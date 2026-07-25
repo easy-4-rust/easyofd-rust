@@ -29,7 +29,7 @@ use chrono::Utc;
 use easyofd_core::{
     ContentObject, ImageFormat, OfdMetadata, OfdPage, OfdResult,
 };
-use zip::write::{FileOptions, ZipWriter};
+use zip::write::{SimpleFileOptions, ZipWriter};
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ impl OfdWriter {
     pub fn build(&self) -> OfdResult<Vec<u8>> {
         let cursor = Cursor::new(Vec::with_capacity(4096));
         let mut zip = ZipWriter::new(cursor);
-        let options = FileOptions::default()
+        let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
         self.write_zip(&mut zip, &options)?;
@@ -119,7 +119,7 @@ impl OfdWriter {
     fn write_zip<W: Write + std::io::Seek>(
         &self,
         zip: &mut ZipWriter<W>,
-        options: &FileOptions,
+        options: &SimpleFileOptions,
     ) -> OfdResult<()> {
         // Collect all image resources across all pages.
         let mut image_resources: Vec<(String, Vec<u8>, ImageFormat)> = Vec::new();

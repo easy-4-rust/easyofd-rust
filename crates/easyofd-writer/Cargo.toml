@@ -12,9 +12,7 @@ easyofd-core = { workspace = true }
 easyofd-reader = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
 zip = { workspace = true }
-quick-xml = { workspace = true }
 
 [lints]
 workspace = true

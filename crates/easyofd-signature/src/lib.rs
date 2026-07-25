@@ -7,7 +7,7 @@
 use std::io::{Cursor, Read, Write};
 
 use easyofd_core::OfdResult;
-use zip::write::FileOptions;
+use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
 /// Supported signature algorithms.
@@ -124,7 +124,7 @@ impl OfdSignatureBuilder {
         let out_buf = Vec::new();
         let out_cursor = Cursor::new(out_buf);
         let mut zip = ZipWriter::new(out_cursor);
-        let options = FileOptions::default()
+        let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
         // Copy existing entries

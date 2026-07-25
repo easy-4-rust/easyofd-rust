@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/easyofd-convert",
     "crates/easyofd-core",
@@ -14,8 +14,8 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.70"
+edition = "2024"
+rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/easy-4-rust/easyofd-rust"
 description = "A Rust library for easy OFD (Open Fixed-layout Document) operations, inspired by EasyExcel"
@@ -33,11 +33,14 @@ easyofd-template = { path = "crates/easyofd-template" }
 easyofd-writer = { path = "crates/easyofd-writer" }
 easyofd = { path = "crates/easyofd" }
 
-thiserror = "2"
-chrono = "0.4"
-uuid = { version = "1", features = ["v4"] }
-zip = "0.6"
-quick-xml = "0.31"
+thiserror = "2.0.18"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+zip = { version = "7.2.0", default-features = false, features = ["deflate"] }
+quick-xml = "0.41.0"
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = { version = "2.0.119", features = ["full"] }
+trybuild = "1.0.116"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

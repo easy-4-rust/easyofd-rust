@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 
 use easyofd_core::OfdResult;
-use zip::write::FileOptions;
+use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
 /// An OFD template filler.
@@ -63,7 +63,7 @@ impl OfdTemplateFiller {
         let out_buf = Vec::new();
         let out_cursor = Cursor::new(out_buf);
         let mut zip = ZipWriter::new(out_cursor);
-        let options = FileOptions::default()
+        let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
         for i in 0..archive.len() {

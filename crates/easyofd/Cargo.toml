@@ -19,7 +19,7 @@ easyofd-writer = { workspace = true }
 [dev-dependencies]
 chrono = { workspace = true }
 zip = { workspace = true }
-trybuild = "1"
+trybuild = { workspace = true }
 
 [lints]
 workspace = true

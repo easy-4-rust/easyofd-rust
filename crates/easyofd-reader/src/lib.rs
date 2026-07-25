@@ -109,7 +109,7 @@ fn parse_ofd_entry<R: Read + std::io::Seek>(
 ) -> OfdResult<String> {
     let xml = read_zip_entry(archive, "OFD.xml")?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut doc_root = String::new();
     let mut in_target = false;
@@ -120,7 +120,7 @@ fn parse_ofd_entry<R: Read + std::io::Seek>(
                 in_target = true;
             }
             Ok(Event::Text(ref e)) if in_target => {
-                doc_root = e.unescape().unwrap_or_default().to_string();
+                doc_root = e.xml10_content().map(|c| c.into_owned()).unwrap_or_default();
             }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
                 in_target = false;
@@ -151,7 +151,7 @@ fn parse_document_entry<R: Read + std::io::Seek>(
     let path = format!("{doc_dir}/Document.xml");
     let xml = read_zip_entry(archive, &path)?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut pages = Vec::new();
 
@@ -162,7 +162,9 @@ fn parse_document_entry<R: Read + std::io::Seek>(
             {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"BaseLoc" {
-                        let val = attr.unescape_value().unwrap_or_default();
+                        let val = attr
+                            .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, reader.decoder())
+                            .unwrap_or_default();
                         pages.push(val.to_string());
                     }
                 }
@@ -183,7 +185,7 @@ fn parse_page_entry<R: Read + std::io::Seek>(
 ) -> OfdResult<OfdPage> {
     let xml = read_zip_entry(archive, page_path)?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
 
     let mut width = 210.0_f64;
@@ -199,10 +201,10 @@ fn parse_page_entry<R: Read + std::io::Seek>(
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 match e.name().as_ref() {
                     b"ofd:PhysicalBox" => in_physical_box = true,
-                    b"ofd:TextObject" => current_text = Some(parse_text_object_attrs(e)?),
+                    b"ofd:TextObject" => current_text = Some(parse_text_object_attrs(e, reader.decoder())?),
                     b"ofd:TextCode" => in_text_code = true,
                     b"ofd:ImageObject" => {
-                        let img = parse_image_object_attrs(e)?;
+                        let img = parse_image_object_attrs(e, reader.decoder())?;
                         content.push(ContentObject::Image(ImageObject::new(
                             img.x, img.y, img.width, img.height,
                             Vec::new(),
@@ -213,7 +215,7 @@ fn parse_page_entry<R: Read + std::io::Seek>(
                 }
             }
             Ok(Event::Text(ref e)) => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let text = e.xml10_content().map(|c| c.into_owned()).unwrap_or_default();
                 if in_physical_box {
                     let parts: Vec<f64> = text
                         .split_whitespace()
@@ -269,7 +271,10 @@ struct TextObjectBuilder {
     size: Option<f64>,
 }
 
-fn parse_text_object_attrs(e: &quick_xml::events::BytesStart) -> OfdResult<TextObjectBuilder> {
+fn parse_text_object_attrs(
+    e: &quick_xml::events::BytesStart,
+    decoder: quick_xml::encoding::Decoder,
+) -> OfdResult<TextObjectBuilder> {
     let mut x = 0.0_f64;
     let mut y = 0.0_f64;
     let mut font = None;
@@ -279,7 +284,7 @@ fn parse_text_object_attrs(e: &quick_xml::events::BytesStart) -> OfdResult<TextO
         match attr.key.as_ref() {
             b"Boundary" => {
                 let parts: Vec<f64> = attr
-                    .unescape_value()
+                    .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
                     .unwrap_or_default()
                     .split_whitespace()
                     .filter_map(|s| s.parse().ok())
@@ -289,8 +294,20 @@ fn parse_text_object_attrs(e: &quick_xml::events::BytesStart) -> OfdResult<TextO
                     y = parts[1];
                 }
             }
-            b"Font" => font = Some(attr.unescape_value().unwrap_or_default().to_string()),
-            b"Size" => size = attr.unescape_value().unwrap_or_default().parse().ok(),
+            b"Font" => {
+                    font = Some(
+                        attr.decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
+                            .unwrap_or_default()
+                            .to_string(),
+                    );
+                }
+            b"Size" => {
+                    size = attr
+                        .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
+                        .unwrap_or_default()
+                        .parse()
+                        .ok();
+                }
             _ => {}
         }
     }
@@ -312,7 +329,10 @@ struct ImageObjectBuilder {
     format: ImageFormat,
 }
 
-fn parse_image_object_attrs(e: &quick_xml::events::BytesStart) -> OfdResult<ImageObjectBuilder> {
+fn parse_image_object_attrs(
+    e: &quick_xml::events::BytesStart,
+    decoder: quick_xml::encoding::Decoder,
+) -> OfdResult<ImageObjectBuilder> {
     let mut x = 0.0_f64;
     let mut y = 0.0_f64;
     let mut w = 0.0_f64;
@@ -321,7 +341,7 @@ fn parse_image_object_attrs(e: &quick_xml::events::BytesStart) -> OfdResult<Imag
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == b"Boundary" {
             let parts: Vec<f64> = attr
-                .unescape_value()
+                .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
                 .unwrap_or_default()
                 .split_whitespace()
                 .filter_map(|s| s.parse().ok())
