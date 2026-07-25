@@ -1,6 +1,87 @@
-/target
+### gradle ###
+.gradle
+/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+### STS ###
+.settings/
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+bin/
+codes/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+*.gz
+rebel.xml
+
+### NetBeans ###
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+log.*/
+
+### maven ###
+target/
+*.war
+*.ear
+*.tar
+#*.zip
+*.tar.gz
+
+### logs ####
+/logs/
+*.log
+
+### temp ignore ###
+*.cache
+*.diff
+*.patch
+*.tmp
+*.java~
+*.properties~
+*.xml~
+
+### system ignore ###
+.DS_Store
+Thumbs.db
+Servers
+.metadata
+upload
+gen_code
+
+### node ###
+node_modules
+pom.xml.versionsBackup
+/server/nacos-server/data
+/server/nacos-server/logs
+!/libs/*.jar
+
+### Python ###
+__pycache__/
+*.py[cod]
+
+.fastRequest
+*.http
+*.json
+.flattened-pom.xml
+/agentdb.rvf
+/agentdb.rvf.lock
+/ruvector.db
+
+### tools ###
+.mimocode/
+.codegraph/
+Cargo.lock
 *.profraw
 *.profdata
-lcov.info
-Cargo.lock
-lcov*.info
