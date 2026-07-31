@@ -38,7 +38,7 @@ impl Default for ConvertOptions {
 /// Returns an error if the input file cannot be read or parsed.
 pub fn pdf_to_ofd(
     pdf_path: impl AsRef<std::path::Path>,
-    ofd_path: impl AsRef<std::path::Path>,
+    _ofd_path: impl AsRef<std::path::Path>,
     options: &ConvertOptions,
 ) -> OfdResult<()> {
     let _pdf_bytes = std::fs::read(pdf_path).map_err(easyofd_core::OfdError::Io)?;

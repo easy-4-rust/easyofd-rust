@@ -26,8 +26,9 @@ pub struct ElectronicSeal {
     pub image_data: Vec<u8>,
     /// Seal name/identifier.
     pub name: String,
-    /// Position: (x, y) in mm, page number (1-based).
+    /// Position: (x, y) in mm.
     pub position: (f64, f64),
+    /// Page number (1-based) the seal is applied to.
     pub page: usize,
 }
 
