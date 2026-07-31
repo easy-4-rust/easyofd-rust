@@ -85,3 +85,11 @@ __pycache__/
 Cargo.lock
 *.profraw
 *.profdata
+**/target/
+**/*.rs.bk
+!xtask/Cargo.lock
+.idea/
+.vscode/
+*.swp
+*.swo
+*.pyc
