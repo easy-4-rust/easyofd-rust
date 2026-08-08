@@ -23,6 +23,10 @@
 //!         └── ...
 //! ```
 
+mod stream_writer;
+
+pub use stream_writer::OfdStreamWriter;
+
 use std::io::{Cursor, Write};
 
 use chrono::Utc;
@@ -30,6 +34,7 @@ use easyofd_core::{
     ContentObject, ImageFormat, OfdMetadata, OfdPage, OfdResult,
 };
 use zip::write::{SimpleFileOptions, ZipWriter};
+use easyofd_package::atomic_write;
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -96,13 +101,21 @@ impl OfdWriter {
     /// Returns an error if ZIP creation fails.
     pub fn build(&self) -> OfdResult<Vec<u8>> {
         let cursor = Cursor::new(Vec::with_capacity(4096));
-        let mut zip = ZipWriter::new(cursor);
+        let cursor = self.write_to(cursor)?;
+        Ok(cursor.into_inner())
+    }
+
+    /// 将 OFD 直接写入支持定位的输出，不额外构造完整字节数组。
+    ///
+    /// # Errors
+    ///
+    /// ZIP 创建或输出写入失败时返回错误。
+    pub fn write_to<W: Write + std::io::Seek>(&self, output: W) -> OfdResult<W> {
+        let mut zip = ZipWriter::new(output);
         let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
-
         self.write_zip(&mut zip, &options)?;
-        let cursor = zip.finish().map_err(zip_err)?;
-        Ok(cursor.into_inner())
+        zip.finish().map_err(zip_err)
     }
 
     /// Build the OFD file and write it to a file path.
@@ -111,9 +124,10 @@ impl OfdWriter {
     ///
     /// Returns an error if ZIP creation or file I/O fails.
     pub fn build_to_file(&self, path: impl AsRef<std::path::Path>) -> OfdResult<()> {
-        let bytes = self.build()?;
-        std::fs::write(path, bytes)?;
-        Ok(())
+        atomic_write(path, |file| {
+            self.write_to(file)?;
+            Ok(())
+        })
     }
 
     fn write_zip<W: Write + std::io::Seek>(
@@ -122,7 +136,7 @@ impl OfdWriter {
         options: &SimpleFileOptions,
     ) -> OfdResult<()> {
         // Collect all image resources across all pages.
-        let mut image_resources: Vec<(String, Vec<u8>, ImageFormat)> = Vec::new();
+        let mut image_resources: Vec<(String, &[u8], ImageFormat)> = Vec::new();
 
         for page in &self.pages {
             for obj in &page.content {
@@ -134,7 +148,7 @@ impl OfdWriter {
                         ImageFormat::Tiff => "tiff",
                     };
                     let res_name = format!("Doc_0/Res/Image_{}.{}", image_resources.len(), ext);
-                    image_resources.push((res_name.clone(), img.data.clone(), img.format));
+                    image_resources.push((res_name, img.data.as_slice(), img.format));
                 }
             }
         }
@@ -157,12 +171,24 @@ impl OfdWriter {
             .map_err(zip_err)?;
         zip.write_all(doc_res_xml.as_bytes()).map_err(io_err)?;
 
+        // PublicRes is referenced by Document.xml even when no custom font is embedded.
+        zip.start_file("Doc_0/PublicRes.xml", *options)
+            .map_err(zip_err)?;
+        zip.write_all(self.build_public_res_xml().as_bytes())
+            .map_err(io_err)?;
+
         // 4. Write each page
+        let mut page_image_start = 0;
         for (i, page) in self.pages.iter().enumerate() {
-            let page_xml = self.build_page_xml(page, i, &image_resources);
+            let page_xml = self.build_page_xml(page, i, page_image_start);
             zip.start_file(format!("Doc_0/Pages/Page_{i}.xml"), *options)
                 .map_err(zip_err)?;
             zip.write_all(page_xml.as_bytes()).map_err(io_err)?;
+            page_image_start += page
+                .content
+                .iter()
+                .filter(|object| matches!(object, ContentObject::Image(_)))
+                .count();
         }
 
         // 5. Write image resources
@@ -229,7 +255,7 @@ impl OfdWriter {
 
     fn build_document_xml(
         &self,
-        image_resources: &[(String, Vec<u8>, ImageFormat)],
+        image_resources: &[(String, &[u8], ImageFormat)],
     ) -> String {
         let mut xml = String::with_capacity(1024);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
@@ -284,7 +310,7 @@ impl OfdWriter {
     #[allow(clippy::unused_self)]
     fn build_document_res_xml(
         &self,
-        image_resources: &[(String, Vec<u8>, ImageFormat)],
+        image_resources: &[(String, &[u8], ImageFormat)],
     ) -> String {
         let mut xml = String::with_capacity(512);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
@@ -320,11 +346,23 @@ impl OfdWriter {
     }
 
     #[allow(clippy::unused_self)]
+    fn build_public_res_xml(&self) -> String {
+        concat!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            "\n",
+            r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">"#,
+            "\n",
+            "</ofd:Res>\n"
+        )
+        .to_string()
+    }
+
+    #[allow(clippy::unused_self)]
     fn build_page_xml(
         &self,
         page: &OfdPage,
         page_index: usize,
-        image_resources: &[(String, Vec<u8>, ImageFormat)],
+        page_image_start: usize,
     ) -> String {
         let mut xml = String::with_capacity(2048);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
@@ -349,21 +387,24 @@ impl OfdWriter {
         // Collect image indices for this page.
         let mut image_counter = 0usize;
 
-        for obj in &page.content {
+        for (object_index, obj) in page.content.iter().enumerate() {
             match obj {
                 ContentObject::Text(text) => {
                     // mm to OFD units (1 mm = ~3.543307 pixels at 96dpi, but OFD uses mm directly)
                     let x = text.x;
                     let y = text.y;
                     // Estimate text width: ~0.3mm per character for 12pt SimSun (rough heuristic)
+                    let character_count = f64::from(
+                        u32::try_from(text.text.chars().count()).unwrap_or(u32::MAX),
+                    );
                     let est_width = text
                         .width
-                        .unwrap_or(f64::from(u32::try_from(text.text.len()).unwrap_or(u32::MAX)) * text.size * 0.06);
+                        .unwrap_or(character_count * text.size * 0.06);
                     let est_height = text.height.unwrap_or(text.size * 0.4);
 
                     xml.push_str(&format!(
                         r#"    <ofd:TextObject ID="t_{page_index}_{idx}" Boundary="{x:.2} {y:.2} {w:.2} {h:.2}" Font="{font}" Size="{size:.1}">"#,
-                        idx = page_index * 1000 + image_counter,
+                        idx = page_index * 1000 + object_index,
                         w = est_width,
                         h = est_height,
                         font = text.font,
@@ -384,22 +425,12 @@ impl OfdWriter {
                 }
                 ContentObject::Image(img) => {
                     // Find the resource ID for this image.
-                    let img_path = format!("Doc_0/Res/Image_{}.{}", image_counter,
-                        match img.format {
-                            ImageFormat::Jpeg => "jpeg",
-                            ImageFormat::Png => "png",
-                            ImageFormat::Bmp => "bmp",
-                            ImageFormat::Tiff => "tiff",
-                        }
-                    );
-                    let res_id = image_resources
-                        .iter()
-                        .position(|(name, _, _)| *name == img_path)
-                        .map_or(100, |i| 100 + i);
+                    let global_image_index = page_image_start + image_counter;
+                    let res_id = 100 + global_image_index;
 
                     xml.push_str(&format!(
                         r#"    <ofd:ImageObject ID="i_{page_index}_{idx}" Boundary="{x:.2} {y:.2} {w:.2} {h:.2}" ResourceID="{res_id}"/>"#,
-                        idx = page_index * 1000 + image_counter,
+                        idx = page_index * 1000 + object_index,
                         x = img.x,
                         y = img.y,
                         w = img.width,
@@ -412,7 +443,7 @@ impl OfdWriter {
                     let stroke = format!("{:06X}", path.stroke_color);
                     xml.push_str(&format!(
                         r#"    <ofd:PathObject ID="p_{page_index}_{idx}" Boundary="{x:.2} {y:.2} 0 0" StrokeColor="{stroke}" LineWidth="{lw:.2}">"#,
-                        idx = page_index * 1000 + image_counter,
+                        idx = page_index * 1000 + object_index,
                         x = path.x,
                         y = path.y,
                         lw = path.stroke_width,
@@ -1091,6 +1122,26 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
         let err = super::io_err(io_err);
         assert!(format!("{err}").contains("I/O error"));
+    }
+
+    #[test]
+    fn test_images_on_multiple_pages_use_distinct_resources() {
+        let mut writer = OfdWriter::new();
+        let mut first = OfdPage::new(210.0, 297.0);
+        first.add_image(ImageObject::png(0.0, 0.0, 10.0, 10.0, vec![1]));
+        let mut second = OfdPage::new(210.0, 297.0);
+        second.add_image(ImageObject::png(0.0, 0.0, 10.0, 10.0, vec![2]));
+        writer.add_pages(vec![first, second]);
+        let bytes = writer.build().unwrap();
+        let reader = easyofd_reader::OfdReader::from_bytes(&bytes).unwrap();
+        let ContentObject::Image(first_image) = &reader.pages()[0].content[0] else {
+            panic!("expected first image");
+        };
+        let ContentObject::Image(second_image) = &reader.pages()[1].content[0] else {
+            panic!("expected second image");
+        };
+        assert_eq!(first_image.data, vec![1]);
+        assert_eq!(second_image.data, vec![2]);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

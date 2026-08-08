@@ -1,6 +1,6 @@
 [package]
-name = "easyofd-writer"
-description = "OFD file writer for easyofd-rust"
+name = "easyofd-package"
+description = "Safe OFD ZIP package access and atomic file output"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,10 +9,6 @@ repository.workspace = true
 
 [dependencies]
 easyofd-core = { workspace = true }
-easyofd-reader = { workspace = true }
-easyofd-package = { workspace = true }
-thiserror = { workspace = true }
-chrono = { workspace = true }
 zip = { workspace = true }
 
 [lints]

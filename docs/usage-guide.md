@@ -1,6 +1,8 @@
 # easyofd-rust Usage Guide 使用指南
 
 > Step-by-step examples for all easyofd-rust operations.
+>
+> **Capability notice:** signature examples demonstrate the experimental package API; they do not currently create a cryptographically valid SM2/RSA signature. Font embedding and PDF conversion are also not production-complete.
 
 ---
 

@@ -1,6 +1,8 @@
 # easyofd-rust Architecture Design Document · 架构设计文档
 
-> **Version**: 0.4.0 | **Date**: 2026-07-21 | **Status**: v0.4 Complete  
+> **Implementation notice**: this document contains the original target architecture. The current signature, font embedding and PDF conversion crates are experimental/stub APIs. Production-complete capabilities are limited to behavior proven by current source and workspace tests.
+>
+> **Version**: 0.5.0 | **Status**: Safe package, streaming page visitor and OFD → Markdown implemented
 > **Author**: easyofd-rust team | **License**: Apache-2.0
 
 ---

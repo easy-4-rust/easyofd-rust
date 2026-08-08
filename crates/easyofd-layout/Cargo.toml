@@ -1,0 +1,14 @@
+[package]
+name = "easyofd-layout"
+description = "Deterministic OFD geometry and reading-order analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+easyofd-core = { workspace = true }
+
+[lints]
+workspace = true

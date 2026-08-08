@@ -5,12 +5,12 @@
 > **纯 Rust &middot; 零 unsafe &middot; Builder 模式 &middot; GB/T 33190-2016 合规**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance)
 
 ---
 
-`easyofd-rust` 为 OFD（开放版式文档）操作提供流畅、类型安全的 API：**创建**、**读取**、**模板填充**、**电子签章**、**PDF 互转**。
+`easyofd-rust` 为 OFD（开放版式文档）操作提供流畅、类型安全的 API：**创建**、**安全读取**、**逐页处理**、**模板填充**和 **OFD → Markdown**。签名、字体嵌入和 PDF 互转目前仅保留实验 API，尚不是生产级实现。
 
 OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic invoices, official documents, and archival purposes.
 
@@ -38,11 +38,13 @@ OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic
 |:---|:---:|:---|
 | Create OFD 创建 | ✅ v0.1 | Text, images, paths, metadata; fluent Builder API |
 | `#[derive(OfdModel)]` 派生宏 | ✅ v0.1 | Compile-time reflection; zero runtime cost |
-| Read OFD 读取 | ✅ v0.2 | SAX-based parsing; text extraction; structured content |
+| Read OFD 读取 | ✅ v0.2 | 安全 ZIP 校验、逐页访问、文本/图片/路径对象 |
+| OFD → Markdown | ✅ v0.1 | 几何阅读顺序、标题、图片导出、损失报告、流式输出 |
+| Atomic output 原子输出 | ✅ v0.1 | 同目录临时文件写入并原子替换 |
 | Template fill 模板填充 | ✅ v0.2 | `{key}` placeholder replacement; binary-preserving |
-| Digital signatures 电子签章 | ✅ v0.3 | GB/T 38540 seals; SM2WithSM3 / SHA256WithRSA |
-| Custom fonts 自定义字体 | ✅ v0.3 | TTF/OTF embedding; EmbeddedFont + FontFormat |
-| PDF ↔ OFD 互转 | ✅ v0.4 | Bidirectional conversion API; ConvertOptions |
+| Digital signatures 电子签章 | ⚠️ Experimental | 当前生成占位签名，不执行 SM2/RSA 密码学签名 |
+| Custom fonts 自定义字体 | ⚠️ Experimental | 当前只有注册 API，尚未生成完整字体资源 |
+| PDF ↔ OFD 互转 | ⚠️ Planned | API 返回明确的未实现错误 |
 | Multi-page 多页 | ✅ v0.1 | Each data item → one page |
 | Vector paths 矢量路径 | ✅ v0.1 | hline, vline, rect with stroke/fill |
 
@@ -51,16 +53,19 @@ OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic
 ## Architecture 架构
 
 ```
-easyofd-rust (9 crates)
+easyofd-rust (12 crates)
 ├── easyofd            🎯 Facade — EasyOfd::write/read/fill_template
 ├── easyofd-core       🧩 Types, traits, errors, data model
 ├── easyofd-derive     ⚡ Proc-macro shim (6 lines)
 ├── easyofd-derive-impl ⚙️ All derive logic (400 lines)
 ├── easyofd-reader     📖 SAX-based OFD parsing
-├── easyofd-writer     ✍️ ZIP/XML generation + custom fonts
+├── easyofd-writer     ✍️ ZIP/XML generation + atomic output
+├── easyofd-package    🛡️ ZIP limits, safe paths, atomic replacement
+├── easyofd-layout     📐 Deterministic reading-order analysis
+├── easyofd-markdown   📝 Streaming OFD → Markdown + loss report
 ├── easyofd-template   📋 Placeholder replacement engine
 ├── easyofd-signature  🔐 GB/T 38540 electronic seals
-└── easyofd-convert    🔄 PDF ↔ OFD bridge
+└── easyofd-convert    🧪 Planned PDF ↔ OFD bridge API
 ```
 
 ---
@@ -111,6 +116,17 @@ EasyOfd::write_pages("doc.ofd")
     .do_write(vec![page])?;
 ```
 
+大文件或持续生成页面时使用增量 Writer：
+
+```rust
+let file = std::fs::File::create("large.ofd")?;
+let mut writer = EasyOfd::stream_writer(file);
+for page in page_source {
+    writer.write_page(page)?;
+}
+writer.finish()?;
+```
+
 ### 3. Read 读取
 
 ```rust
@@ -153,6 +169,8 @@ EasyOfd::fill_template("template.ofd", &data)?
 
 ### 5. Signature 电子签章
 
+> 当前签章模块为实验性包结构 API，只生成占位 `SignedValue`，不能用于需要密码学有效性的生产文档。
+
 ```rust
 use easyofd::{OfdSignatureBuilder, ElectronicSeal, SignatureAlgorithm};
 
@@ -171,6 +189,23 @@ OfdSignatureBuilder::new("document.ofd")
 ```
 
 ---
+
+### 6. OFD to Markdown 转 Markdown
+
+```rust
+use easyofd::{EasyOfd, ImagePolicy, PageBreakStyle};
+
+let result = EasyOfd::to_markdown("invoice.ofd")
+    .page_range(1, 20)
+    .images(ImagePolicy::ExtractTo("assets".into()))
+    .page_breaks(PageBreakStyle::HtmlComment)
+    .do_convert()?;
+
+std::fs::write("invoice.md", result.markdown)?;
+println!("losses: {}", result.report.losses.len());
+```
+
+大文件可以使用 `.convert_to(writer)` 逐页写出，避免在内存中保留完整 Markdown。
 
 ## API Reference  API 参考
 
@@ -253,7 +288,7 @@ OfdSignatureBuilder::new("document.ofd")
 | **Compile-time reflection 编译期反射** | `#[derive(OfdModel)]` — no runtime overhead |
 | **Trait extensibility Trait 可扩展** | `OfdModel` trait for custom implementations |
 | **Single error type 统一错误** | `OfdError` enum, `OfdResult<T>` alias |
-| **Separation of concerns 关注点分离** | 9 crates, each with one job |
+| **Separation of concerns 关注点分离** | 12 crates, each with one job |
 
 ---
 
@@ -263,8 +298,9 @@ OfdSignatureBuilder::new("document.ofd")
 |:---:|:---:|:---|
 | **v0.1** | ✅ | Core types, Writer, Derive macro, Builder API |
 | **v0.2** | ✅ | OFD Reader, Template engine |
-| **v0.3** | ✅ | Electronic seals (GB/T 38540), Custom fonts |
-| **v0.4** | ✅ | PDF ↔ OFD conversion bridge |
+| **v0.3** | ⚠️ | Signature and font APIs exist; production implementation pending |
+| **v0.4** | ⚠️ | PDF ↔ OFD conversion API exists; backend pending |
+| **v0.5** | ✅ | Safe package layer, page visitor, atomic output, OFD → Markdown |
 | **v1.0** | 🔜 | Stable API, full integration tests, performance benchmarks |
 
 ---
@@ -283,5 +319,5 @@ Apache-2.0
 ---
 
 <p align="center">
-  <sub>Built with Rust 🦀 &middot; 9 crates &middot; 177 tests &middot; Follows <a href="https://github.com/hiwepy/easyexcel-rs">easyexcel-rs</a> conventions</sub>
+  <sub>Built with Rust 🦀 &middot; 12 crates &middot; Follows <a href="https://github.com/hiwepy/easyexcel-rs">easyexcel-rs</a> conventions</sub>
 </p>

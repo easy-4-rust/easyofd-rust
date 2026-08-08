@@ -40,6 +40,8 @@
 //!     .do_write(vec![page])?;
 //! ```
 
+mod ofd_read_builder;
+
 // Re-export core types for convenience.
 pub use easyofd_core::{
     ContentObject, ImageFormat, ImageObject, OfdError, OfdField, OfdFieldKind, OfdMetadata,
@@ -50,10 +52,23 @@ pub use easyofd_core::{
 pub use easyofd_derive::OfdModel;
 
 // Re-export writer internals for advanced usage.
-pub use easyofd_writer::{OfdWriter, WriteOptions, EmbeddedFont, FontFormat, OfdEditor};
+pub use easyofd_writer::{
+    EmbeddedFont, FontFormat, OfdEditor, OfdStreamWriter, OfdWriter, WriteOptions,
+};
 
 // Re-export reader for advanced usage.
 pub use easyofd_reader::OfdReader;
+pub use easyofd_reader::ReadOptions;
+pub use ofd_read_builder::OfdReadBuilder;
+
+// Re-export package, layout and Markdown conversion APIs.
+pub use easyofd_layout::{LayoutAnalyzer, LayoutBlock, LayoutOptions, LayoutResult};
+pub use easyofd_markdown::{
+    ConversionLoss, ConversionReport, ConversionWarning, ConvertedAsset, ImagePolicy,
+    MarkdownConversionBuilder, MarkdownConversionResult, MarkdownConverter, MarkdownOptions,
+    OcrPolicy, OcrProvider, PageBreakStyle,
+};
+pub use easyofd_package::PackageLimits;
 
 // Re-export template for advanced usage.
 pub use easyofd_template::OfdTemplateFiller;
@@ -94,6 +109,23 @@ impl EasyOfd {
         }
     }
 
+    /// 创建增量 OFD Writer，页面和图片在调用 `write_page` 时直接进入输出。
+    #[must_use]
+    pub fn stream_writer<W: std::io::Write + std::io::Seek>(
+        output: W,
+    ) -> OfdStreamWriter<W> {
+        OfdStreamWriter::new(output, WriteOptions::default())
+    }
+
+    /// 使用自定义元数据创建增量 OFD Writer。
+    #[must_use]
+    pub fn stream_writer_with_options<W: std::io::Write + std::io::Seek>(
+        output: W,
+        options: WriteOptions,
+    ) -> OfdStreamWriter<W> {
+        OfdStreamWriter::new(output, options)
+    }
+
     /// Write pages directly to a file in one call.
     ///
     /// # Errors
@@ -128,6 +160,20 @@ impl EasyOfd {
     /// Returns an error if the file cannot be read or is not a valid OFD document.
     pub fn read(path: impl AsRef<std::path::Path>) -> OfdResult<OfdReader> {
         OfdReader::open(path)
+    }
+
+    /// 创建逐页读取构建器，适合大文件和有限内存场景。
+    #[must_use]
+    pub fn read_pages(path: impl AsRef<std::path::Path>) -> OfdReadBuilder {
+        OfdReadBuilder::new(path)
+    }
+
+    /// 创建 OFD 到 Markdown 的转换构建器。
+    #[must_use]
+    pub fn to_markdown(
+        path: impl AsRef<std::path::Path>,
+    ) -> MarkdownConversionBuilder {
+        MarkdownConversionBuilder::new(path)
     }
 
     /// Parse an OFD file from in-memory bytes.
@@ -327,6 +373,32 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[0..2], b"PK");
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_streaming_read_and_markdown_facades() {
+        let dir = std::env::temp_dir().join("easyofd_facade_markdown");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("facade.ofd");
+        let mut page = OfdPage::new(210.0, 297.0);
+        page.add_text(TextObject::new(10.0, 10.0, "Facade title").size(24.0));
+        EasyOfd::write_pages_to(&path, vec![page]).unwrap();
+
+        let mut visited = 0;
+        EasyOfd::read_pages(&path)
+            .page_range(1, 1)
+            .do_read(|page_number, _| {
+                assert_eq!(page_number, 1);
+                visited += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(visited, 1);
+
+        let result = EasyOfd::to_markdown(&path).do_convert().unwrap();
+        assert!(result.markdown.contains("Facade title"));
+        assert_eq!(result.report.pages_converted, 1);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

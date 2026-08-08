@@ -45,7 +45,10 @@ impl SignedOfd {
     ///
     /// Returns an error if file I/O fails.
     pub fn save(self, path: impl AsRef<std::path::Path>) -> OfdResult<()> {
-        std::fs::write(path, self.data).map_err(easyofd_core::OfdError::Io)
+        easyofd_package::atomic_write(path, |file| {
+            file.write_all(&self.data)?;
+            Ok(())
+        })
     }
 
     /// Return the signed OFD bytes.
@@ -121,6 +124,10 @@ impl OfdSignatureBuilder {
         let cursor = Cursor::new(input_bytes);
         let mut archive =
             zip::ZipArchive::new(cursor).map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+        easyofd_package::validate_archive(
+            &mut archive,
+            easyofd_package::PackageLimits::default(),
+        )?;
 
         let out_buf = Vec::new();
         let out_cursor = Cursor::new(out_buf);

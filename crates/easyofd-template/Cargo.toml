@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 easyofd-core = { workspace = true }
+easyofd-package = { workspace = true }
 thiserror = { workspace = true }
 zip = { workspace = true }
 

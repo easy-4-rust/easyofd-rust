@@ -5,6 +5,9 @@ members = [
     "crates/easyofd-core",
     "crates/easyofd-derive",
     "crates/easyofd-derive-impl",
+    "crates/easyofd-layout",
+    "crates/easyofd-markdown",
+    "crates/easyofd-package",
     "crates/easyofd-reader",
     "crates/easyofd-signature",
     "crates/easyofd-template",
@@ -27,6 +30,9 @@ easyofd-core = { path = "crates/easyofd-core" }
 easyofd-convert = { path = "crates/easyofd-convert" }
 easyofd-derive = { path = "crates/easyofd-derive" }
 easyofd-derive-impl = { path = "crates/easyofd-derive-impl" }
+easyofd-layout = { path = "crates/easyofd-layout" }
+easyofd-markdown = { path = "crates/easyofd-markdown" }
+easyofd-package = { path = "crates/easyofd-package" }
 easyofd-reader = { path = "crates/easyofd-reader" }
 easyofd-signature = { path = "crates/easyofd-signature" }
 easyofd-template = { path = "crates/easyofd-template" }

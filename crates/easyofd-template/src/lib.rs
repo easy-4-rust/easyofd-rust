@@ -59,6 +59,10 @@ impl OfdTemplateFiller {
         let cursor = Cursor::new(template_bytes);
         let mut archive = zip::ZipArchive::new(cursor)
             .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+        easyofd_package::validate_archive(
+            &mut archive,
+            easyofd_package::PackageLimits::default(),
+        )?;
 
         let out_buf = Vec::new();
         let out_cursor = Cursor::new(out_buf);
@@ -75,13 +79,17 @@ impl OfdTemplateFiller {
             entry.read_to_end(&mut content).map_err(easyofd_core::OfdError::Io)?;
 
             // Replace placeholders in XML files
-            let is_xml = name.ends_with(".xml") || name.ends_with(".XML");
+            let is_xml = std::path::Path::new(&name)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"));
             if is_xml {
-                let text = String::from_utf8_lossy(&content).to_string();
+                let text = String::from_utf8(content).map_err(|error| {
+                    easyofd_core::OfdError::Xml(format!("{name}: {error}"))
+                })?;
                 let mut replaced = text;
                 for (key, value) in data {
                     let placeholder = format!("{{{key}}}");
-                    replaced = replaced.replace(&placeholder, value);
+                    replaced = replaced.replace(&placeholder, &xml_escape(value));
                 }
                 zip.start_file(name, options)
                     .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
@@ -115,8 +123,20 @@ impl OfdTemplateFiller {
     ///
     /// Returns an error if file I/O fails.
     pub fn save(self, path: impl AsRef<std::path::Path>) -> OfdResult<()> {
-        std::fs::write(path, self.output).map_err(easyofd_core::OfdError::Io)
+        easyofd_package::atomic_write(path, |file| {
+            file.write_all(&self.output)?;
+            Ok(())
+        })
     }
+}
+
+fn xml_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 #[cfg(test)]
@@ -154,6 +174,18 @@ mod tests {
         let text = reader.extract_all_text();
         assert!(text.contains("Alice"));
         assert!(!text.contains("{name}"));
+    }
+
+    #[test]
+    fn test_fill_escapes_xml_values() {
+        let template = make_template(&["value"]);
+        let mut data = HashMap::new();
+        data.insert("value".into(), "<A&B>".into());
+        let output = OfdTemplateFiller::fill_bytes(&template, &data)
+            .unwrap()
+            .into_bytes();
+        let reader = easyofd_reader::OfdReader::from_bytes(&output).unwrap();
+        assert_eq!(reader.extract_all_text(), "<A&B>");
     }
 
     #[test]
