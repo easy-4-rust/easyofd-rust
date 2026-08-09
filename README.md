@@ -1,323 +1,325 @@
-# easyofd-rust &middot; [English](#easyofd-rust) | [中文](#easyofd-rust-中文)
+<a id="readme-top"></a>
 
-> **An idiomatic Rust library for quick OFD document operations.**  
-> Inspired by [Alibaba EasyExcel](https://github.com/alibaba/easyexcel)'s builder-pattern API design.  
-> **纯 Rust &middot; 零 unsafe &middot; Builder 模式 &middot; GB/T 33190-2016 合规**
+<div align="center">
+
+# easyofd-rust
+
+**Idiomatic Rust OFD library — Builder pattern, compile-time derive, GB/T 33190-2016 compliant**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance)
 
----
+[English](./README.md) · [简体中文](./README.zh-CN.md)
 
-`easyofd-rust` 为 OFD（开放版式文档）操作提供流畅、类型安全的 API：**创建**、**安全读取**、**逐页处理**、**模板填充**和 **OFD → Markdown**。签名、字体嵌入和 PDF 互转目前仅保留实验 API，尚不是生产级实现。
+[Features](#features) · [Architecture](#architecture) ·
+[Quick Start](#quick-start) · [API Reference](#api-reference) ·
+[Design Principles](#design-principles) · [Roadmap](#roadmap) ·
+[Contributing](#contributing)
 
-OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic invoices, official documents, and archival purposes.
-
----
-
-## Table of Contents 目录
-
-- [Features 功能](#features-功能)
-- [Architecture 架构](#architecture-架构)
-- [Quick Start 快速开始](#quick-start-快速开始)
-  - [1. Write with Derive 派生宏写入](#1-write-with-derive-派生宏写入)
-  - [2. Manual Write 手动构建写入](#2-manual-write-手动构建写入)
-  - [3. Read 读取](#3-read-读取)
-  - [4. Template Fill 模板填充](#4-template-fill-模板填充)
-  - [5. Signature 电子签章](#5-signature-电子签章)
-- [API Reference API 参考](#api-reference--api-参考)
-- [Design Principles 设计原则](#design-principles--设计原则)
-- [Roadmap 路线图](#roadmap--路线图)
+</div>
 
 ---
 
-## Features 功能
+> **Current version**: `0.1.0`<br>
+> **MSRV**: Rust `1.88`<br>
+> **Edition**: `2024`<br>
+> **Workspace Resolver**: `3`<br>
+> **License**: Apache-2.0
 
-| Feature 功能 | Status | Description 描述 |
+`easyofd-rust` provides a fluent, type-safe API for OFD (Open Fixed-layout Document) operations: **create**, **read**, **stream-write**, **template fill**, **edit**, and **OFD → Markdown** conversion. Digital signatures and PDF conversion are experimental/planned.
+
+OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic invoices, official documents, and archival purposes. Inspired by [Alibaba EasyExcel](https://github.com/alibaba/easyexcel).
+
+---
+
+## Features
+
+| Feature | Status | Description |
 |:---|:---:|:---|
-| Create OFD 创建 | ✅ v0.1 | Text, images, paths, metadata; fluent Builder API |
-| `#[derive(OfdModel)]` 派生宏 | ✅ v0.1 | Compile-time reflection; zero runtime cost |
-| Read OFD 读取 | ✅ v0.2 | 安全 ZIP 校验、逐页访问、文本/图片/路径对象 |
-| OFD → Markdown | ✅ v0.1 | 几何阅读顺序、标题、图片导出、损失报告、流式输出 |
-| Atomic output 原子输出 | ✅ v0.1 | 同目录临时文件写入并原子替换 |
-| Template fill 模板填充 | ✅ v0.2 | `{key}` placeholder replacement; binary-preserving |
-| Digital signatures 电子签章 | ⚠️ Experimental | 当前生成占位签名，不执行 SM2/RSA 密码学签名 |
-| Custom fonts 自定义字体 | ⚠️ Experimental | 当前只有注册 API，尚未生成完整字体资源 |
-| PDF ↔ OFD 互转 | ⚠️ Planned | API 返回明确的未实现错误 |
-| Multi-page 多页 | ✅ v0.1 | Each data item → one page |
-| Vector paths 矢量路径 | ✅ v0.1 | hline, vline, rect with stroke/fill |
+| Create OFD | ✅ | Text, images, paths, metadata; fluent Builder API |
+| `#[derive(OfdModel)]` | ✅ | Compile-time reflection; zero runtime cost |
+| Stream Writer | ✅ | Page-by-page ZIP writing; constant memory per page |
+| Editor | ✅ | Open → modify (add text, pages, watermarks) → save |
+| Read OFD | ✅ | SAX-based parsing, page visitor, safe ZIP validation |
+| OFD → Markdown | ✅ | Deterministic reading-order, image export, loss report |
+| Template fill | ✅ | `{key}` placeholder replacement, binary-preserving |
+| Atomic output | ✅ | Same-directory temp file + atomic rename |
+| Digital signatures | ⚠️ | API complete, cryptographic signing is stub |
+| PDF ↔ OFD | 🗓️ | API surface returns explicit not-implemented error |
+| Vector paths | ✅ | hline, vline, rect with stroke/fill |
+| Custom fonts | ⚠️ | Registration API only, no font resource generation yet |
 
 ---
 
-## Architecture 架构
+## Architecture
 
 ```
 easyofd-rust (12 crates)
-├── easyofd            🎯 Facade — EasyOfd::write/read/fill_template
-├── easyofd-core       🧩 Types, traits, errors, data model
-├── easyofd-derive     ⚡ Proc-macro shim (6 lines)
+├── easyofd             🎯 Facade — EasyOfd::write/read/to_markdown/fill_template
+├── easyofd-core        🧩 Types, traits, errors, data model
+├── easyofd-derive      ⚡ Proc-macro shim (6 lines)
 ├── easyofd-derive-impl ⚙️ All derive logic (400 lines)
-├── easyofd-reader     📖 SAX-based OFD parsing
-├── easyofd-writer     ✍️ ZIP/XML generation + atomic output
-├── easyofd-package    🛡️ ZIP limits, safe paths, atomic replacement
-├── easyofd-layout     📐 Deterministic reading-order analysis
-├── easyofd-markdown   📝 Streaming OFD → Markdown + loss report
-├── easyofd-template   📋 Placeholder replacement engine
-├── easyofd-signature  🔐 GB/T 38540 electronic seals
-└── easyofd-convert    🧪 Planned PDF ↔ OFD bridge API
+├── easyofd-reader      📖 SAX-based OFD parsing + page visitor
+├── easyofd-writer      ✍️ ZIP/XML generation + stream writer + editor
+├── easyofd-package     🛡️ ZIP limits, safe paths, atomic replacement
+├── easyofd-layout      📐 Deterministic reading-order analysis
+├── easyofd-markdown    📝 Streaming OFD → Markdown + loss report
+├── easyofd-template    📋 Placeholder replacement engine
+├── easyofd-signature   🔐 GB/T 38540 electronic seals [experimental]
+└── easyofd-convert     🧪 PDF ↔ OFD bridge API [planned]
 ```
+
+```mermaid
+flowchart TB
+    USER["Your Application"] --> FACADE["easyofd facade"]
+    FACADE --> CORE["easyofd-core"]
+    FACADE --> READER["easyofd-reader"]
+    FACADE --> WRITER["easyofd-writer"]
+    FACADE --> MARKDOWN["easyofd-markdown"]
+    FACADE --> TEMPLATE["easyofd-template"]
+    READER --> PACKAGE["easyofd-package"]
+    WRITER --> PACKAGE
+    MARKDOWN --> READER
+    MARKDOWN --> LAYOUT["easyofd-layout"]
+    DERIVE["easyofd-derive"] --> DERIVE_IMPL["derive-impl"]
+    DERIVE_IMPL --> CORE
+```
+
+See [docs/easyofd-rust-Architecture.zh_CN.md](docs/easyofd-rust-Architecture.zh_CN.md) for the full architecture document.
 
 ---
 
-## Quick Start 快速开始
+## Quick Start
 
 ```toml
 [dependencies]
-easyofd = "0.4"
+easyofd = "0.1"
 ```
 
-### 1. Write with Derive 派生宏写入
+### 1. Write with Derive Macro
 
 ```rust
 use easyofd::{EasyOfd, OfdModel};
 
 #[derive(OfdModel)]
-#[ofd(page_width = 210.0, page_height = 297.0)]  // A4
+#[ofd(page_width = 210.0, page_height = 297.0)]
 struct Invoice {
     #[ofd(x = 20.0, y = 30.0, size = 18.0, bold)]
     title: String,
     #[ofd(x = 20.0, y = 50.0)]
     amount: String,
-    #[ofd(x = 20.0, y = 70.0, kind = "image", img_width = 30.0, img_height = 30.0)]
-    seal: Vec<u8>,
-    #[ofd(ignore)]
-    internal_id: u64,
 }
 
-let data = vec![Invoice { /* ... */ }];
-EasyOfd::write::<Invoice>("out.ofd")
-    .metadata_title("Invoices")
+let data = vec![
+    Invoice { title: "Invoice #001".into(), amount: "$100.00".into() },
+    Invoice { title: "Invoice #002".into(), amount: "$200.00".into() },
+];
+
+EasyOfd::write::<Invoice>("invoices.ofd")
+    .metadata_title("Monthly Invoices")
     .do_write(&data)?;
 ```
 
-### 2. Manual Write 手动构建写入
+### 2. Manual Page Construction
 
 ```rust
-use easyofd::{EasyOfd, OfdPage, TextObject, ImageObject, PathObject};
+use easyofd::{EasyOfd, TextObject, ImageObject, OfdPage};
 
-let mut page = OfdPage::new(210.0, 297.0);
-page.add_text(TextObject::new(20.0, 30.0, "Title").size(24.0).bold());
-page.add_path(PathObject::hline(20.0, 55.0, 190.0));
-page.add_image(ImageObject::jpeg(150.0, 30.0, 30.0, 30.0, std::fs::read("seal.jpg")?));
+let mut page = OfdPage::new(210.0, 297.0); // A4
+page.add_text(TextObject::new(20.0, 30.0, "Hello OFD!").size(24.0).bold());
+page.add_text(TextObject::new(20.0, 60.0, "Normal text"));
+page.add_image(ImageObject::jpeg(150.0, 30.0, 30.0, 30.0, jpeg_bytes));
 
-EasyOfd::write_pages("doc.ofd")
-    .metadata_title("My Document")
-    .do_write(vec![page])?;
+EasyOfd::write_pages_to("output.ofd", vec![page])?;
 ```
 
-大文件或持续生成页面时使用增量 Writer：
+### 3. Stream Writer (Large Documents)
 
 ```rust
+use easyofd::{EasyOfd, OfdPage, TextObject};
+
 let file = std::fs::File::create("large.ofd")?;
 let mut writer = EasyOfd::stream_writer(file);
-for page in page_source {
+for i in 1..=100_000 {
+    let mut page = OfdPage::new(210.0, 297.0);
+    page.add_text(TextObject::new(10.0, 10.0, format!("Page {i}")));
     writer.write_page(page)?;
 }
 writer.finish()?;
 ```
 
-### 3. Read 读取
+### 4. Read OFD
 
 ```rust
-let reader = EasyOfd::read("input.ofd")?;
-println!("Pages: {}", reader.page_count());
+use easyofd::EasyOfd;
 
-// Extract per-page text
-for (i, text) in reader.extract_text().iter().enumerate() {
-    println!("Page {}: {}", i + 1, text);
-}
-
-// Or all text at once
-let all = reader.extract_all_text();
-
-// Access structured content
-for page in reader.pages() {
-    for obj in &page.content {
-        match obj {
-            ContentObject::Text(t) => println!("Text: {}", t.text),
-            ContentObject::Image(_) => println!("Image found"),
-            ContentObject::Path(_) => println!("Path found"),
-        }
-    }
-}
+// Visitor pattern — pages are not retained in memory
+let visited = EasyOfd::read_pages("input.ofd")
+    .page_range(1, 10)
+    .do_read(|page_number, page| {
+        println!("Page {page_number}: {} objects", page.content.len());
+        Ok(())
+    })?;
 ```
 
-### 4. Template Fill 模板填充
+### 5. OFD → Markdown
 
 ```rust
+use easyofd::EasyOfd;
+
+// In-memory
+let result = EasyOfd::to_markdown("input.ofd").do_convert()?;
+println!("{}", result.markdown);
+println!("Pages: {}, Losses: {}", result.report.pages_converted, result.report.losses.len());
+
+// Stream to file
+use std::fs::File;
+EasyOfd::to_markdown("input.ofd")
+    .convert_to(File::create("output.md")?)?;
+```
+
+### 6. Template Fill
+
+```rust
+use easyofd::EasyOfd;
 use std::collections::HashMap;
 
 let mut data = HashMap::new();
-data.insert("title".into(), "Invoice #001".into());
-data.insert("amount".into(), "$1,234.00".into());
-data.insert("date".into(), "2026-01-15".into());
+data.insert("name".to_string(), "Alice".to_string());
+data.insert("amount".to_string(), "$1,234.00".to_string());
 
-EasyOfd::fill_template("template.ofd", &data)?
-    .save("output.ofd")?;
+EasyOfd::fill_template("template.ofd", &data)?.save("filled.ofd")?;
 ```
 
-### 5. Signature 电子签章
-
-> 当前签章模块为实验性包结构 API，只生成占位 `SignedValue`，不能用于需要密码学有效性的生产文档。
+### 7. Edit Existing OFD
 
 ```rust
-use easyofd::{OfdSignatureBuilder, ElectronicSeal, SignatureAlgorithm};
+use easyofd::{OfdEditor, TextObject, Watermark};
 
-let seal = ElectronicSeal {
-    image_data: std::fs::read("seal.png")?,
-    name: "Company Seal".into(),
-    position: (150.0, 200.0),
-    page: 1,
-};
-
-OfdSignatureBuilder::new("document.ofd")
-    .seal(seal)
-    .algorithm(SignatureAlgorithm::Sm2WithSm3)
-    .sign()?
-    .save("signed.ofd")?;
+let mut editor = OfdEditor::open("input.ofd")?;
+editor.add_text_to_page(0, TextObject::new(10.0, 40.0, "Added text"))?;
+editor.apply_watermarks(&[Watermark::text("CONFIDENTIAL").position(50.0, 150.0)]);
+editor.save("edited.ofd")?;
 ```
 
 ---
 
-### 6. OFD to Markdown 转 Markdown
+## API Reference
 
-```rust
-use easyofd::{EasyOfd, ImagePolicy, PageBreakStyle};
+### Entry Point
 
-let result = EasyOfd::to_markdown("invoice.ofd")
-    .page_range(1, 20)
-    .images(ImagePolicy::ExtractTo("assets".into()))
-    .page_breaks(PageBreakStyle::HtmlComment)
-    .do_convert()?;
+All operations go through `EasyOfd` static methods:
 
-std::fs::write("invoice.md", result.markdown)?;
-println!("losses: {}", result.report.losses.len());
+| Method | Returns | Purpose |
+|---|---|---|
+| `EasyOfd::write::<T>(path)` | `OfdWriterBuilder<T>` | Typed write with `OfdModel` |
+| `EasyOfd::write_pages(path)` | `PageWriterBuilder` | Manual page write |
+| `EasyOfd::write_pages_to(path, pages)` | `OfdResult<()>` | One-shot file write |
+| `EasyOfd::write_pages_to_bytes(pages)` | `OfdResult<Vec<u8>>` | One-shot bytes |
+| `EasyOfd::stream_writer(output)` | `OfdStreamWriter<W>` | Streaming write |
+| `EasyOfd::read_pages(path)` | `OfdReadBuilder` | Page visitor |
+| `EasyOfd::to_markdown(path)` | `MarkdownConversionBuilder` | Markdown conversion |
+| `EasyOfd::fill_template(path, data)` | `OfdResult<OfdTemplateFiller>` | Template fill |
+
+### Core Types
+
+| Type | Purpose |
+|---|---|
+| `OfdPage` | A page with width, height, and content objects |
+| `TextObject` | Positioned text with font, size, weight, color |
+| `ImageObject` | Positioned image (JPEG/PNG/BMP/TIFF) |
+| `PathObject` | Vector path (SVG-like `d` attribute) |
+| `OfdModel` | Trait for mapping Rust structs to OFD pages |
+| `OfdError` | Unified error enum (7 variants) |
+| `ConversionReport` | Markdown conversion results + losses + warnings |
+
+---
+
+## Design Principles
+
+| Principle | Implementation |
+|---|---|
+| **Zero unsafe** | `#![forbid(unsafe_code)]` across entire workspace |
+| **Fluent Builders** | `mut self → Self` with `#[must_use]` |
+| **Compile-time reflection** | `#[derive(OfdModel)]` — zero runtime cost |
+| **Single facade** | `EasyOfd` — discoverable static factory |
+| **GB/T 33190-2016** | Valid OFD ZIP with correct XML namespaces |
+| **Single error type** | `OfdError` + `type OfdResult<T>` |
+| **Streaming first** | Writer/Reader/Markdown all support page-by-page processing |
+| **Separation of concerns** | Each crate has one job; facade wires them together |
+
+---
+
+## Workspace Structure
+
+| Crate | Tests | Lines | Description |
+|---|---:|---:|---|
+| `easyofd` | 12 | 504 | Facade, Builders, re-exports |
+| `easyofd-core` | 48 | 612 | Types, traits, errors |
+| `easyofd-derive` | — | 6 | Proc-macro shim |
+| `easyofd-derive-impl` | 34+2 | 400 | Derive logic + compile-fail |
+| `easyofd-reader` | 12 | 844 | SAX parser + visitor |
+| `easyofd-writer` | 62 | 1440 | Writer + StreamWriter + Editor |
+| `easyofd-package` | 6 | 280 | ZIP safety + atomic I/O |
+| `easyofd-layout` | 3 | 159 | Reading-order analysis |
+| `easyofd-markdown` | 10 | 307 | OFD → Markdown |
+| `easyofd-template` | 2 | 160 | Placeholder engine |
+| `easyofd-signature` | 3 | 180 | Electronic seals [experimental] |
+| `easyofd-convert` | 5 | 80 | PDF bridge [planned] |
+| **Total** | **199** | **6128** | — |
+
+---
+
+## Benchmark
+
+```bash
+cargo run --release -p easyofd --example benchmark -- 10000
 ```
 
-大文件可以使用 `.convert_to(writer)` 逐页写出，避免在内存中保留完整 Markdown。
-
-## API Reference  API 参考
-
-### EasyOfd Entry Points 入口
-
-| Method 方法 | Signature 签名 | Description |
-|:---|:---|:---|
-| `write::<T>` | `(path) -> OfdWriterBuilder<T>` | 派生宏写入 |
-| `write_pages` | `(path) -> PageWriterBuilder` | 手动构建写入 |
-| `read` | `(path) -> OfdResult<OfdReader>` | 读取 OFD |
-| `fill_template` | `(path, &HashMap) -> OfdResult<OfdTemplateFiller>` | 模板填充 |
-| `write_pages_to` | `(path, Vec<OfdPage>) -> OfdResult<()>` | 直接写入文件 |
-| `write_pages_to_bytes` | `(Vec<OfdPage>) -> OfdResult<Vec<u8>>` | 写入内存 |
-| `read_from_bytes` | `(&[u8]) -> OfdResult<OfdReader>` | 从内存读取 |
-
-### OfdWriterBuilder\<T: OfdModel\>
-
-| Method | Signature | Description |
-|:---|:---|:---|
-| `metadata_title` | `(title) -> Self` | 设置文档标题 |
-| `metadata_author` | `(author) -> Self` | 设置作者 |
-| `metadata_creator` | `(creator) -> Self` | 设置创建程序 |
-| `do_write` | `(&self, &[T]) -> OfdResult<()>` | 写入文件 |
-| `do_write_to_bytes` | `(&self, &[T]) -> OfdResult<Vec<u8>>` | 写入内存 |
-
-### OfdReader
-
-| Method | Returns | Description |
-|:---|:---|:---|
-| `open(path)` | `OfdResult<Self>` | 打开文件 |
-| `from_bytes(&[u8])` | `OfdResult<Self>` | 从内存解析 |
-| `page_count()` | `usize` | 页数 |
-| `pages()` | `&[OfdPage]` | 结构化页面 |
-| `extract_text()` | `Vec<String>` | 每页文本 |
-| `extract_all_text()` | `String` | 全部文本 |
-
-### OfdSignatureBuilder
-
-| Method | Description |
-|:---|:---|
-| `new(path)` | 创建构建器 |
-| `seal(ElectronicSeal)` | 添加印章 |
-| `algorithm(SignatureAlgorithm)` | 签名算法 |
-| `certificate(Vec<u8>)` | 设置证书 |
-| `private_key(Vec<u8>)` | 设置私钥 |
-| `sign() -> OfdResult<SignedOfd>` | 执行签章 |
-
-### Content Objects 内容对象
-
-| Type | Key Constructors | Description |
-|:---|:---|:---|
-| `TextObject` | `new(x,y,text) .font().size().bold().italic().color()` | 文本块 |
-| `ImageObject` | `new(x,y,w,h,data,fmt) .jpeg() .png()` | 图片 |
-| `PathObject` | `new(x,y,data) .hline() .vline() .rect()` | 矢量路径 |
-| `OfdPage` | `new(width,height) .add_text() .add_image() .add_path()` | 页面 |
-
-### `#[ofd(...)]` Attributes 属性
-
-| Attribute | Type | Default | Description |
-|:---|:---|:---|:---|
-| `x, y` | f64/int | required | Position in mm |
-| `font` | str | `"SimSun"` | Font family |
-| `size` | f64 | `12.0` | Font size in pt |
-| `bold` | flag | — | Bold (weight 700) |
-| `weight` | u32 | `400` | Font weight |
-| `italic` | flag | — | Italic |
-| `color` | u32 | `0` | RGB hex (e.g. `0xFF0000`) |
-| `kind` | str | `"text"` | `"text"` or `"image"` |
-| `ignore` | flag | — | Skip field |
-| `page_width/height` | f64/int | `210.0/297.0` | Struct-level: page size |
+Output: JSON with page count, input size, read/write timings.
 
 ---
 
-## Design Principles 设计原则
+## Testing
 
-| Principle 原则 | Practice 实践 |
-|:---|:---|
-| **Pure Rust 纯 Rust** | `#![forbid(unsafe_code)]` in every crate |
-| **Type-safe builders 类型安全构建器** | `mut self → Self`, `#[must_use]` |
-| **Compile-time reflection 编译期反射** | `#[derive(OfdModel)]` — no runtime overhead |
-| **Trait extensibility Trait 可扩展** | `OfdModel` trait for custom implementations |
-| **Single error type 统一错误** | `OfdError` enum, `OfdResult<T>` alias |
-| **Separation of concerns 关注点分离** | 12 crates, each with one job |
+```bash
+# All tests
+cargo test --workspace
 
----
+# Clippy
+cargo clippy --workspace -- -D warnings
 
-## Roadmap 路线图
-
-| Phase 阶段 | Status | Deliverables 交付 |
-|:---:|:---:|:---|
-| **v0.1** | ✅ | Core types, Writer, Derive macro, Builder API |
-| **v0.2** | ✅ | OFD Reader, Template engine |
-| **v0.3** | ⚠️ | Signature and font APIs exist; production implementation pending |
-| **v0.4** | ⚠️ | PDF ↔ OFD conversion API exists; backend pending |
-| **v0.5** | ✅ | Safe package layer, page visitor, atomic output, OFD → Markdown |
-| **v1.0** | 🔜 | Stable API, full integration tests, performance benchmarks |
+# Compile-fail tests (derive macro error messages)
+cargo test -p easyofd-derive-impl
+```
 
 ---
 
-## License 许可证
+## Roadmap
 
-Apache-2.0
-
-## Related Projects 相关项目
-
-- [easyexcel-rs](https://github.com/hiwepy/easyexcel-rs) — Rust port of Alibaba EasyExcel
-- [easyexcel](https://github.com/alibaba/easyexcel) — Original Java library
-- [ofd-rs](https://crates.io/crates/ofd-rs) — Lower-level OFD writer crate
-- [ofd-core](https://crates.io/crates/ofd-core) — OFD XML parsing & data model
+| Version | Milestone | Status |
+|---|---|:---:|
+| v0.1 | Writer + Derive + basic API | ✅ |
+| v0.2 | Reader + Template + Package safety | ✅ |
+| v0.3 | Signature API design | ✅ experimental |
+| v0.4 | Convert API design | ✅ planned |
+| v0.5 | Layout + Markdown + Editor + StreamWriter | ✅ |
+| v0.6 | Cryptographic signing implementation | 🗓️ |
+| v0.7 | PDF ↔ OFD conversion implementation | 🗓️ |
 
 ---
 
-<p align="center">
-  <sub>Built with Rust 🦀 &middot; 12 crates &middot; Follows <a href="https://github.com/hiwepy/easyexcel-rs">easyexcel-rs</a> conventions</sub>
-</p>
+## Contributing
+
+1. Fork and clone
+2. `cargo test --workspace` — all tests must pass
+3. `cargo clippy --workspace -- -D warnings` — no warnings
+4. All new code must have `#[test]` coverage
+5. No `unsafe` code — `#![forbid(unsafe_code)]` is enforced
+
+---
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
