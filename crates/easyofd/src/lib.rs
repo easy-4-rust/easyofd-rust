@@ -77,7 +77,9 @@ pub use easyofd_template::OfdTemplateFiller;
 pub use easyofd_signature::{ElectronicSeal, OfdSignatureBuilder, SignatureAlgorithm, SignedOfd};
 
 // Re-export convert functions for advanced usage.
-pub use easyofd_convert::{pdf_to_ofd, ofd_to_pdf, convert_image, ConvertOptions, ImageConvertFormat};
+pub use easyofd_convert::{
+    ConvertOptions, ImageConvertFormat, convert_image, ofd_to_pdf, pdf_to_ofd,
+};
 
 // ─── EasyOfd Static Factory ──────────────────────────────────────────────────
 
@@ -111,9 +113,7 @@ impl EasyOfd {
 
     /// 创建增量 OFD Writer，页面和图片在调用 `write_page` 时直接进入输出。
     #[must_use]
-    pub fn stream_writer<W: std::io::Write + std::io::Seek>(
-        output: W,
-    ) -> OfdStreamWriter<W> {
+    pub fn stream_writer<W: std::io::Write + std::io::Seek>(output: W) -> OfdStreamWriter<W> {
         OfdStreamWriter::new(output, WriteOptions::default())
     }
 
@@ -131,10 +131,7 @@ impl EasyOfd {
     /// # Errors
     ///
     /// Returns an error if ZIP creation or file I/O fails.
-    pub fn write_pages_to(
-        path: impl AsRef<std::path::Path>,
-        pages: Vec<OfdPage>,
-    ) -> OfdResult<()> {
+    pub fn write_pages_to(path: impl AsRef<std::path::Path>, pages: Vec<OfdPage>) -> OfdResult<()> {
         let mut writer = OfdWriter::new();
         writer.add_pages(pages);
         writer.build_to_file(path)
@@ -170,9 +167,7 @@ impl EasyOfd {
 
     /// 创建 OFD 到 Markdown 的转换构建器。
     #[must_use]
-    pub fn to_markdown(
-        path: impl AsRef<std::path::Path>,
-    ) -> MarkdownConversionBuilder {
+    pub fn to_markdown(path: impl AsRef<std::path::Path>) -> MarkdownConversionBuilder {
         MarkdownConversionBuilder::new(path)
     }
 
@@ -406,7 +401,11 @@ mod tests {
         let mut page = OfdPage::new(210.0, 297.0);
         page.add_text(TextObject::new(20.0, 30.0, "Invoice"));
         page.add_image(ImageObject::jpeg(
-            150.0, 30.0, 30.0, 30.0, vec![0xFF, 0xD8, 0xFF, 0xE0],
+            150.0,
+            30.0,
+            30.0,
+            30.0,
+            vec![0xFF, 0xD8, 0xFF, 0xE0],
         ));
 
         let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();

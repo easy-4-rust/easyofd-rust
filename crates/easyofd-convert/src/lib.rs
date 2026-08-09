@@ -88,10 +88,7 @@ pub enum ImageConvertFormat {
 /// # Errors
 ///
 /// Returns an error if conversion fails.
-pub fn convert_image(
-    _input: &[u8],
-    _target_format: ImageConvertFormat,
-) -> OfdResult<Vec<u8>> {
+pub fn convert_image(_input: &[u8], _target_format: ImageConvertFormat) -> OfdResult<Vec<u8>> {
     Err(easyofd_core::OfdError::Conversion(
         "image conversion requires image crate integration (planned)".into(),
     ))

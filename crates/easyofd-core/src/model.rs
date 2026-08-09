@@ -290,7 +290,8 @@ fn detect_image_format(path: &std::path::Path, data: &[u8]) -> ImageFormat {
     }
     if data.len() >= 4
         && ((data[0] == b'I' && data[1] == b'I') || (data[0] == b'M' && data[1] == b'M'))
-        && data[2] == 0x00 && data[3] == 0x2A
+        && data[2] == 0x00
+        && data[3] == 0x2A
     {
         return ImageFormat::Tiff;
     }

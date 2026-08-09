@@ -20,8 +20,8 @@ use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 
 use easyofd_core::OfdResult;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// An OFD template filler.
 ///
@@ -52,23 +52,17 @@ impl OfdTemplateFiller {
     /// # Errors
     ///
     /// Returns an error if the data is not a valid ZIP.
-    pub fn fill_bytes(
-        template_bytes: &[u8],
-        data: &HashMap<String, String>,
-    ) -> OfdResult<Self> {
+    pub fn fill_bytes(template_bytes: &[u8], data: &HashMap<String, String>) -> OfdResult<Self> {
         let cursor = Cursor::new(template_bytes);
-        let mut archive = zip::ZipArchive::new(cursor)
-            .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-        easyofd_package::validate_archive(
-            &mut archive,
-            easyofd_package::PackageLimits::default(),
-        )?;
+        let mut archive =
+            zip::ZipArchive::new(cursor).map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+        easyofd_package::validate_archive(&mut archive, easyofd_package::PackageLimits::default())?;
 
         let out_buf = Vec::new();
         let out_cursor = Cursor::new(out_buf);
         let mut zip = ZipWriter::new(out_cursor);
-        let options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let options =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         for i in 0..archive.len() {
             let mut entry = archive
@@ -76,16 +70,17 @@ impl OfdTemplateFiller {
                 .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
             let name = entry.name().to_string();
             let mut content = Vec::new();
-            entry.read_to_end(&mut content).map_err(easyofd_core::OfdError::Io)?;
+            entry
+                .read_to_end(&mut content)
+                .map_err(easyofd_core::OfdError::Io)?;
 
             // Replace placeholders in XML files
             let is_xml = std::path::Path::new(&name)
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"));
             if is_xml {
-                let text = String::from_utf8(content).map_err(|error| {
-                    easyofd_core::OfdError::Xml(format!("{name}: {error}"))
-                })?;
+                let text = String::from_utf8(content)
+                    .map_err(|error| easyofd_core::OfdError::Xml(format!("{name}: {error}")))?;
                 let mut replaced = text;
                 for (key, value) in data {
                     let placeholder = format!("{{{key}}}");
@@ -99,7 +94,8 @@ impl OfdTemplateFiller {
                 // Binary files (images, etc.) — copy as-is
                 zip.start_file(name, options)
                     .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-                zip.write_all(&content).map_err(easyofd_core::OfdError::Io)?;
+                zip.write_all(&content)
+                    .map_err(easyofd_core::OfdError::Io)?;
             }
         }
 

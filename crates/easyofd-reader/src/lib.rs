@@ -21,12 +21,12 @@ use std::io::{BufReader, Cursor, Read, Seek};
 use easyofd_core::{
     ContentObject, ImageFormat, ImageObject, OfdError, OfdPage, OfdResult, PathObject, TextObject,
 };
-use quick_xml::events::Event;
-use quick_xml::Reader as XmlReader;
 use easyofd_package::{PackageLimits, validate_archive};
+use quick_xml::Reader as XmlReader;
+use quick_xml::events::Event;
 
 /// OFD 读取选项。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ReadOptions {
     /// 第一个读取页码，使用从 1 开始的页码。
     pub first_page: Option<usize>,
@@ -34,16 +34,6 @@ pub struct ReadOptions {
     pub last_page: Option<usize>,
     /// ZIP 包安全限制。
     pub package_limits: PackageLimits,
-}
-
-impl Default for ReadOptions {
-    fn default() -> Self {
-        Self {
-            first_page: None,
-            last_page: None,
-            package_limits: PackageLimits::default(),
-        }
-    }
 }
 
 /// An OFD document reader.
@@ -181,9 +171,7 @@ fn page_text(page: &OfdPage) -> String {
 // ─── XML Parsing ─────────────────────────────────────────────────────────────
 
 /// Parse OFD.xml → return the DocRoot directory (e.g. "Doc_0").
-fn parse_ofd_entry<R: Read + std::io::Seek>(
-    archive: &mut zip::ZipArchive<R>,
-) -> OfdResult<String> {
+fn parse_ofd_entry<R: Read + std::io::Seek>(archive: &mut zip::ZipArchive<R>) -> OfdResult<String> {
     let xml = read_zip_entry(archive, "OFD.xml")?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
     reader.config_mut().trim_text(true);
@@ -197,7 +185,10 @@ fn parse_ofd_entry<R: Read + std::io::Seek>(
                 in_target = true;
             }
             Ok(Event::Text(ref e)) if in_target => {
-                doc_root = e.xml10_content().map(|c| c.into_owned()).unwrap_or_default();
+                doc_root = e
+                    .xml10_content()
+                    .map(|c| c.into_owned())
+                    .unwrap_or_default();
             }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
                 in_target = false;
@@ -234,13 +225,14 @@ fn parse_document_entry<R: Read + std::io::Seek>(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if e.name().as_ref() == b"ofd:Page" =>
-            {
+            Ok(Event::Empty(ref e) | Event::Start(ref e)) if e.name().as_ref() == b"ofd:Page" => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"BaseLoc" {
                         let val = attr
-                            .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, reader.decoder())
+                            .decoded_and_normalized_value(
+                                quick_xml::XmlVersion::Explicit1_0,
+                                reader.decoder(),
+                            )
                             .unwrap_or_default();
                         pages.push(val.to_string());
                     }
@@ -353,37 +345,35 @@ fn parse_page_entry<R: Read + std::io::Seek>(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
-                match e.name().as_ref() {
-                    b"ofd:PhysicalBox" => in_physical_box = true,
-                    b"ofd:TextObject" => current_text = Some(parse_text_object_attrs(e, reader.decoder())?),
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) => match e.name().as_ref() {
+                b"ofd:PhysicalBox" => in_physical_box = true,
+                b"ofd:TextObject" => {
+                    current_text = Some(parse_text_object_attrs(e, reader.decoder())?)
+                }
                 b"ofd:TextCode" => in_text_code = true,
                 b"ofd:PathObject" => {
                     current_path = Some(parse_path_object_attrs(e, reader.decoder())?)
                 }
                 b"ofd:AbbreviatedData" => in_path_data = true,
                 b"ofd:ImageObject" => {
-                        let img = parse_image_object_attrs(e, reader.decoder())?;
-                        let (data, format) = if let Some(resource) = resources.get(&img.resource_id) {
+                    let img = parse_image_object_attrs(e, reader.decoder())?;
+                    let (data, format) = if let Some(resource) = resources.get(&img.resource_id) {
                         let resource_path = resolve_resource_path(doc_dir, &resource.location)?;
-                        (
-                            read_zip_entry(archive, &resource_path)?,
-                                resource.format,
-                            )
-                        } else {
-                            (Vec::new(), img.format)
-                        };
-                        content.push(ContentObject::Image(ImageObject::new(
-                            img.x, img.y, img.width, img.height,
-                            data,
-                            format,
-                        )));
-                    }
-                    _ => {}
+                        (read_zip_entry(archive, &resource_path)?, resource.format)
+                    } else {
+                        (Vec::new(), img.format)
+                    };
+                    content.push(ContentObject::Image(ImageObject::new(
+                        img.x, img.y, img.width, img.height, data, format,
+                    )));
                 }
-            }
+                _ => {}
+            },
             Ok(Event::Text(ref e)) => {
-                let text = e.xml10_content().map(|c| c.into_owned()).unwrap_or_default();
+                let text = e
+                    .xml10_content()
+                    .map(|c| c.into_owned())
+                    .unwrap_or_default();
                 if in_physical_box {
                     let parts: Vec<f64> = text
                         .split_whitespace()
@@ -422,15 +412,14 @@ fn parse_page_entry<R: Read + std::io::Seek>(
                     }
                 }
             }
-            Ok(Event::End(ref e)) => {
-                match e.name().as_ref() {
-                    b"ofd:PhysicalBox" => in_physical_box = false,
-                    b"ofd:TextObject" => {
-                        if let Some(t) = current_text.take() {
-                            let mut obj = TextObject::new(t.x, t.y, t.text);
-                            if let Some(f) = t.font {
-                                obj = obj.font(f);
-                            }
+            Ok(Event::End(ref e)) => match e.name().as_ref() {
+                b"ofd:PhysicalBox" => in_physical_box = false,
+                b"ofd:TextObject" => {
+                    if let Some(t) = current_text.take() {
+                        let mut obj = TextObject::new(t.x, t.y, t.text);
+                        if let Some(f) = t.font {
+                            obj = obj.font(f);
+                        }
                         if let Some(s) = t.size {
                             obj = obj.size(s);
                         }
@@ -452,9 +441,8 @@ fn parse_page_entry<R: Read + std::io::Seek>(
                     }
                 }
                 b"ofd:AbbreviatedData" => in_path_data = false,
-                    _ => {}
-                }
-            }
+                _ => {}
+            },
             Ok(Event::Eof) => break,
             Err(e) => return Err(OfdError::Xml(format!("{page_path}: {e}"))),
             _ => {}
@@ -462,7 +450,11 @@ fn parse_page_entry<R: Read + std::io::Seek>(
         buf.clear();
     }
 
-    Ok(OfdPage { width, height, content })
+    Ok(OfdPage {
+        width,
+        height,
+        content,
+    })
 }
 
 // ─── Attribute Parsing Helpers ───────────────────────────────────────────────
@@ -507,19 +499,19 @@ fn parse_text_object_attrs(
                 }
             }
             b"Font" => {
-                    font = Some(
-                        attr.decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-                            .unwrap_or_default()
-                            .to_string(),
-                    );
-                }
-            b"Size" => {
-                    size = attr
-                        .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
+                font = Some(
+                    attr.decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
                         .unwrap_or_default()
-                        .parse()
-                        .ok();
-                }
+                        .to_string(),
+                );
+            }
+            b"Size" => {
+                size = attr
+                    .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
+                    .unwrap_or_default()
+                    .parse()
+                    .ok();
+            }
             _ => {}
         }
     }

@@ -30,11 +30,9 @@ pub use stream_writer::OfdStreamWriter;
 use std::io::{Cursor, Write};
 
 use chrono::Utc;
-use easyofd_core::{
-    ContentObject, ImageFormat, OfdMetadata, OfdPage, OfdResult,
-};
-use zip::write::{SimpleFileOptions, ZipWriter};
+use easyofd_core::{ContentObject, ImageFormat, OfdMetadata, OfdPage, OfdResult};
 use easyofd_package::atomic_write;
+use zip::write::{SimpleFileOptions, ZipWriter};
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -112,8 +110,8 @@ impl OfdWriter {
     /// ZIP 创建或输出写入失败时返回错误。
     pub fn write_to<W: Write + std::io::Seek>(&self, output: W) -> OfdResult<W> {
         let mut zip = ZipWriter::new(output);
-        let options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let options =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         self.write_zip(&mut zip, &options)?;
         zip.finish().map_err(zip_err)
     }
@@ -155,8 +153,7 @@ impl OfdWriter {
 
         // 1. Write OFD.xml
         let ofd_xml = self.build_ofd_xml();
-        zip.start_file("OFD.xml", *options)
-            .map_err(zip_err)?;
+        zip.start_file("OFD.xml", *options).map_err(zip_err)?;
         zip.write_all(ofd_xml.as_bytes()).map_err(io_err)?;
 
         // 2. Write Document.xml
@@ -217,7 +214,10 @@ impl OfdWriter {
         xml.push('\n');
 
         if let Some(ref title) = self.options.metadata.title {
-            xml.push_str(&format!("      <ofd:Title>{}</ofd:Title>", xml_escape(title)));
+            xml.push_str(&format!(
+                "      <ofd:Title>{}</ofd:Title>",
+                xml_escape(title)
+            ));
             xml.push('\n');
         }
         if let Some(ref author) = self.options.metadata.author {
@@ -253,10 +253,7 @@ impl OfdWriter {
         xml
     }
 
-    fn build_document_xml(
-        &self,
-        image_resources: &[(String, &[u8], ImageFormat)],
-    ) -> String {
+    fn build_document_xml(&self, image_resources: &[(String, &[u8], ImageFormat)]) -> String {
         let mut xml = String::with_capacity(1024);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
@@ -268,7 +265,10 @@ impl OfdWriter {
         xml.push('\n');
 
         // Page area: use first page dimensions, or A4 default
-        let (pw, ph) = self.pages.first().map_or((210.0, 297.0), |p| (p.width, p.height));
+        let (pw, ph) = self
+            .pages
+            .first()
+            .map_or((210.0, 297.0), |p| (p.width, p.height));
         xml.push_str(&format!(
             r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {pw:.2} {ph:.2}</ofd:PhysicalBox></ofd:PageArea>"
         ));
@@ -280,9 +280,7 @@ impl OfdWriter {
 
         // Document resources
         if !image_resources.is_empty() {
-            xml.push_str(
-                r"    <ofd:DocumentRes>Doc_0/DocumentRes.xml</ofd:DocumentRes>",
-            );
+            xml.push_str(r"    <ofd:DocumentRes>Doc_0/DocumentRes.xml</ofd:DocumentRes>");
             xml.push('\n');
         }
 
@@ -308,10 +306,7 @@ impl OfdWriter {
     }
 
     #[allow(clippy::unused_self)]
-    fn build_document_res_xml(
-        &self,
-        image_resources: &[(String, &[u8], ImageFormat)],
-    ) -> String {
+    fn build_document_res_xml(&self, image_resources: &[(String, &[u8], ImageFormat)]) -> String {
         let mut xml = String::with_capacity(512);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
@@ -358,12 +353,7 @@ impl OfdWriter {
     }
 
     #[allow(clippy::unused_self)]
-    fn build_page_xml(
-        &self,
-        page: &OfdPage,
-        page_index: usize,
-        page_image_start: usize,
-    ) -> String {
+    fn build_page_xml(&self, page: &OfdPage, page_index: usize, page_image_start: usize) -> String {
         let mut xml = String::with_capacity(2048);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
@@ -394,12 +384,9 @@ impl OfdWriter {
                     let x = text.x;
                     let y = text.y;
                     // Estimate text width: ~0.3mm per character for 12pt SimSun (rough heuristic)
-                    let character_count = f64::from(
-                        u32::try_from(text.text.chars().count()).unwrap_or(u32::MAX),
-                    );
-                    let est_width = text
-                        .width
-                        .unwrap_or(character_count * text.size * 0.06);
+                    let character_count =
+                        f64::from(u32::try_from(text.text.chars().count()).unwrap_or(u32::MAX));
+                    let est_width = text.width.unwrap_or(character_count * text.size * 0.06);
                     let est_height = text.height.unwrap_or(text.size * 0.4);
 
                     xml.push_str(&format!(
@@ -561,7 +548,7 @@ impl OfdEditor {
     pub fn apply_watermarks(&mut self, watermarks: &[easyofd_core::Watermark]) {
         for wm in watermarks {
             for (i, page) in self.pages.iter_mut().enumerate() {
-                let target = wm.page.map_or(true, |p| p == i);
+                let target = wm.page.is_none_or(|p| p == i);
                 if !target {
                     continue;
                 }
@@ -575,8 +562,11 @@ impl OfdEditor {
                 }
                 if let Some(ref data) = wm.image {
                     page.add_image(easyofd_core::ImageObject::jpeg(
-                        wm.position.0, wm.position.1,
-                        100.0, 40.0, data.clone(),
+                        wm.position.0,
+                        wm.position.1,
+                        100.0,
+                        40.0,
+                        data.clone(),
                     ));
                 }
             }
@@ -760,10 +750,7 @@ mod tests {
     #[test]
     fn test_add_pages() {
         let mut w = OfdWriter::new();
-        w.add_pages(vec![
-            OfdPage::new(210.0, 297.0),
-            OfdPage::new(297.0, 210.0),
-        ]);
+        w.add_pages(vec![OfdPage::new(210.0, 297.0), OfdPage::new(297.0, 210.0)]);
         assert_eq!(w.pages.len(), 2);
     }
 
@@ -911,7 +898,14 @@ mod tests {
     fn test_document_res_bmp() {
         let mut w = OfdWriter::new();
         let mut page = OfdPage::new(210.0, 297.0);
-        page.add_image(ImageObject::new(0.0, 0.0, 10.0, 10.0, vec![0x42], ImageFormat::Bmp));
+        page.add_image(ImageObject::new(
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            vec![0x42],
+            ImageFormat::Bmp,
+        ));
         w.add_page(page);
         let bytes = w.build().unwrap();
         let names = zip_entry_names(&bytes);
@@ -922,7 +916,14 @@ mod tests {
     fn test_document_res_tiff() {
         let mut w = OfdWriter::new();
         let mut page = OfdPage::new(210.0, 297.0);
-        page.add_image(ImageObject::new(0.0, 0.0, 10.0, 10.0, vec![0x49], ImageFormat::Tiff));
+        page.add_image(ImageObject::new(
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            vec![0x49],
+            ImageFormat::Tiff,
+        ));
         w.add_page(page);
         let bytes = w.build().unwrap();
         let names = zip_entry_names(&bytes);
@@ -1181,7 +1182,9 @@ mod editor_tests {
         assert_eq!(editor.page_count(), 1);
 
         // Add text to existing page
-        editor.add_text_to_page(0, TextObject::new(10.0, 40.0, "Edited text")).unwrap();
+        editor
+            .add_text_to_page(0, TextObject::new(10.0, 40.0, "Edited text"))
+            .unwrap();
 
         // Save to new file
         let out = dir.join("edited.ofd");

@@ -4,7 +4,7 @@
 //! The `easyofd-derive` proc-macro crate is a thin shim that delegates to this crate.
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{Data, DeriveInput, Fields};
 
 /// Entry point called by the proc-macro shim.
@@ -288,7 +288,8 @@ fn parse_lit_u32(lit: &syn::Lit) -> syn::Result<u32> {
 
 /// Extract the string value from a `Lit`, or empty string if not a string literal.
 fn lit_to_string(lit: &syn::Lit) -> String {
-    lit.to_token_stream().to_string()
+    lit.to_token_stream()
+        .to_string()
         .trim_matches('"')
         .to_string()
 }

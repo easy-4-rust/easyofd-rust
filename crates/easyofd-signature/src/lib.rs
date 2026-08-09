@@ -7,8 +7,8 @@
 use std::io::{Cursor, Read, Write};
 
 use easyofd_core::OfdResult;
-use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
 
 /// Supported signature algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,22 +118,18 @@ impl OfdSignatureBuilder {
     ///
     /// Returns an error if the input file cannot be read.
     pub fn sign(self) -> OfdResult<SignedOfd> {
-        let input_bytes =
-            std::fs::read(&self.input_path).map_err(easyofd_core::OfdError::Io)?;
+        let input_bytes = std::fs::read(&self.input_path).map_err(easyofd_core::OfdError::Io)?;
 
         let cursor = Cursor::new(input_bytes);
         let mut archive =
             zip::ZipArchive::new(cursor).map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-        easyofd_package::validate_archive(
-            &mut archive,
-            easyofd_package::PackageLimits::default(),
-        )?;
+        easyofd_package::validate_archive(&mut archive, easyofd_package::PackageLimits::default())?;
 
         let out_buf = Vec::new();
         let out_cursor = Cursor::new(out_buf);
         let mut zip = ZipWriter::new(out_cursor);
-        let options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let options =
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
         // Copy existing entries
         for i in 0..archive.len() {
@@ -142,11 +138,14 @@ impl OfdSignatureBuilder {
                 .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
             let name = entry.name().to_string();
             let mut content = Vec::new();
-            entry.read_to_end(&mut content).map_err(easyofd_core::OfdError::Io)?;
+            entry
+                .read_to_end(&mut content)
+                .map_err(easyofd_core::OfdError::Io)?;
 
             zip.start_file(name, options)
                 .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-            zip.write_all(&content).map_err(easyofd_core::OfdError::Io)?;
+            zip.write_all(&content)
+                .map_err(easyofd_core::OfdError::Io)?;
         }
 
         // Add seal images

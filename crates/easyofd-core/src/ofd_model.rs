@@ -142,7 +142,9 @@ mod tests {
 
     #[test]
     fn test_ofd_model_to_page() {
-        let m = TestModel { text: "hello".into() };
+        let m = TestModel {
+            text: "hello".into(),
+        };
         let page = m.to_page().unwrap();
         assert!((page.width - 210.0).abs() < f64::EPSILON);
         assert!((page.height - 297.0).abs() < f64::EPSILON);

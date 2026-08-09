@@ -85,7 +85,15 @@ fn test_derive_to_pages_empty() {
 #[derive(OfdModel)]
 #[ofd(page_width = 297.0, page_height = 210.0)]
 struct FullAttrs {
-    #[ofd(x = 10.0, y = 20.0, font = "SimHei", size = 24.0, weight = 700, italic, color = 16711680)]
+    #[ofd(
+        x = 10.0,
+        y = 20.0,
+        font = "SimHei",
+        size = 24.0,
+        weight = 700,
+        italic,
+        color = 16711680
+    )]
     header: String,
     #[ofd(x = 10.0, y = 50.0, font = "Arial", size = 14.0)]
     body: String,
@@ -144,7 +152,13 @@ fn test_full_attrs_italic_bold_combined() {
 struct WithImage {
     #[ofd(x = 20.0, y = 30.0)]
     title: String,
-    #[ofd(x = 150.0, y = 30.0, kind = "image", img_width = 40.0, img_height = 40.0)]
+    #[ofd(
+        x = 150.0,
+        y = 30.0,
+        kind = "image",
+        img_width = 40.0,
+        img_height = 40.0
+    )]
     seal: Vec<u8>,
 }
 
@@ -182,7 +196,9 @@ struct WithNonOfdAttrs {
 
 #[test]
 fn test_non_ofd_attrs_ignored() {
-    let item = WithNonOfdAttrs { text: "hello".into() };
+    let item = WithNonOfdAttrs {
+        text: "hello".into(),
+    };
     let page = item.to_page().unwrap();
     assert_eq!(page.content.len(), 1);
 }
@@ -215,13 +231,22 @@ fn test_float_weight_and_color() {
 struct FloatImgSize {
     #[ofd(x = 0.0, y = 0.0)]
     text: String,
-    #[ofd(x = 50.0, y = 50.0, kind = "image", img_width = 50.0, img_height = 60.0)]
+    #[ofd(
+        x = 50.0,
+        y = 50.0,
+        kind = "image",
+        img_width = 50.0,
+        img_height = 60.0
+    )]
     seal: Vec<u8>,
 }
 
 #[test]
 fn test_float_img_size() {
-    let item = FloatImgSize { text: "x".into(), seal: vec![0xFF] };
+    let item = FloatImgSize {
+        text: "x".into(),
+        seal: vec![0xFF],
+    };
     let page = item.to_page().unwrap();
     assert_eq!(page.content.len(), 2);
 }
@@ -259,7 +284,9 @@ struct WithUnknownStructAttr {
 
 #[test]
 fn test_unknown_attrs_ignored() {
-    let item = WithUnknownStructAttr { text: "hello".into() };
+    let item = WithUnknownStructAttr {
+        text: "hello".into(),
+    };
     let page = item.to_page().unwrap();
     assert_eq!(page.content.len(), 1);
     assert_eq!(WithUnknownStructAttr::page_size(), (210.0, 297.0));
@@ -337,11 +364,19 @@ fn test_easyofd_write_derive_model() {
 #[test]
 fn test_manual_page_construction() {
     let mut page = OfdPage::new(297.0, 210.0);
-    page.add_text(TextObject::new(20.0, 30.0, "Manual Page Title").size(24.0).bold());
+    page.add_text(
+        TextObject::new(20.0, 30.0, "Manual Page Title")
+            .size(24.0)
+            .bold(),
+    );
     page.add_text(TextObject::new(20.0, 60.0, "Body text goes here"));
     page.add_path(PathObject::hline(20.0, 55.0, 277.0));
     page.add_image(ImageObject::jpeg(
-        200.0, 30.0, 50.0, 50.0, vec![0xFF, 0xD8, 0xFF, 0xE0],
+        200.0,
+        30.0,
+        50.0,
+        50.0,
+        vec![0xFF, 0xD8, 0xFF, 0xE0],
     ));
 
     let bytes = EasyOfd::write_pages("manual.ofd")
@@ -515,7 +550,11 @@ fn test_multiple_images_same_page() {
     let mut page = OfdPage::new(210.0, 297.0);
     for i in 0..5 {
         page.add_image(ImageObject::jpeg(
-            f64::from(i) * 40.0, 0.0, 30.0, 30.0, vec![0xFF],
+            f64::from(i) * 40.0,
+            0.0,
+            30.0,
+            30.0,
+            vec![0xFF],
         ));
     }
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
