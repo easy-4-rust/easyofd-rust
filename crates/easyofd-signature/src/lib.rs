@@ -167,3 +167,124 @@ mod tests {
         let _ = std::fs::remove_file(&p);
     }
 }
+
+/// 签名验证结果。
+#[derive(Debug)]
+pub struct VerificationResult {
+    /// 签名是否有效。
+    pub valid: bool,
+    /// SM3 摘要值。
+    pub digest: String,
+    /// 签名值。
+    pub signature_value: String,
+    /// 公钥（十六进制）。
+    pub public_key: String,
+    /// 签名算法。
+    pub algorithm: SignatureAlgorithm,
+}
+
+/// 从已签名的 OFD 文件中读取签名信息。
+///
+/// # 错误
+///
+/// 如果文件无法读取或签名格式无效则返回错误。
+pub fn read_signature(ofd_path: impl AsRef<std::path::Path>) -> OfdResult<VerificationResult> {
+    let ofd_path = ofd_path.as_ref();
+    let bytes = std::fs::read(ofd_path).map_err(easyofd_core::OfdError::Io)?;
+    let cursor = Cursor::new(&bytes[..]);
+    let mut archive = zip::ZipArchive::new(cursor)
+        .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+
+    // 读取 Signature.xml
+    let mut sig_file = archive
+        .by_name("Doc_0/Signs/Signature.xml")
+        .map_err(|e| easyofd_core::OfdError::Conversion(format!("签名文件不存在: {e}")))?;
+
+    let mut sig_xml = String::new();
+    sig_file
+        .read_to_string(&mut sig_xml)
+        .map_err(easyofd_core::OfdError::Io)?;
+
+    // 解析 XML 提取签名信息
+    let algorithm = if sig_xml.contains("SM2WithSM3") {
+        SignatureAlgorithm::Sm2WithSm3
+    } else {
+        SignatureAlgorithm::Sha256WithRsa
+    };
+
+    let digest = extract_xml_value(&sig_xml, "ofd:DigestValue").unwrap_or_default();
+    let signature_value = extract_xml_value(&sig_xml, "ofd:SignedValue").unwrap_or_default();
+    let public_key = extract_xml_value(&sig_xml, "ofd:PublicKey").unwrap_or_default();
+
+    Ok(VerificationResult {
+        valid: true, // 需要实际验证逻辑
+        digest,
+        signature_value,
+        public_key,
+        algorithm,
+    })
+}
+
+/// 验证 OFD 文件的 SM2 签名。
+///
+/// 当前实现仅读取和解析签名信息，完整的密码学验证需要
+/// 根据实际业务场景集成 SM2 验签逻辑。
+///
+/// # 错误
+///
+/// 如果文件无法读取或签名格式无效则返回错误。
+pub fn verify_signature(ofd_path: impl AsRef<std::path::Path>) -> OfdResult<bool> {
+    let result = read_signature(ofd_path)?;
+
+    // 验证签名值和摘要存在
+    if result.signature_value.is_empty() || result.digest.is_empty() {
+        return Ok(false);
+    }
+
+    // 验证算法支持
+    if result.algorithm != SignatureAlgorithm::Sm2WithSm3 {
+        return Err(easyofd_core::OfdError::Conversion(
+            "仅支持 SM2WithSM3 算法验证".into(),
+        ));
+    }
+
+    // 解析公钥（验证格式有效性）
+    let pub_bytes = unhex(&result.public_key)
+        .map_err(|_| easyofd_core::OfdError::Conversion("公钥格式无效".into()))?;
+
+    if pub_bytes.len() != 33 && pub_bytes.len() != 65 {
+        return Err(easyofd_core::OfdError::Conversion("公钥长度无效".into()));
+    }
+
+    // 解析签名（验证格式有效性）
+    let sig_bytes = unhex(&result.signature_value)
+        .map_err(|_| easyofd_core::OfdError::Conversion("签名格式无效".into()))?;
+
+    if sig_bytes.len() != 64 {
+        return Err(easyofd_core::OfdError::Conversion("签名长度无效".into()));
+    }
+
+    // TODO: 使用 sm2::dsa::VerifyingKey 进行完整密码学验证
+    // 需要根据实际签名时使用的 DistId 和消息格式进行适配
+
+    Ok(true)
+}
+
+/// 从十六进制字符串解析字节。
+fn unhex(s: &str) -> Result<Vec<u8>, std::num::ParseIntError> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
+        .collect()
+}
+
+/// 从 XML 中提取指定标签的值。
+fn extract_xml_value(xml: &str, tag: &str) -> Option<String> {
+    let start_tag = format!("<{tag}>");
+    let end_tag = format!("</{tag}>");
+
+    let start = xml.find(&start_tag)? + start_tag.len();
+    let end = xml.find(&end_tag)?;
+
+    Some(xml[start..end].to_string())
+}

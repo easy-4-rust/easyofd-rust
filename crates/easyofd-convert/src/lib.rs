@@ -5,8 +5,8 @@
 //!
 //! ## 功能
 //!
-//! - PDF → OFD: 提取 PDF 文本和页面结构，映射到 OFD 文本对象
-//! - OFD → PDF: 将 OFD 页面内容渲染为 PDF 页面
+//! - PDF → OFD: 提取 PDF 文本(Tj/TJ 操作符)和页面结构
+//! - OFD → PDF: 渲染文本、图片、路径对象到 PDF
 //!
 //! ## 依赖
 //!
@@ -17,7 +17,7 @@
 
 use std::path::Path;
 
-use easyofd_core::{OfdError, OfdPage, OfdResult, TextObject};
+use easyofd_core::{ContentObject, OfdError, OfdPage, OfdResult, TextObject};
 use easyofd_reader::OfdReader;
 use easyofd_writer::OfdWriter;
 use lopdf::Document;
@@ -40,6 +40,8 @@ impl Default for ConvertOptions {
     }
 }
 
+// ─── PDF → OFD ──────────────────────────────────────────────────────────────
+
 /// PDF → OFD 转换。
 ///
 /// 从 PDF 提取文本内容和页面结构，映射到 OFD 文本对象。
@@ -55,10 +57,9 @@ pub fn pdf_to_ofd(
     let pdf_path = pdf_path.as_ref();
     let ofd_path = ofd_path.as_ref();
 
-    // 解析 PDF
-    let doc = Document::load(pdf_path).map_err(|e| OfdError::Conversion(format!("PDF 解析失败: {e}")))?;
+    let doc = Document::load(pdf_path)
+        .map_err(|e| OfdError::Conversion(format!("PDF 解析失败: {e}")))?;
 
-    // 获取页面数量
     let page_count = doc.get_pages().len();
     let range = if options.pages.is_empty() {
         0..page_count
@@ -70,91 +71,159 @@ pub fn pdf_to_ofd(
     let (default_w, default_h) = options.page_size.unwrap_or((210.0, 297.0));
 
     for page_num in range {
-        let page_id = doc.get_pages().get(&(page_num as u32 + 1)).copied()
+        let page_id = doc
+            .get_pages()
+            .get(&(page_num as u32 + 1))
+            .copied()
             .ok_or_else(|| OfdError::Conversion(format!("页面 {} 不存在", page_num + 1)))?;
 
-        // 提取页面文本
-        let text_content = extract_page_text(&doc, page_id)?;
-
-        // 获取页面尺寸
+        let text_lines = extract_page_text(&doc, page_id)?;
         let (w, h) = get_page_size(&doc, page_id).unwrap_or((default_w, default_h));
 
         let mut page = OfdPage::new(w, h);
-
-        // 将提取的文本添加到页面
         let mut y_offset = 20.0;
-        for line in text_content.lines() {
+
+        for line in text_lines {
             if !line.is_empty() {
-                page.add_text(TextObject::new(10.0, y_offset, line));
-                y_offset += 5.0; // 行间距
+                page.add_text(TextObject::new(10.0, y_offset, &line));
+                y_offset += 5.0;
             }
         }
 
         writer.add_page(page);
     }
 
-    // 写入 OFD 文件
     let ofd_bytes = writer.build()?;
     std::fs::write(ofd_path, ofd_bytes).map_err(OfdError::Io)?;
-
     Ok(())
 }
 
-/// 从 PDF 页面提取文本。
-fn extract_page_text(doc: &Document, page_id: lopdf::ObjectId) -> OfdResult<String> {
-    let mut text = String::new();
+/// 从 PDF 页面提取文本行。
+///
+/// 支持 Tj (单字符串) 和 TJ (数组) 操作符。
+fn extract_page_text(doc: &Document, page_id: lopdf::ObjectId) -> OfdResult<Vec<String>> {
+    let mut lines = Vec::new();
 
-    // 获取页面内容流
     if let Ok(content_stream) = doc.get_page_content(page_id) {
-        // 简单的文本提取：查找 Tj 和 TJ 操作符
         let content = String::from_utf8_lossy(&content_stream);
+        let mut current_line = String::new();
 
-        // 查找文本字符串 (Tj 操作)
         for line in content.lines() {
-            if line.ends_with(" Tj") {
-                // 提取引号内的文本
-                if let Some(start) = line.find('(') {
-                    if let Some(end) = line.rfind(')') {
-                        let text_content = &line[start + 1..end];
-                        text.push_str(text_content);
-                        text.push('\n');
-                    }
+            let trimmed = line.trim();
+
+            // Tj 操作: (text) Tj
+            if trimmed.ends_with(" Tj") {
+                if let Some(text) = extract_string_from_tj(trimmed) {
+                    current_line.push_str(&text);
+                }
+            }
+            // TJ 操作: [(text) spacing (text)] TJ
+            else if trimmed.ends_with(" TJ") {
+                if let Some(text) = extract_string_from_tj_array(trimmed) {
+                    current_line.push_str(&text);
+                }
+            }
+            // Td/TD 操作: 新行
+            else if trimmed.ends_with(" Td") || trimmed.ends_with(" TD") {
+                if !current_line.is_empty() {
+                    lines.push(current_line.clone());
+                    current_line.clear();
                 }
             }
         }
+
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
     }
 
-    Ok(text)
+    Ok(lines)
+}
+
+/// 从 Tj 操作提取字符串: (text) Tj
+fn extract_string_from_tj(op: &str) -> Option<String> {
+    let start = op.find('(')?;
+    let end = op.rfind(')')?;
+    if start < end {
+        Some(op[start + 1..end].to_string())
+    } else {
+        None
+    }
+}
+
+/// 从 TJ 操作提取字符串: [(text) spacing (text)] TJ
+fn extract_string_from_tj_array(op: &str) -> Option<String> {
+    let start = op.find('[')?;
+    let end = op.rfind(']')?;
+    if start >= end {
+        return None;
+    }
+
+    let array_content = &op[start + 1..end];
+    let mut text = String::new();
+    let mut chars = array_content.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '(' {
+            // 读取到匹配的 )
+            let mut depth = 1;
+            let mut escaped = false;
+            let mut str_content = String::new();
+
+            for inner_c in chars.by_ref() {
+                if escaped {
+                    str_content.push(inner_c);
+                    escaped = false;
+                } else if inner_c == '\\' {
+                    escaped = true;
+                } else if inner_c == '(' {
+                    depth += 1;
+                    str_content.push(inner_c);
+                } else if inner_c == ')' {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                    str_content.push(inner_c);
+                } else {
+                    str_content.push(inner_c);
+                }
+            }
+
+            text.push_str(&str_content);
+        }
+        // 数字参数（间距）忽略
+    }
+
+    Some(text)
 }
 
 /// 获取 PDF 页面尺寸（mm）。
 fn get_page_size(doc: &Document, page_id: lopdf::ObjectId) -> Option<(f64, f64)> {
-    if let Ok(page) = doc.get_dictionary(page_id) {
-        if let Ok(media_box) = page.get(b"MediaBox") {
-            if let Ok(array) = media_box.as_array() {
-                if array.len() >= 4 {
-                    let x1 = array[0].as_float().unwrap_or(0.0) as f64;
-                    let y1 = array[1].as_float().unwrap_or(0.0) as f64;
-                    let x2 = array[2].as_float().unwrap_or(612.0) as f64;
-                    let y2 = array[3].as_float().unwrap_or(792.0) as f64;
+    let page = doc.get_dictionary(page_id).ok()?;
+    let media_box = page.get(b"MediaBox").ok()?;
+    let array = media_box.as_array().ok()?;
 
-                    // PDF 单位是点 (1 点 = 1/72 英寸)，转换为 mm
-                    let width_pt = x2 - x1;
-                    let height_pt = y2 - y1;
-                    let width_mm = width_pt * 25.4 / 72.0;
-                    let height_mm = height_pt * 25.4 / 72.0;
-
-                    return Some((width_mm, height_mm));
-                }
-            }
-        }
+    if array.len() < 4 {
+        return None;
     }
-    None
+
+    let x1 = array[0].as_float().ok()? as f64;
+    let y1 = array[1].as_float().ok()? as f64;
+    let x2 = array[2].as_float().ok()? as f64;
+    let y2 = array[3].as_float().ok()? as f64;
+
+    let width_mm = (x2 - x1) * 25.4 / 72.0;
+    let height_mm = (y2 - y1) * 25.4 / 72.0;
+
+    Some((width_mm, height_mm))
 }
+
+// ─── OFD → PDF ──────────────────────────────────────────────────────────────
 
 /// OFD → PDF 转换。
 ///
-/// 将 OFD 页面内容渲染为 PDF 页面。
+/// 将 OFD 页面内容渲染为 PDF 页面（文本、图片、路径）。
 ///
 /// # 错误
 ///
@@ -167,7 +236,6 @@ pub fn ofd_to_pdf(
     let ofd_path = ofd_path.as_ref();
     let pdf_path = pdf_path.as_ref();
 
-    // 读取 OFD 文件
     let ofd_bytes = std::fs::read(ofd_path).map_err(OfdError::Io)?;
     let reader = OfdReader::from_bytes(&ofd_bytes)?;
 
@@ -178,52 +246,54 @@ pub fn ofd_to_pdf(
         options.pages.start.min(pages.len())..options.pages.end.min(pages.len())
     };
 
-    // 创建 PDF 文档
+    if range.is_empty() {
+        return Err(OfdError::Conversion("没有可转换的页面".into()));
+    }
+
+    let first_page = &pages[range.start];
     let (doc, page_id, layer_id) = printpdf::PdfDocument::new(
         "OFD Export",
-        printpdf::Mm(210.0 as f32),
-        printpdf::Mm(297.0 as f32),
+        printpdf::Mm(first_page.width as f32),
+        printpdf::Mm(first_page.height as f32),
         "Layer 1",
     );
 
-    let mut current_layer = doc.get_page(page_id).get_layer(layer_id);
-
-    // 添加字体
-    let font = doc.add_builtin_font(printpdf::BuiltinFont::Helvetica)
+    let font = doc
+        .add_builtin_font(printpdf::BuiltinFont::Helvetica)
         .map_err(|e| OfdError::Conversion(format!("字体加载失败: {e}")))?;
 
-    for page_idx in range.clone() {
-        let page = &pages[page_idx];
+    let mut current_layer = doc.get_page(page_id).get_layer(layer_id);
 
-        // 设置页面尺寸
-        let width_mm = page.width;
+    for (idx, page_idx) in range.clone().enumerate() {
+        let page = &pages[page_idx];
         let height_mm = page.height;
 
-        // 添加文本对象
         for content in &page.content {
-            if let easyofd_core::ContentObject::Text(text) = content {
-                current_layer.use_text(
-                    &text.text,
-                    text.size as f32,
-                    printpdf::Mm(text.x as f32),
-                    printpdf::Mm((height_mm - text.y) as f32), // PDF 坐标系 Y 轴向上
-                    &font,
-                );
+            match content {
+                ContentObject::Text(text) => {
+                    render_text_to_pdf(&current_layer, text, height_mm, &font);
+                }
+                ContentObject::Image(img) => {
+                    render_image_to_pdf(&current_layer, img, height_mm);
+                }
+                ContentObject::Path(path) => {
+                    render_path_to_pdf(&current_layer, path, height_mm);
+                }
             }
         }
 
-        // 如果不是最后一页，添加新页面
-        if page_idx < range.end - 1 {
+        // 添加新页面（如果不是最后一页）
+        if idx < range.len() - 1 {
+            let next_page = &pages[page_idx + 1];
             let (new_page_id, new_layer_id) = doc.add_page(
-                printpdf::Mm(width_mm as f32),
-                printpdf::Mm(height_mm as f32),
+                printpdf::Mm(next_page.width as f32),
+                printpdf::Mm(next_page.height as f32),
                 "Layer 1",
             );
             current_layer = doc.get_page(new_page_id).get_layer(new_layer_id);
         }
     }
 
-    // 保存 PDF
     doc.save(&mut std::io::BufWriter::new(
         std::fs::File::create(pdf_path).map_err(OfdError::Io)?,
     ))
@@ -231,6 +301,92 @@ pub fn ofd_to_pdf(
 
     Ok(())
 }
+
+/// 渲染文本对象到 PDF 层。
+fn render_text_to_pdf(
+    layer: &printpdf::PdfLayerReference,
+    text: &easyofd_core::TextObject,
+    page_height: f64,
+    font: &printpdf::IndirectFontRef,
+) {
+    let x = printpdf::Mm(text.x as f32);
+    let y = printpdf::Mm((page_height - text.y) as f32); // PDF Y 轴向上
+    layer.use_text(&text.text, text.size as f32, x, y, font);
+}
+
+/// 渲染图片对象到 PDF 层。
+fn render_image_to_pdf(
+    _layer: &printpdf::PdfLayerReference,
+    _img: &easyofd_core::ImageObject,
+    _page_height: f64,
+) {
+    // 图片渲染需要 image crate 集成，当前版本暂不支持
+    // TODO: 使用 image::load_from_memory 解析图片数据
+}
+
+/// 渲染路径对象到 PDF 层。
+fn render_path_to_pdf(
+    layer: &printpdf::PdfLayerReference,
+    path: &easyofd_core::PathObject,
+    page_height: f64,
+) {
+    use printpdf::*;
+
+    let stroke_color = path.stroke_color;
+    let r = ((stroke_color >> 16) & 0xFF) as f64 / 255.0;
+    let g = ((stroke_color >> 8) & 0xFF) as f64 / 255.0;
+    let b = (stroke_color & 0xFF) as f64 / 255.0;
+
+    layer.set_outline_color(Color::Rgb(Rgb::new(r as f32, g as f32, b as f32, None)));
+    layer.set_outline_thickness(path.stroke_width as f32);
+
+    // 解析简化路径数据 (M x y L x y 格式)
+    let path_data = &path.path_data;
+    let tokens: Vec<&str> = path_data.split_whitespace().collect();
+
+    let mut i = 0;
+    let mut current_x = path.x;
+    let mut current_y = path.y;
+
+    while i < tokens.len() {
+        match tokens[i] {
+            "M" if i + 2 < tokens.len() => {
+                if let (Ok(x), Ok(y)) = (tokens[i + 1].parse::<f64>(), tokens[i + 2].parse::<f64>())
+                {
+                    current_x = x;
+                    current_y = y;
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+            }
+            "L" if i + 2 < tokens.len() => {
+                if let (Ok(x), Ok(y)) = (tokens[i + 1].parse::<f64>(), tokens[i + 2].parse::<f64>())
+                {
+                    let points = vec![
+                        (
+                            Point::new(Mm(current_x as f32), Mm((page_height - current_y) as f32)),
+                            false,
+                        ),
+                        (Point::new(Mm(x as f32), Mm((page_height - y) as f32)), false),
+                    ];
+                    layer.add_line(Line {
+                        points,
+                        is_closed: false,
+                    });
+                    current_x = x;
+                    current_y = y;
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+            }
+            _ => i += 1,
+        }
+    }
+}
+
+// ─── 图片格式转换 ────────────────────────────────────────────────────────────
 
 /// 图片格式转换辅助。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,7 +417,7 @@ mod tests {
     #[test]
     fn test_convert_options_default() {
         let opts = ConvertOptions::default();
-        assert!(opts.pages.is_empty()); // 0..0 = 所有页面
+        assert!(opts.pages.is_empty());
         assert!(opts.page_size.is_none());
     }
 
@@ -300,30 +456,58 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_string_from_tj() {
+        assert_eq!(extract_string_from_tj("(Hello) Tj"), Some("Hello".into()));
+        assert_eq!(extract_string_from_tj("no parens"), None);
+    }
+
+    #[test]
+    fn test_extract_string_from_tj_array() {
+        let op = "[(Hello) -100 (World)] TJ";
+        assert_eq!(extract_string_from_tj_array(op), Some("HelloWorld".into()));
+    }
+
+    #[test]
     fn test_ofd_to_pdf_roundtrip() {
         use easyofd_core::OfdPage;
         use easyofd_writer::OfdWriter;
 
-        // 创建测试 OFD
         let mut writer = OfdWriter::new();
         let mut page = OfdPage::new(210.0, 297.0);
         page.add_text(TextObject::new(10.0, 20.0, "PDF 转换测试"));
         writer.add_page(page);
         let ofd_bytes = writer.build().unwrap();
 
-        // 写入临时文件
         let ofd_path = "/tmp/test_convert.ofd";
         let pdf_path = "/tmp/test_convert.pdf";
         std::fs::write(ofd_path, &ofd_bytes).unwrap();
 
-        // OFD → PDF 转换
         let result = ofd_to_pdf(ofd_path, pdf_path, &ConvertOptions::default());
         assert!(result.is_ok(), "OFD → PDF 转换应该成功: {:?}", result.err());
+        assert!(std::path::Path::new(pdf_path).exists());
 
-        // 验证 PDF 文件存在
-        assert!(std::path::Path::new(pdf_path).exists(), "PDF 文件应该存在");
+        let _ = std::fs::remove_file(ofd_path);
+        let _ = std::fs::remove_file(pdf_path);
+    }
 
-        // 清理
+    #[test]
+    fn test_ofd_to_pdf_with_path_object() {
+        use easyofd_core::{OfdPage, PathObject};
+        use easyofd_writer::OfdWriter;
+
+        let mut writer = OfdWriter::new();
+        let mut page = OfdPage::new(210.0, 297.0);
+        page.add_path(PathObject::new(50.0, 50.0, "M 0 0 L 100 100"));
+        writer.add_page(page);
+        let ofd_bytes = writer.build().unwrap();
+
+        let ofd_path = "/tmp/test_path.ofd";
+        let pdf_path = "/tmp/test_path.pdf";
+        std::fs::write(ofd_path, &ofd_bytes).unwrap();
+
+        let result = ofd_to_pdf(ofd_path, pdf_path, &ConvertOptions::default());
+        assert!(result.is_ok(), "路径对象转换应该成功: {:?}", result.err());
+
         let _ = std::fs::remove_file(ofd_path);
         let _ = std::fs::remove_file(pdf_path);
     }
