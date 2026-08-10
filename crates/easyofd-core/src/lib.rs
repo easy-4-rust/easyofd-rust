@@ -9,13 +9,15 @@
 //! - [`page_size`] — Common page size constants
 
 pub mod error;
+pub mod watermark;
 pub mod model;
 pub mod ofd_model;
 
 // Re-export core types at crate root for convenience.
+pub use watermark::Watermark;
 pub use error::{OfdError, OfdResult};
 pub use model::{
     ContentObject, ImageFormat, ImageObject, OfdMetadata, OfdPage, PathObject, TextObject,
-    Watermark, page_size,
+    page_size,
 };
 pub use ofd_model::{OfdField, OfdFieldKind, OfdModel};

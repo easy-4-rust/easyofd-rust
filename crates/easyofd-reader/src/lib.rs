@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_lines)]
 //! # easyofd-reader
 //!
 //! OFD file reader that parses GB/T 33190-2016 compliant ZIP archives.
