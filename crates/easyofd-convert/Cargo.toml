@@ -9,6 +9,11 @@ repository.workspace = true
 
 [dependencies]
 easyofd-core = { workspace = true }
+easyofd-reader = { workspace = true }
+easyofd-writer = { workspace = true }
+lopdf = { workspace = true }
+printpdf = { workspace = true }
+chrono = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]
