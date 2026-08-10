@@ -47,6 +47,7 @@ proc-macro2 = "1.0.107"
 quote = "1.0.47"
 syn = { version = "3.0.3", features = ["full"] }
 trybuild = "1.0.116"
+criterion = { version = "0.5", features = ["html_reports"] }
 # ═══ 国密算法 ═══
 sm2 = { version = "0.14.0-rc.15", features = ["dsa", "arithmetic", "getrandom"] }
 sm3 = "0.5.0"
@@ -74,3 +75,6 @@ missing_errors_doc = "allow"
 items_after_statements = "allow"
 manual_string_new = "allow"
 
+
+[workspace.dev-dependencies]
+criterion = { workspace = true }

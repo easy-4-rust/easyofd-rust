@@ -17,3 +17,10 @@ zip = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "write_bench"
+harness = false

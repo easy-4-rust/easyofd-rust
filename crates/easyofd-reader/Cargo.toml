@@ -20,3 +20,8 @@ workspace = true
 
 [dev-dependencies]
 easyofd-writer = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "read_bench"
+harness = false
