@@ -330,7 +330,7 @@ fn render_path_to_pdf(
     path: &easyofd_core::PathObject,
     page_height: f64,
 ) {
-    use printpdf::*;
+    use printpdf::{Color, Rgb, Point, Mm, Line};
 
     let stroke_color = path.stroke_color;
     let r = ((stroke_color >> 16) & 0xFF) as f64 / 255.0;
