@@ -15,8 +15,8 @@ chrono = { workspace = true }
 zip = { workspace = true }
 quick-xml = { workspace = true }
 
-[dev-dependencies]
-easyofd-writer = { workspace = true }
-
 [lints]
 workspace = true
+
+[dev-dependencies]
+easyofd-writer = { workspace = true }
