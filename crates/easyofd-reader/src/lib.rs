@@ -674,74 +674,19 @@ fn resolve_resource_path(doc_dir: &str, location: &str) -> OfdResult<String> {
 mod tests {
     use super::*;
     use easyofd_core::OfdPage;
-
-    /// Minimal OFD builder for tests (no writer dependency).
-    fn build_test_ofd(pages: &[OfdPage]) -> Vec<u8> {
-        use std::io::Cursor;
-        use zip::write::{SimpleFileOptions, ZipWriter};
-        use std::io::Write;
-
-        let buf = Vec::new();
-        let cursor = Cursor::new(buf);
-        let mut zip = ZipWriter::new(cursor);
-        let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-        // OFD.xml
-        zip.start_file("OFD.xml", opts).unwrap();
-        zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
-<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" DocRoot="Doc_0/Document.xml">
-  <ofd:DocBody><ofd:DocInfo><ofd:DocID>test</ofd:DocID></ofd:DocInfo></ofd:DocBody>
-</ofd:OFD>"#).unwrap();
-
-        // Document.xml
-        let mut doc_xml = String::from(r#"<?xml version="1.0" encoding="UTF-8"?>
-<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
-  <ofd:CommonData><ofd:PublicRes>PublicRes.xml</ofd:PublicRes><ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes></ofd:CommonData>
-  <ofd:Pages>"#);
-        for i in 0..pages.len() {
-            doc_xml.push_str(&format!(r#"<ofd:Page ID="{i}" BaseLoc="Pages/Page_{i}.xml"/>"#));
-        }
-        doc_xml.push_str("</ofd:Pages></ofd:Document>");
-        zip.start_file("Doc_0/Document.xml", opts).unwrap();
-        zip.write_all(doc_xml.as_bytes()).unwrap();
-
-        // PublicRes.xml
-        zip.start_file("Doc_0/PublicRes.xml", opts).unwrap();
-        zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?><ofd:PublicRes xmlns:ofd="http://www.ofdspec.org/2016"></ofd:PublicRes>"#).unwrap();
-
-        // DocumentRes.xml
-        zip.start_file("Doc_0/DocumentRes.xml", opts).unwrap();
-        zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?><ofd:DocumentRes xmlns:ofd="http://www.ofdspec.org/2016"></ofd:DocumentRes>"#).unwrap();
-
-        // Pages
-        for (i, page) in pages.iter().enumerate() {
-            let mut page_xml = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
-<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
-  <ofd:Content Boundary="0 0 {} {}">"#, page.width, page.height);
-            for obj in &page.content {
-                if let easyofd_core::ContentObject::Text(t) = obj {
-                    page_xml.push_str(&format!(
-                        r#"<ofd:TextObject Boundary="{} {} 100 20"><ofd:TextCode>{}</ofd:TextCode></ofd:TextObject>"#,
-                        t.x, t.y, t.text
-                    ));
-                }
-            }
-            page_xml.push_str("</ofd:Content></ofd:Page>");
-            zip.start_file(format!("Doc_0/Pages/Page_{i}.xml"), opts).unwrap();
-            zip.write_all(page_xml.as_bytes()).unwrap();
-        }
-
-        let cursor = zip.finish().unwrap();
-        cursor.into_inner()
-    }
+    use easyofd_writer::OfdWriter;
 
     fn roundtrip(pages: Vec<OfdPage>) -> Vec<u8> {
-        build_test_ofd(&pages)
+        let mut writer = OfdWriter::new();
+        for page in pages {
+            writer.add_page(page);
+        }
+        writer.build().unwrap()
     }
 
     #[test]
     fn test_empty_document() {
-        let bytes = build_test_ofd(&[]);
+        let bytes = OfdWriter::new().build().unwrap();
         let reader = OfdReader::from_bytes(&bytes).unwrap();
         assert_eq!(reader.page_count(), 0);
     }
