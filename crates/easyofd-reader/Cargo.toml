@@ -18,5 +18,6 @@ quick-xml = { workspace = true }
 [dev-dependencies]
 easyofd-writer = { workspace = true }
 
+
 [lints]
 workspace = true
