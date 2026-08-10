@@ -3,7 +3,8 @@ use std::io::{Seek, Write};
 use easyofd_core::{ContentObject, ImageFormat, OfdPage, OfdResult};
 use zip::write::{SimpleFileOptions, ZipWriter};
 
-use crate::{OfdWriter, WriteOptions, io_err, zip_err};
+use crate::{OfdWriter, WriteOptions};
+use crate::helpers::{io_err, zip_err};
 
 /// 逐页写入 OFD 的常量内容内存 Writer。
 ///
