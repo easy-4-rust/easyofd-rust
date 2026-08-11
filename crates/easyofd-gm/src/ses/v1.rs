@@ -60,6 +60,31 @@ use super::{
     expect_tlv,
 };
 
+// ── 名字变体别名（对应 Java 带下划线命名） ─────────────────────────────
+
+#[allow(non_camel_case_types)]
+mod java_name_aliases {
+    use super::{
+        SESHeader, SESPictureInfo, SESPropertyInfo, SESSignature, SealInfo, SignInfo, TBSSign,
+    };
+
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.TBS_Sign`。
+    pub type TBS_Sign = TBSSign;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.SES_Signature`。
+    pub type SES_Signature = SESSignature;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.SES_ESPropertyInfo`。
+    pub type SES_ESPropertyInfo = SESPropertyInfo;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.SES_SealInfo`。
+    pub type SES_SealInfo = SealInfo;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.SES_ESPictrueInfo`（Java 保留拼写错误）。
+    pub type SES_ESPictrueInfo = SESPictureInfo;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.SES_Header`。
+    pub type SES_Header = SESHeader;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v1.SES_SignInfo`。
+    pub type SES_SignInfo = SignInfo;
+}
+pub use java_name_aliases::*;
+
 // ── 辅助 ──────────────────────────────────────────────────────────────
 
 /// 将 value 字节重新包装为完整 SEQUENCE DER 编码。

@@ -4,6 +4,8 @@
 
 mod abbreviated_data;
 mod ct_path;
+pub mod tight;
 
 pub use abbreviated_data::{AbbreviatedData, PathCommand};
 pub use ct_path::{CT_Path, FillRule};
+pub use tight::{ArcCommand, CloseCommand, CubicBezier, LineCommand, MoveCommand, QuadraticBezier};

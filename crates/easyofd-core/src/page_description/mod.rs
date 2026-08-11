@@ -13,6 +13,7 @@ pub mod color;
 pub mod ct_region;
 pub mod draw_param;
 pub mod graphic_transform;
+pub mod res;
 
 pub use area::Area;
 pub use clips::CT_Clip;
@@ -22,3 +23,6 @@ pub use color::{
 pub use ct_region::CT_Region;
 pub use draw_param::CT_DrawParam;
 pub use graphic_transform::CT_CGTransform;
+pub use res::{
+    CT_MultiMedia, ColorSpaces, CompositeGraphicUnits, DrawParams, Fonts, MediaType, MultiMedias,
+};

@@ -67,6 +67,31 @@ use super::{
     expect_tlv,
 };
 
+// ── 名字变体别名（对应 Java 带下划线命名） ─────────────────────────────
+
+#[allow(non_camel_case_types)]
+mod java_name_aliases {
+    use super::{
+        CertDigest, SESHeader, SESPictureInfo, SESPropertyInfo, SESSignature, SealInfo, TBSSign,
+    };
+
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.TBS_Sign`。
+    pub type TBS_Sign = TBSSign;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.SES_Signature`。
+    pub type SES_Signature = SESSignature;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.SES_ESPropertyInfo`。
+    pub type SES_ESPropertyInfo = SESPropertyInfo;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.SES_SealInfo`。
+    pub type SES_SealInfo = SealInfo;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.SES_ESPictrueInfo`（Java 保留拼写错误）。
+    pub type SES_ESPictrueInfo = SESPictureInfo;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.SES_Header`。
+    pub type SES_Header = SESHeader;
+    /// 别名：对应 Java `org.ofdrw.gm.ses.v5.CertDigestObj`。
+    pub type CertDigestObj = CertDigest;
+}
+pub use java_name_aliases::*;
+
 // ── 辅助 ──────────────────────────────────────────────────────────────
 
 /// 将 value 字节重新包装为完整 SEQUENCE DER 编码。

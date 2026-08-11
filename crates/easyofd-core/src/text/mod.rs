@@ -3,11 +3,13 @@
 //! 对应 GB/T 33190-2016 第 11 节，包含文本对象、字体描述、
 //! 文字定位和字形变换等类型。
 
+pub mod charset;
 mod ct_cg_transform;
 mod ct_font;
 mod ct_text;
 mod text_code;
 
+pub use charset::Charset;
 pub use ct_cg_transform::CT_CGTransform;
 pub use ct_font::CT_Font;
 pub use ct_text::{CT_Text, Direction};

@@ -26,14 +26,50 @@
 //! # }
 //! ```
 
+pub mod check;
+pub mod convert;
 pub mod integrity;
+pub mod pkg;
 pub mod rules;
 
 use std::io::{Cursor, Read};
 
 use easyofd_core::{OfdError, OfdResult};
 
+pub use check::{
+    ArchiveRule, ArchiveViolation, OfdArchiveChecker, Severity,
+    rule::{
+        AnnotationRule, AttachmentRule, AudioVideoRule, ClipAreaRule, ColorProfileRule,
+        ColorSpaceRule, ExtensionRule, ExternalResourceRule, FontSubsetRule, ImageExtensionRule,
+        ImageFormatRule, ImageInterpolateRule, ImageResourceRegRule, NonGotoActionRule,
+        OutlineActionRule, PageBlockDepthRule, PermissionRule, ResourcePlacementRule,
+        SingleDocRule, TextHScaleRule, TextSizeRule,
+    },
+};
+pub use convert::{
+    ArchiveHandler, OfdArchiveConverter,
+    handler::{
+        AnnotationHandler as ConvertAnnotationHandler,
+        AttachmentHandler as ConvertAttachmentHandler,
+        AudioVideoHandler as ConvertAudioVideoHandler, CleanFillAttrHandler,
+        CleanStrokeAttrHandler, ClipAreaHandler as ConvertClipAreaHandler,
+        DocTypeHandler as ConvertDocTypeHandler, EncryptionHandler,
+        ExtensionHandler as ConvertExtensionHandler,
+        ExternalResourceHandler as ConvertExternalResourceHandler, ImageConvertHandler,
+        ImageExtensionHandler as ConvertImageExtensionHandler, ImageInterpolateHandler,
+        ImageResourceRegHandler as ConvertImageResourceRegHandler, LayerNameHandler,
+        NonGotoActionHandler as ConvertNonGotoActionHandler,
+        OutlineActionHandler as ConvertOutlineActionHandler, PageBlockFlattenHandler,
+        PermissionHandler as ConvertPermissionHandler,
+        ResourcePlacementHandler as ConvertResourcePlacementHandler, SignatureHandler,
+        SingleDocHandler as ConvertSingleDocHandler, VPrefsHandler,
+    },
+};
 pub use integrity::{CheckMethod, IntegrityEntry, IntegrityReport, verify_integrity};
+pub use pkg::container::{
+    AnnotsDir, OfdPkgDir, PageDir, PagesDir, ResDir, TempsDir, VirtualContainer,
+};
+pub use pkg::tool::{ElemCup, OfdNameSpaceModifier};
 pub use rules::font_rule::FontRule;
 pub use rules::image_rule::ImageRule;
 pub use rules::path_rule::PathRule;

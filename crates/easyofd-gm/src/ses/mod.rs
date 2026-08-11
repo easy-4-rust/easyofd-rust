@@ -12,15 +12,31 @@
 //! - [`v5`] — SES V5 结构，等同 V4 + 可选 timeStamp。
 
 mod der_error;
+pub mod ext_data;
+pub mod extension_datas;
+pub mod parse;
 pub mod v1;
 pub mod v4;
 pub mod v5;
 
+mod cert_digest_list;
+mod cert_digest_obj;
+mod cert_info_list;
+mod cert_list;
+
+pub use cert_digest_list::CertDigestList;
+pub use cert_digest_obj::CertDigestObj;
+pub use cert_info_list::CertInfoList;
+pub use cert_list::SESCertList;
 pub use der_error::{DerError, DerResult};
+pub use ext_data::ExtData;
+pub use extension_datas::ExtensionDatas;
+pub use parse::{SESVersion, SESVersionHolder, VersionParser};
 
 // ── 公共 DER 编码/解码工具 ─────────────────────────────────────────────
 
 /// ASN.1 tag 常量。
+pub(crate) const TAG_BOOLEAN: u8 = 0x01;
 pub(crate) const TAG_INTEGER: u8 = 0x02;
 pub(crate) const TAG_BIT_STRING: u8 = 0x03;
 pub(crate) const TAG_OCTET_STRING: u8 = 0x04;
@@ -57,6 +73,13 @@ pub(crate) fn encode_length(len: usize, out: &mut Vec<u8>) {
         out.push((len >> 8) as u8);
         out.push(len as u8);
     }
+}
+
+/// 编码 DER BOOLEAN。
+pub(crate) fn encode_boolean(val: bool, out: &mut Vec<u8>) {
+    out.push(TAG_BOOLEAN);
+    out.push(0x01);
+    out.push(u8::from(val));
 }
 
 /// 编码 DER INTEGER（无符号）。

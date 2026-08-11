@@ -9,6 +9,7 @@ pub mod oids;
 pub mod signed_data;
 pub mod signer_info;
 pub mod sm2_cipher;
+pub mod verify_info;
 
 pub use content_info::ContentInfo;
 pub use issuer_and_serial_number::IssuerAndSerialNumber;
@@ -16,6 +17,7 @@ pub use oids::{format_oid, parse_oid};
 pub use signed_data::SignedData;
 pub use signer_info::SignerInfo;
 pub use sm2_cipher::Sm2Cipher;
+pub use verify_info::VerifyInfo;
 
 #[cfg(test)]
 mod tests {

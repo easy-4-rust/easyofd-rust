@@ -8,6 +8,7 @@
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::float_cmp)]
 
+pub mod opt_val;
 pub mod st_array;
 pub mod st_box;
 pub mod st_id;
@@ -15,6 +16,7 @@ pub mod st_loc;
 pub mod st_pos;
 pub mod st_ref_id;
 
+pub use opt_val::OptVal;
 pub use st_array::ST_Array;
 pub use st_box::ST_Box;
 pub use st_id::ST_ID;

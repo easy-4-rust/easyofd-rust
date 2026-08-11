@@ -6,21 +6,27 @@
 mod algorithm;
 mod cert;
 mod crl;
-mod electronic_seal;
+pub mod electronic_seal;
+pub mod errors;
 mod internal_helpers;
 mod multi;
 mod ofd_signature_builder;
 mod read_signature;
 mod seal;
+pub mod sign_containers;
 pub mod sign_dir;
+pub mod sign_id_parser;
 pub mod sign_id_provider;
 mod signed_ofd;
 pub mod signs_dir;
+pub mod stamppos;
 #[cfg(test)]
 #[path = "test_lib.rs"]
 mod tests;
 mod timestamp;
+pub mod timestamp_hook;
 mod verification_result;
+pub mod verify_containers;
 mod verify_signature;
 mod xml;
 
@@ -32,6 +38,10 @@ pub use algorithm::SignatureAlgorithm;
 pub use cert::{CertificateInfo, parse_x509_der, parse_x509_pem, verify_chain};
 pub use crl::{CrlInfo, check_revoked, ocsp_check, ocsp_check_with_endpoint, parse_crl_der};
 pub use electronic_seal::ElectronicSeal;
+pub use errors::{
+    DocNotSignException, FileIntegrityException, InvalidSignedValueException, OfdVerifyException,
+    SignatureException, SignatureTerminateException,
+};
 pub use ofd_signature_builder::{
     DigitalSignContainer, OfdSignatureBuilder, SignMode, SignatureContainer, SignatureMethod,
 };
@@ -39,13 +49,24 @@ pub use read_signature::read_signature;
 pub use seal::{
     SealInfo, StampAppearance, StampSide, decode_seal_esl, encode_seal_esl, riding_stamp_appearance,
 };
+pub use sign_containers::{
+    ExtendSignatureContainer, Gbt35275DsContainer, Gbt35275Pkcs9DsContainer, ProtectFileFilter,
+    SesV1Container, SesV4Container, SesV5Container, SigType, SignCleaner, ToDigestFileInfo,
+};
 pub use sign_dir::SignDir;
+pub use sign_id_parser::{NumberFormatAtomicSignId, SignIdParser, StandFormatAtomicSignId};
 pub use sign_id_provider::{NumberSignIdProvider, SignIdProvider, StandardSignIdProvider};
 pub use signed_ofd::SignedOfd;
 pub use signs_dir::SignsDir;
+pub use stamppos::{CuttingRatio, NormalStampPos, RidingStampPos, Side};
 pub use timestamp::{
     TimeStamp, create_timestamp, decode_der as decode_timestamp_der,
     encode_der as encode_timestamp_der,
 };
+pub use timestamp_hook::{ClosureTimeStampHook, TimeStampHook};
 pub use verification_result::VerificationResult;
+pub use verify_containers::{
+    DigitalValidateContainer, Gbt35275ValidateContainer, OfdValidator, SesV1ValidateContainer,
+    SesV4ValidateContainer, SesV5ValidateContainer, SignedDataValidateContainer,
+};
 pub use verify_signature::{SignatureVerificationResult, verify_signature, verify_signature_multi};

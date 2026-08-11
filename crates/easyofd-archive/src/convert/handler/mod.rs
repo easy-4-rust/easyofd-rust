@@ -1,0 +1,51 @@
+//! OFD-A 转换处理器实现。
+//!
+//! 对应 Java: org.ofdrw.archive.convert.handler
+
+pub mod annotation_handler;
+pub mod attachment_handler;
+pub mod audio_video_handler;
+pub mod clean_fill_attr_handler;
+pub mod clean_stroke_attr_handler;
+pub mod clip_area_handler;
+pub mod doc_type_handler;
+pub mod encryption_handler;
+pub mod extension_handler;
+pub mod external_resource_handler;
+pub mod image_convert_handler;
+pub mod image_extension_handler;
+pub mod image_interpolate_handler;
+pub mod image_resource_reg_handler;
+pub mod layer_name_handler;
+pub mod non_goto_action_handler;
+pub mod outline_action_handler;
+pub mod page_block_flatten_handler;
+pub mod permission_handler;
+pub mod resource_placement_handler;
+pub mod signature_handler;
+pub mod single_doc_handler;
+pub mod v_prefs_handler;
+
+pub use annotation_handler::AnnotationHandler;
+pub use attachment_handler::AttachmentHandler;
+pub use audio_video_handler::AudioVideoHandler;
+pub use clean_fill_attr_handler::CleanFillAttrHandler;
+pub use clean_stroke_attr_handler::CleanStrokeAttrHandler;
+pub use clip_area_handler::ClipAreaHandler;
+pub use doc_type_handler::DocTypeHandler;
+pub use encryption_handler::EncryptionHandler;
+pub use extension_handler::ExtensionHandler;
+pub use external_resource_handler::ExternalResourceHandler;
+pub use image_convert_handler::ImageConvertHandler;
+pub use image_extension_handler::ImageExtensionHandler;
+pub use image_interpolate_handler::ImageInterpolateHandler;
+pub use image_resource_reg_handler::ImageResourceRegHandler;
+pub use layer_name_handler::LayerNameHandler;
+pub use non_goto_action_handler::NonGotoActionHandler;
+pub use outline_action_handler::OutlineActionHandler;
+pub use page_block_flatten_handler::PageBlockFlattenHandler;
+pub use permission_handler::PermissionHandler;
+pub use resource_placement_handler::ResourcePlacementHandler;
+pub use signature_handler::SignatureHandler;
+pub use single_doc_handler::SingleDocHandler;
+pub use v_prefs_handler::VPrefsHandler;
