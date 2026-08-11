@@ -27,6 +27,7 @@ impl Matrix3x3 {
     /// 创建单位矩阵。
     ///
     /// 对应 Java `MatrixUtils.base()`。
+    #[must_use]
     pub fn identity() -> Self {
         Self {
             data: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -41,6 +42,7 @@ impl Matrix3x3 {
     /// - `a, b`：第一行前两列（缩放/旋转）
     /// - `c, d`：第二行前两列（缩放/旋转）
     /// - `tx, ty`：第三行前两列（平移）
+    #[must_use]
     pub fn new(a: f64, b: f64, c: f64, d: f64, tx: f64, ty: f64) -> Self {
         Self {
             data: [[a, b, 0.0], [c, d, 0.0], [tx, ty, 1.0]],
@@ -50,11 +52,13 @@ impl Matrix3x3 {
     /// 从 CTM 数组（6 个元素）创建矩阵。
     ///
     /// 对应 Java `MatrixUtils.ctm(ctm)`。
+    #[must_use]
     pub fn from_ctm(ctm: &[f64; 6]) -> Self {
         Self::new(ctm[0], ctm[1], ctm[2], ctm[3], ctm[4], ctm[5])
     }
 
     /// 获取指定位置的值。
+    #[must_use]
     pub fn get(&self, row: usize, col: usize) -> f64 {
         self.data[row][col]
     }
@@ -67,6 +71,7 @@ impl Matrix3x3 {
     /// 矩阵乘法（self * rhs）。
     ///
     /// 对应 Java 中的 `matrix.mtimes(other)`。
+    #[must_use]
     pub fn multiply(&self, rhs: &Matrix3x3) -> Matrix3x3 {
         let mut result = [[0.0f64; 3]; 3];
         for i in 0..3 {
@@ -82,6 +87,7 @@ impl Matrix3x3 {
     /// 缩放变换。
     ///
     /// 对应 Java `MatrixUtils.scale(matrix, x, y)`。
+    #[must_use]
     pub fn scale(&self, x: f64, y: f64) -> Matrix3x3 {
         self.multiply(&Matrix3x3::new(x, 0.0, 0.0, y, 0.0, 0.0))
     }
@@ -89,6 +95,7 @@ impl Matrix3x3 {
     /// 平移变换。
     ///
     /// 对应 Java `MatrixUtils.move(matrix, x, y)`。
+    #[must_use]
     pub fn translate(&self, x: f64, y: f64) -> Matrix3x3 {
         self.multiply(&Matrix3x3::new(1.0, 0.0, 0.0, 1.0, x, y))
     }
@@ -97,6 +104,7 @@ impl Matrix3x3 {
     ///
     /// 对应 Java `MatrixUtils.imageMatrix(matrix, a, b, c)`。
     /// 关于直线 `aX + bY + c = 0` 做镜像。
+    #[must_use]
     pub fn mirror(&self, a: f64, b: f64, c: f64) -> Matrix3x3 {
         let denom = a * a + b * b;
         if denom.abs() < f64::EPSILON {
@@ -123,6 +131,7 @@ impl Matrix3x3 {
     /// 点变换：将 (x, y) 通过矩阵变换到新坐标。
     ///
     /// 对应 Java `MatrixUtils.pointTransform(ctm, x, y)`。
+    #[must_use]
     pub fn transform_point(&self, x: f64, y: f64) -> Tuple2<f64, f64> {
         let new_x = x * self.data[0][0] + y * self.data[1][0] + self.data[2][0];
         let new_y = x * self.data[0][1] + y * self.data[1][1] + self.data[2][1];
@@ -132,6 +141,7 @@ impl Matrix3x3 {
     /// 计算外接矩形的左上角。
     ///
     /// 对应 Java `MatrixUtils.leftTop(matrix)`。
+    #[must_use]
     pub fn left_top(&self) -> Tuple2<f64, f64> {
         let corners = [
             self.transform_point_raw(0.0, 0.0),
@@ -156,6 +166,7 @@ impl Matrix3x3 {
     }
 
     /// 返回原始数据引用。
+    #[must_use]
     pub fn as_array(&self) -> &[[f64; 3]; 3] {
         &self.data
     }
@@ -168,6 +179,7 @@ impl Default for Matrix3x3 {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

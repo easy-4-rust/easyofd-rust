@@ -195,6 +195,15 @@ pub(crate) fn escape_xml_attr(s: &str) -> String {
 fn read_encrypt_info<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
 ) -> OfdResult<std::collections::HashMap<String, String>> {
+    parse_encrypt_info_xml_from_archive(archive)
+}
+
+/// 从 ZIP 归档中读取并解析 `EncryptInfo.xml`。
+///
+/// 供 `OfdDecryptor` 等外部模块使用。
+pub fn parse_encrypt_info_xml_from_archive<R: Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> OfdResult<std::collections::HashMap<String, String>> {
     let mut file = archive
         .by_name(ENCRYPT_INFO_PATH)
         .map_err(|_| OfdError::InvalidDocument("加密描述文件 EncryptInfo.xml 缺失".into()))?;

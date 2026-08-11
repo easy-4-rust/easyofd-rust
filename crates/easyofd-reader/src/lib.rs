@@ -19,8 +19,43 @@ mod ofd_reader;
 mod parser;
 mod read_options;
 
+// ── ofdrw 对齐新增模块 ──
+pub mod bad_ofd_exception;
+pub mod content_extractor;
+pub mod delta_tool;
+pub mod dl_ofd_reader;
+pub mod error_path_exception;
+pub mod extractor;
+pub mod keyword;
+pub mod model;
+pub mod ofd_reader_facade;
+pub mod page_info;
+pub mod resource_locator;
+pub mod resource_manage;
+pub mod seal_ofd_reader;
+pub mod tools;
+pub mod zip_util;
+
+// ── 默认导出 ──
+pub use bad_ofd_exception::BadOfdException;
+pub use content_extractor::ContentExtractor;
+#[allow(deprecated)]
+pub use dl_ofd_reader::DlOfdReader;
+pub use error_path_exception::ErrorPathException;
+pub use keyword::{KeywordExtractor, KeywordPosition, KeywordResource};
+#[allow(deprecated)]
+pub use model::{
+    AnnotionEntity, OfdDocumentVo, OfdPageVo, SealDataVo, StampAnnotVo, TemplatePageEntity,
+    TemplateZOrder,
+};
 pub use ofd_reader::OfdReader;
+pub use ofd_reader_facade::OfdReaderFacade;
+pub use page_info::PageInfo;
 pub use read_options::ReadOptions;
+pub use resource_locator::ResourceLocator;
+pub use resource_manage::ResourceManage;
+#[allow(deprecated)]
+pub use seal_ofd_reader::SealOfdReader;
 
 #[cfg(test)]
 mod tests {

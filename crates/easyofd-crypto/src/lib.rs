@@ -19,11 +19,41 @@
 //! - GB/T 32907-2016 SM4 分组密码算法
 
 pub mod encryption;
-mod ofd_encrypt;
+pub mod ofd_encrypt;
 pub mod sm4;
 
+// ── ofdrw 对齐新增模块 ──
+pub mod container_file_filter;
+pub mod container_path;
+pub mod decrypt_result;
+pub mod integrity;
+pub mod ofd_decryptor;
+pub mod ofd_encryptor;
+pub mod user_cert_decryptor;
+pub mod user_cert_encryptor;
+pub mod user_fek_decryptor;
+pub mod user_fek_encryptor;
+pub mod user_password_decryptor;
+pub mod user_password_encryptor;
+
+// ── 默认导出 ──
+pub use container_file_filter::{ContainerFileFilter, DefaultContainerFileFilter, ExtensionFilter};
+pub use container_path::ContainerPath;
+pub use decrypt_result::DecryptResult;
 pub use encryption::{CT_EncryptInfo, EncryptEntries, EncryptEntry, ProtectionCaseID};
+pub use integrity::{
+    GmProtectSigner, GmProtectVerifier, OfdIntegrity, OfdIntegrityVerifier, ProtectSigner,
+    ProtectVerifier, SimpleSigner, SimpleVerifier,
+};
+pub use ofd_decryptor::OfdDecryptor;
 pub use ofd_encrypt::{decrypt_ofd, encrypt_ofd};
+pub use ofd_encryptor::OfdEncryptor;
+pub use user_cert_decryptor::UserCertDecryptor;
+pub use user_cert_encryptor::{CertAlgorithm, UserCertEncryptor};
+pub use user_fek_decryptor::{DirectFekDecryptor, UserFekDecryptor};
+pub use user_fek_encryptor::{SimpleFekEncryptor, UserFekEncryptor};
+pub use user_password_decryptor::UserPasswordDecryptor;
+pub use user_password_encryptor::UserPasswordEncryptor;
 
 /// 返回模块标识，用于运行时识别。
 #[must_use]

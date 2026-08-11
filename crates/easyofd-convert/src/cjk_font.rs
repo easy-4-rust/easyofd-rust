@@ -34,10 +34,10 @@ pub struct CjkFontInfo {
 /// 如果系统未安装 CJK 字体则返回 `None`。
 pub fn find_cjk_font() -> Option<CjkFontInfo> {
     for candidate in candidate_paths() {
-        if candidate.path.exists() {
-            if let Some(info) = validate_font(&candidate.path, &candidate.name) {
-                return Some(info);
-            }
+        if candidate.path.exists()
+            && let Some(info) = validate_font(&candidate.path, &candidate.name)
+        {
+            return Some(info);
         }
     }
 

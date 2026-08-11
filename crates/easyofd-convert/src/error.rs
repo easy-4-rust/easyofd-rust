@@ -62,6 +62,7 @@ impl std::error::Error for GeneralConvertError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     #[test]
     fn test_new() {
@@ -87,8 +88,7 @@ mod tests {
 
     #[test]
     fn test_error_trait() {
-        let err: Box<dyn std::error::Error> =
-            Box::new(GeneralConvertError::new("test"));
+        let err: Box<dyn std::error::Error> = Box::new(GeneralConvertError::new("test"));
         assert!(err.source().is_none());
     }
 

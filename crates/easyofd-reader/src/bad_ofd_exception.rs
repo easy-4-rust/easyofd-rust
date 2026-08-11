@@ -63,10 +63,8 @@ impl BadOfdException {
 impl From<BadOfdException> for easyofd_core::OfdError {
     fn from(e: BadOfdException) -> Self {
         match e {
-            BadOfdException::CorruptedStructure { message } => {
-                easyofd_core::OfdError::InvalidDocument(message)
-            }
-            BadOfdException::ParseFailed { message } => {
+            BadOfdException::CorruptedStructure { message }
+            | BadOfdException::ParseFailed { message } => {
                 easyofd_core::OfdError::InvalidDocument(message)
             }
             BadOfdException::FileNotFound { path } => easyofd_core::OfdError::Zip(path),
@@ -108,6 +106,9 @@ mod tests {
     fn test_into_ofd_error() {
         let bad = BadOfdException::corrupted("test");
         let ofd_err: easyofd_core::OfdError = bad.into();
-        assert!(matches!(ofd_err, easyofd_core::OfdError::InvalidDocument(_)));
+        assert!(matches!(
+            ofd_err,
+            easyofd_core::OfdError::InvalidDocument(_)
+        ));
     }
 }

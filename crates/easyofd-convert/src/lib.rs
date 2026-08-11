@@ -27,15 +27,31 @@
 mod cjk_font;
 mod convert_helper;
 mod convert_options;
+pub mod converter;
+pub mod error;
 pub mod exporter;
+pub mod font;
+pub mod html;
 mod image_convert_format;
 pub mod importer;
+pub mod point;
+pub mod utils;
 
 pub use convert_helper::ConvertHelper;
 pub use convert_options::ConvertOptions;
+pub use converter::{CgTransformEntry, CgTransformMap, DocConverter};
+pub use error::GeneralConvertError;
 pub use exporter::{Exporter, ImageExporter, PdfExporter, SvgExporter, TextExporter};
+pub use font::{
+    BoundingBox, CmapSubtable, FontWrapper, GlyfCompositeComp, GlyfCompositeDescript, GlyfDescript,
+    GlyfSimpleDescript, GlyphData, GlyphDataProvider, HorizontalHeaderTable,
+    HorizontalMetricsTable, NameRecord, NamingTable,
+};
+pub use html::Element;
 pub use image_convert_format::ImageConvertFormat;
 pub use importer::{Importer, PdfImporter};
+pub use point::{PathPoint, TextCodePoint, Tuple2};
+pub use utils::{EPlatform, Matrix3x3};
 
 use std::path::Path;
 
@@ -140,11 +156,11 @@ fn extract_page_text(doc: &Document, page_id: lopdf::ObjectId) -> OfdResult<Vec<
                 }
             }
             // Td/TD 操作: 新行
-            else if trimmed.ends_with(" Td") || trimmed.ends_with(" TD") {
-                if !current_line.is_empty() {
-                    lines.push(current_line.clone());
-                    current_line.clear();
-                }
+            else if (trimmed.ends_with(" Td") || trimmed.ends_with(" TD"))
+                && !current_line.is_empty()
+            {
+                lines.push(current_line.clone());
+                current_line.clear();
             }
         }
 
@@ -255,7 +271,7 @@ fn extract_page_images(doc: &Document, page_id: lopdf::ObjectId) -> Vec<Extracte
         let is_dct = pdf_img
             .filters
             .as_ref()
-            .map_or(false, |filters| filters.iter().any(|f| f == "DCTDecode"));
+            .is_some_and(|filters| filters.iter().any(|f| f == "DCTDecode"));
 
         if is_dct {
             // JPEG 直传

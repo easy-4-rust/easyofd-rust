@@ -116,7 +116,8 @@ impl ResourceLocator {
             let item = item.trim();
             if item == "." || item.is_empty() {
                 continue;
-            } else if item == ".." {
+            }
+            if item == ".." {
                 segments.pop();
                 if segments.is_empty() {
                     segments.push("/".to_string());
@@ -141,9 +142,9 @@ impl ResourceLocator {
         }
         // 查找最后一个 '/' 分隔文件名和目录部分
         if let Some(idx) = path.rfind('/') {
-            let dir_part = &path[..idx + 1];
+            let dir_part = &path[..=idx];
             let file_part = &path[idx + 1..];
-            let mut wd = self.work_dir.clone();
+            let wd = self.work_dir.clone();
             let abs_dir = Self::to_absolute_path_of(&wd, dir_part);
             if abs_dir.ends_with('/') {
                 format!("{abs_dir}{file_part}")
@@ -195,7 +196,8 @@ impl ResourceLocator {
             let item = item.trim();
             if item == "." || item.is_empty() {
                 continue;
-            } else if item == ".." {
+            }
+            if item == ".." {
                 work.pop();
                 if work.is_empty() {
                     work.push("/".to_string());
@@ -220,17 +222,23 @@ impl Default for ResourceLocator {
 pub mod patterns {
     /// 匹配 Doc_N 目录。
     pub fn is_doc_dir(segment: &str) -> bool {
-        segment.starts_with("Doc_") && segment[4..].chars().all(|c| c.is_ascii_digit())
+        segment.starts_with("Doc_")
+            && !segment[4..].is_empty()
+            && segment[4..].chars().all(|c| c.is_ascii_digit())
     }
 
     /// 匹配 Page_N 目录。
     pub fn is_page_dir(segment: &str) -> bool {
-        segment.starts_with("Page_") && segment[5..].chars().all(|c| c.is_ascii_digit())
+        segment.starts_with("Page_")
+            && !segment[5..].is_empty()
+            && segment[5..].chars().all(|c| c.is_ascii_digit())
     }
 
     /// 匹配 Sign_N 目录。
     pub fn is_sign_dir(segment: &str) -> bool {
-        segment.starts_with("Sign_") && segment[5..].chars().all(|c| c.is_ascii_digit())
+        segment.starts_with("Sign_")
+            && !segment[5..].is_empty()
+            && segment[5..].chars().all(|c| c.is_ascii_digit())
     }
 
     /// 匹配 Res 目录。

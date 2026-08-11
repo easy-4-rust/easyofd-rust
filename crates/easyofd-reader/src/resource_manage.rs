@@ -128,9 +128,7 @@ impl ResourceManage {
     /// 按类型获取资源 ID 列表。
     #[must_use]
     pub fn ids_by_type(&self, resource_type: ResourceType) -> &[String] {
-        self.by_type
-            .get(&resource_type)
-            .map_or(&[], Vec::as_slice)
+        self.by_type.get(&resource_type).map_or(&[], Vec::as_slice)
     }
 
     /// 获取指定类型的全部资源条目。

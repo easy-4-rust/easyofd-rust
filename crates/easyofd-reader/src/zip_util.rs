@@ -35,9 +35,7 @@ pub fn read_entry<R: Read + Seek>(
 /// # 错误
 ///
 /// 归档读取失败时返回错误。
-pub fn list_entries<R: Read + Seek>(
-    archive: &mut zip::ZipArchive<R>,
-) -> OfdResult<Vec<String>> {
+pub fn list_entries<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> OfdResult<Vec<String>> {
     let mut names = Vec::new();
     for i in 0..archive.len() {
         let file = archive
@@ -60,7 +58,6 @@ pub fn extract_to_dir<R: Read + Seek>(
     dest: &Path,
 ) -> OfdResult<()> {
     use std::fs;
-    use std::io::Write;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -90,8 +87,7 @@ pub fn extract_to_dir<R: Read + Seek>(
 /// ZIP 格式错误或 IO 操作失败时返回错误。
 pub fn extract_bytes_to_dir(data: &[u8], dest: &Path) -> OfdResult<()> {
     let reader = std::io::Cursor::new(data);
-    let mut archive =
-        zip::ZipArchive::new(reader).map_err(|e| OfdError::Zip(format!("{e}")))?;
+    let mut archive = zip::ZipArchive::new(reader).map_err(|e| OfdError::Zip(format!("{e}")))?;
     extract_to_dir(&mut archive, dest)
 }
 

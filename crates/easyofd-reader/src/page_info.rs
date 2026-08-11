@@ -66,13 +66,13 @@ impl PageInfo {
     /// 获取页面宽度（毫米）。
     #[must_use]
     pub fn width(&self) -> f64 {
-        self.size.width()
+        self.size.width
     }
 
     /// 获取页面高度（毫米）。
     #[must_use]
     pub fn height(&self) -> f64 {
-        self.size.height()
+        self.size.height
     }
 }
 
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_page_info_with_id() {
         let size = ST_Box::new(0.0, 0.0, 210.0, 297.0);
-        let info = PageInfo::new(1, size).with_id(ST_ID::new(42));
+        let info = PageInfo::new(1, size).with_id(ST_ID::new(42).unwrap());
         assert_eq!(info.id.map(|id| id.get()), Some(42));
     }
 

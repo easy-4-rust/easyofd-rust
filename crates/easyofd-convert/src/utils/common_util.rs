@@ -98,7 +98,7 @@ mod tests {
     fn test_dpi_to_ppm() {
         // 72 dpi: 72 * 0.01/0.254 ≈ 2.8346
         let ppm = dpi_to_ppm(72);
-        assert!(approx_eq(ppm, 2.834645669));
+        assert!(approx_eq(ppm, 2.834_645_669));
     }
 
     #[test]

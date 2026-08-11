@@ -56,6 +56,7 @@ impl<X, Y> From<(X, Y)> for Tuple2<X, Y> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 
@@ -83,9 +84,9 @@ mod tests {
 
     #[test]
     fn test_from_tuple() {
-        let t: Tuple2<i32, f64> = (5, 3.14).into();
+        let t: Tuple2<i32, f64> = (5, std::f64::consts::PI).into();
         assert_eq!(*t.first(), 5);
-        assert!((t.second() - 3.14).abs() < f64::EPSILON);
+        assert!((t.second() - std::f64::consts::PI).abs() < f64::EPSILON);
     }
 
     #[test]
