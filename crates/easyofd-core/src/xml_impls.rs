@@ -458,28 +458,35 @@ impl XmlElement for CT_PageArea {
     }
 
     fn attributes(&self) -> Vec<(String, String)> {
-        let mut attrs = Vec::new();
+        Vec::new()
+    }
+
+    // GB/T 33190-2016：PhysicalBox/ApplicationBox 等是 PageArea 的**子元素**
+    // （<ofd:PageArea><ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>...），
+    // 与 ofdrw 输出一致（不是属性）。
+    fn child_nodes(&self) -> Vec<XmlNode> {
+        let mut nodes = Vec::new();
         if let Some(ref pb) = self.physical_box {
-            attrs.push(("PhysicalBox".to_string(), pb.clone()));
+            nodes.push(text_child("PhysicalBox", pb));
         }
         if let Some(ref ab) = self.application_box {
-            attrs.push(("ApplicationBox".to_string(), ab.clone()));
+            nodes.push(text_child("ApplicationBox", ab));
         }
         if let Some(ref cb) = self.content_box {
-            attrs.push(("ContentBox".to_string(), cb.clone()));
+            nodes.push(text_child("ContentBox", cb));
         }
         if let Some(ref bb) = self.bleed_box {
-            attrs.push(("BleedBox".to_string(), bb.clone()));
+            nodes.push(text_child("BleedBox", bb));
         }
-        attrs
+        nodes
     }
 
     fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
         Ok(Self {
-            physical_box: node.get_attr("PhysicalBox").map(String::from),
-            application_box: node.get_attr("ApplicationBox").map(String::from),
-            content_box: node.get_attr("ContentBox").map(String::from),
-            bleed_box: node.get_attr("BleedBox").map(String::from),
+            physical_box: node.child("PhysicalBox").and_then(|c| c.text.clone()),
+            application_box: node.child("ApplicationBox").and_then(|c| c.text.clone()),
+            content_box: node.child("ContentBox").and_then(|c| c.text.clone()),
+            bleed_box: node.child("BleedBox").and_then(|c| c.text.clone()),
         })
     }
 }
