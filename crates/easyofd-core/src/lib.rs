@@ -12,7 +12,9 @@ pub mod action;
 pub mod annotation;
 pub mod attachment;
 pub mod basic_type;
+pub mod compat;
 pub mod composite_obj;
+pub mod consts;
 pub mod crypto;
 pub mod custom_tags;
 pub mod doc;
@@ -20,10 +22,13 @@ pub mod doc_vpreferences;
 pub mod error;
 pub mod extensions;
 pub mod graph;
+pub mod graphics2d;
 pub mod holder;
 pub mod image;
 pub mod integrity;
 pub mod model;
+pub mod ofd_common_qname;
+pub mod ofd_element;
 pub mod ofd_model;
 pub mod page_description;
 pub mod page_obj;
@@ -77,3 +82,39 @@ pub use signatures::{
 pub use text::{CT_CGTransform, CT_Font, CT_Text, Direction, TextCode};
 pub use versions::{DocVersion, File, FileList, Version, Versions};
 pub use watermark::Watermark;
+
+// ── 新增类型导出 ──────────────────────────────────────────────────────────
+
+pub use crypto::{
+    CryptoParameter, DecyptSeed, Encryptions, ExtendParams, SigParameter, SigParameters, UserInfo,
+};
+pub use graphics2d::{
+    GraphicsDeviceType, OfdGraphics2DDrawParam, OfdGraphicsDocument, OfdPageGraphics2D,
+    OfdPageGraphicsConfiguration, OfdPageGraphicsDevice, OfdShape, OfdShapes,
+};
+pub use ofd_common_qname::OfdCommonQName;
+pub use ofd_element::{DefaultElementProxy, OfdElement, OfdSimpleTypeElement};
+
+// ── 兼容别名（Java 类名 → Rust 类型名）────────────────────────────────────
+// 不用 wildcard，已在 compat 模块中逐个 pub use。详见 compat 模块文档。
+
+/// 对应 Java: OFDCommonQName（Rust 命名别名）。
+pub type OFDCommonQName = OfdCommonQName;
+
+/// 对应 Java: OFDGraphicsDocument（Rust 命名别名）。
+pub type OFDGraphicsDocument = OfdGraphicsDocument;
+
+/// 对应 Java: OFDGraphics2DDrawParam（Rust 命名别名）。
+pub type OFDGraphics2DDrawParam = OfdGraphics2DDrawParam;
+
+/// 对应 Java: OFDPageGraphics2D（Rust 命名别名）。
+pub type OFDPageGraphics2D = OfdPageGraphics2D;
+
+/// 对应 Java: OFDPageGraphicsConfiguration（Rust 命名别名）。
+pub type OFDPageGraphicsConfiguration = OfdPageGraphicsConfiguration;
+
+/// 对应 Java: OFDPageGraphicsDevice（Rust 命名别名）。
+pub type OFDPageGraphicsDevice = OfdPageGraphicsDevice;
+
+/// 对应 Java: OFDShapes（Rust 命名别名）。
+pub type OFDShapes = OfdShapes;

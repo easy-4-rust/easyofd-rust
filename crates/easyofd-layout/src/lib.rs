@@ -34,6 +34,7 @@ mod layout_analyzer;
 mod layout_block;
 mod layout_options;
 mod layout_result;
+mod ofd_doc;
 mod paragraph;
 mod position;
 mod rectangle;
@@ -70,13 +71,20 @@ mod txt_line_block;
 
 // ── 新增：元素 ─────────────────────────────────────────────────────────────────
 mod area_holder_block;
+mod area_holder_blocks_process;
+mod area_holder_context;
 mod art_word;
 mod br;
 mod page_area_filler;
 mod placeholder_span;
 
 // ── 新增：绘制器 ───────────────────────────────────────────────────────────────
+mod area_holder_block_render;
+mod canvas_render;
 mod cell_content_drawer;
+mod div_render;
+mod img_render;
+mod paragraph_render;
 
 // ── 新增：接口 trait ───────────────────────────────────────────────────────────
 mod div_container;
@@ -114,6 +122,7 @@ pub use layout_analyzer::LayoutAnalyzer;
 pub use layout_block::LayoutBlock;
 pub use layout_options::LayoutOptions;
 pub use layout_result::LayoutResult;
+pub use ofd_doc::{AreaHolderBlockEntry, AreaHolderBlocks, OfdLayoutDoc};
 pub use paragraph::{Paragraph, TextAlign};
 pub use position::Position;
 pub use rectangle::Rectangle;
@@ -150,13 +159,20 @@ pub use txt_line_block::TxtLineBlock;
 
 // ── 新增 pub use：元素 ───────────────────────────────────────────────────────────
 pub use area_holder_block::AreaHolderBlock;
+pub use area_holder_blocks_process::AreaHolderBlocksProcess;
+pub use area_holder_context::AreaHolderContext;
 pub use art_word::ArtWord;
 pub use br::BR;
 pub use page_area_filler::PageAreaFiller;
 pub use placeholder_span::PlaceholderSpan;
 
 // ── 新增 pub use：绘制器 ─────────────────────────────────────────────────────────
+pub use area_holder_block_render::AreaHolderBlockRender;
+pub use canvas_render::CanvasRender;
 pub use cell_content_drawer::{CellContentDrawer, CellImage};
+pub use div_render::DivRender;
+pub use img_render::ImgRender;
+pub use paragraph_render::ParagraphRender;
 
 // ── 新增 pub use：接口 trait ─────────────────────────────────────────────────────
 pub use div_container::DivContainer;
@@ -183,3 +199,24 @@ pub use graph_helper::GraphHelper;
 pub use stream_collect::StreamCollect;
 pub use text_measure_tool::TextMeasureTool;
 pub use watermark_drawer::{WatermarkDrawer, WatermarkRotation};
+
+// ── Java 名称别名（对齐 ofdrw 命名） ─────────────────────────────────────────
+//
+// 以下别名用于 Java → Rust 迁移场景，使 Java 代码中的 `OFDDoc`、
+// `CT_AreaHolderBlock`、`ExistCTFont` 等名称在 Rust 中可直接使用。
+
+/// Java 名称别名：对应 `org.ofdrw.layout.OFDDoc`。
+///
+/// 已有 Rust 类型：[`OfdLayoutDoc`]。
+pub type OFDDoc = OfdLayoutDoc;
+
+/// Java 名称别名：对应 `org.ofdrw.layout.areaholder.CT_AreaHolderBlock`。
+///
+/// 已有 Rust 类型：[`AreaHolderBlock`]。
+#[allow(non_camel_case_types)]
+pub type CT_AreaHolderBlock = AreaHolderBlock;
+
+/// Java 名称别名：对应 `org.ofdrw.layout.engine.ExistCTFont`。
+///
+/// 已有 Rust 类型：[`ExistCtFont`]。
+pub type ExistCTFont = ExistCtFont;

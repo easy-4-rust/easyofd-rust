@@ -131,8 +131,7 @@ mod tests {
 
     #[test]
     fn test_ofd_element_with_attrs() {
-        let proxy = DefaultElementProxy::new("Test")
-            .attr("Key", "Value");
+        let proxy = DefaultElementProxy::new("Test").attr("Key", "Value");
         let attrs = proxy.ofd_attributes();
         assert_eq!(attrs.len(), 1);
         assert_eq!(attrs[0].0, "Key");

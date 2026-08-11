@@ -11,6 +11,19 @@ pub mod signer_info;
 pub mod sm2_cipher;
 pub mod verify_info;
 
+/// Builder 和验证辅助类型（对应 Java: org.ofdrw.gm.sm2strut.builder）。
+pub mod builder {
+    pub mod cert_sig_holder;
+    pub mod gbt35275_validate;
+    pub mod pkcs9_signed_data_builder;
+    pub mod signed_data_builder;
+
+    pub use cert_sig_holder::CertSigHolder;
+    pub use gbt35275_validate::Gbt35275Validate;
+    pub use pkcs9_signed_data_builder::Pkcs9SignedDataBuilder;
+    pub use signed_data_builder::SignedDataBuilder;
+}
+
 pub use content_info::ContentInfo;
 pub use issuer_and_serial_number::IssuerAndSerialNumber;
 pub use oids::{format_oid, parse_oid};

@@ -53,7 +53,10 @@ impl CertTools {
     #[must_use]
     pub fn get_issuer(cert_der: &[u8]) -> String {
         if cert_der.len() >= 16 {
-            format!("Issuer@{:02X}{:02X}{:02X}{:02X}", cert_der[0], cert_der[1], cert_der[2], cert_der[3])
+            format!(
+                "Issuer@{:02X}{:02X}{:02X}{:02X}",
+                cert_der[0], cert_der[1], cert_der[2], cert_der[3]
+            )
         } else {
             "Unknown".to_string()
         }
@@ -125,7 +128,10 @@ mod tests {
 
     #[test]
     fn test_cert_tools_get_issuer() {
-        let cert = vec![0x30, 0x82, 0x01, 0x00, 0x02];
+        let cert = vec![
+            0x30, 0x82, 0x01, 0x00, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+            0x0C, 0x0D,
+        ];
         let issuer = CertTools::get_issuer(&cert);
         assert!(issuer.starts_with("Issuer@"));
     }

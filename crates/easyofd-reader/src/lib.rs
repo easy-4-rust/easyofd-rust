@@ -57,6 +57,76 @@ pub use resource_manage::ResourceManage;
 #[allow(deprecated)]
 pub use seal_ofd_reader::SealOfdReader;
 
+// ── ofdrw Java 类名别名（snake_case → PascalCase 对齐） ──
+
+/// 对应 Java: `org.ofdrw.reader.OFDReader`
+///
+/// Java 原始类名为全大写 `OFDReader`，Rust 版使用 [`OfdReader`]。
+/// 此别名保持与 Java API 的名称兼容。
+pub type OFDReader = OfdReader;
+
+/// 对应 Java: `org.ofdrw.reader.BadOFDException`
+///
+/// Java 原始类名为 `BadOFDException`，Rust 版使用 [`BadOfdException`]。
+pub type BadOFDException = BadOfdException;
+
+/// 对应 Java: `org.ofdrw.reader.DLOFDReader`
+///
+/// Java 原始类名为 `DLOFDReader`，Rust 版使用 [`DlOfdReader`]。
+#[allow(deprecated)]
+pub type DLOFDReader = DlOfdReader;
+
+/// 对应 Java: `org.ofdrw.reader.SealOFDReader`
+///
+/// Java 原始类名为 `SealOFDReader`，Rust 版使用 [`SealOfdReader`]。
+#[allow(deprecated)]
+pub type SealOFDReader = SealOfdReader;
+
+/// 对应 Java: `org.ofdrw.reader.model.OFDDocumentVo`
+///
+/// Java 原始类名为 `OFDDocumentVo`，Rust 版使用 [`OfdDocumentVo`]。
+#[allow(deprecated)]
+pub type OFDDocumentVo = OfdDocumentVo;
+
+/// 对应 Java: `org.ofdrw.reader.model.OFDPageVo`
+///
+/// Java 原始类名为 `OFDPageVo`，Rust 版使用 [`OfdPageVo`]。
+#[allow(deprecated)]
+pub type OFDPageVo = OfdPageVo;
+
+/// 对应 Java: `org.ofdrw.reader.tools.NameSpaceModifier`
+///
+/// Java 原始类名为 `NameSpaceModifier`（驼峰含大写 S），
+/// Rust 版使用 [`tools::namespace_modifier::NamespaceModifier`]。
+#[allow(deprecated)]
+pub type NameSpaceModifier = tools::namespace_modifier::NamespaceModifier;
+
+/// 对应 Java: `org.ofdrw.reader.tools.NameSpaceCleaner`
+///
+/// Java 原始类名为 `NameSpaceCleaner`（驼峰含大写 S），
+/// Rust 版使用 [`tools::namespace_cleaner::NamespaceCleaner`]。
+pub type NameSpaceCleaner = tools::namespace_cleaner::NamespaceCleaner;
+
+/// 对应 Java: `org.ofdrw.reader.ZipUtil`
+///
+/// 工具类以模块级函数形式实现，见 [`zip_util`] 模块。
+pub use zip_util as ZipUtil;
+
+/// 对应 Java: `org.ofdrw.reader.DeltaTool`
+///
+/// 工具类以模块级函数形式实现，见 [`delta_tool`] 模块。
+pub use delta_tool as DeltaTool;
+
+/// 对应 Java: `org.ofdrw.reader.tools.ImageUtils`
+///
+/// 工具类以模块级函数形式实现，见 [`tools::image_utils`] 模块。
+pub use tools::image_utils as ImageUtils;
+
+/// 对应 Java: `org.ofdrw.reader.tools.NameSpaceModifier`（命名空间常量）
+///
+/// OFD 标准命名空间 URI: `http://www.ofdspec.org/2016`。
+pub use tools::namespace_modifier::OFD_NAMESPACE;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,5 +454,99 @@ mod tests {
             Some("Outer/back_outer.png"),
             "resource after inner Res closes uses outer BaseLoc again"
         );
+    }
+
+    // ─── Java 名称别名测试 ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_ofd_reader_alias() {
+        let bytes = OfdWriter::new().build().unwrap();
+        // 通过 Java 风格别名 OFDReader 访问
+        let reader = OFDReader::from_bytes(&bytes).unwrap();
+        assert_eq!(reader.page_count(), 0);
+    }
+
+    #[test]
+    fn test_bad_ofd_exception_alias() {
+        let e = BadOFDException::corrupted("test alias");
+        assert!(e.to_string().contains("test alias"));
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_dl_ofd_reader_alias() {
+        let bytes = OfdWriter::new().build().unwrap();
+        let reader = DLOFDReader::from_bytes(&bytes).unwrap();
+        assert_eq!(reader.page_count(), 0);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_seal_ofd_reader_alias() {
+        let bytes = OfdWriter::new().build().unwrap();
+        let reader = SealOFDReader::from_bytes(&bytes).unwrap();
+        assert_eq!(reader.page_count(), 0);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_ofd_document_vo_alias() {
+        let vo = OFDDocumentVo::new("Doc_0", 210.0, 297.0, vec![]);
+        assert_eq!(vo.doc_path, "Doc_0");
+    }
+
+    #[test]
+    fn test_namespace_modifier_alias() {
+        #[allow(deprecated)]
+        let modifier = NameSpaceModifier::new();
+        assert_eq!(modifier.expected_namespace(), OFD_NAMESPACE);
+    }
+
+    #[test]
+    fn test_namespace_cleaner_alias() {
+        let xml = "<ofd:OFD><ofd:DocBody/></ofd:OFD>";
+        let result = NameSpaceCleaner::remove_ofd_prefix(xml);
+        assert!(!result.contains("ofd:"));
+    }
+
+    #[test]
+    fn test_zip_util_module_alias() {
+        // ZipUtil 是 zip_util 模块的别名
+        let data = {
+            let mut buf = std::io::Cursor::new(Vec::new());
+            {
+                let mut zip = zip::ZipWriter::new(&mut buf);
+                let options = zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored);
+                zip.start_file("test.txt", options).unwrap();
+                std::io::Write::write_all(&mut zip, b"hello").unwrap();
+                zip.finish().unwrap();
+            }
+            buf.into_inner()
+        };
+        let reader = std::io::Cursor::new(&data);
+        let mut archive = zip::ZipArchive::new(reader).unwrap();
+        let entries = ZipUtil::list_entries(&mut archive).unwrap();
+        assert_eq!(entries.len(), 1);
+    }
+
+    #[test]
+    fn test_delta_tool_module_alias() {
+        let delta = vec!["1.0".into(), "2.0".into()];
+        let result = DeltaTool::get_delta(Some(&delta), 2);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_image_utils_module_alias() {
+        assert_eq!(
+            ImageUtils::detect_format(&[0x89, 0x50, 0x4E, 0x47]),
+            ImageUtils::ImageFormat::Png
+        );
+    }
+
+    #[test]
+    fn test_ofd_namespace_constant() {
+        assert_eq!(OFD_NAMESPACE, "http://www.ofdspec.org/2016");
     }
 }

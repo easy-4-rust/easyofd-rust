@@ -67,9 +67,10 @@ pub use convert::{
 };
 pub use integrity::{CheckMethod, IntegrityEntry, IntegrityReport, verify_integrity};
 pub use pkg::container::{
-    AnnotsDir, OfdPkgDir, PageDir, PagesDir, ResDir, TempsDir, VirtualContainer,
+    AnnotsDir, OfdPackageFileIterator, OfdPkgDir, PageDir, PagesDir, ResDir, TempsDir,
+    VirtualContainer,
 };
-pub use pkg::tool::{ElemCup, OfdNameSpaceModifier};
+pub use pkg::tool::{ElemCup, OfdNameSpaceModifier, SaxReaderFactory};
 pub use rules::font_rule::FontRule;
 pub use rules::image_rule::ImageRule;
 pub use rules::path_rule::PathRule;
@@ -85,6 +86,31 @@ pub use rules::{
 pub fn module_name() -> &'static str {
     "easyofd-archive"
 }
+
+// ── Java 名称别名（对齐 ofdrw 命名） ─────────────────────────────────────────
+//
+// 以下别名用于 Java → Rust 迁移场景，使 Java 代码中的 `OFDDir`、
+// `OFDArchiveConverter` 等名称在 Rust 中可直接使用。
+
+/// Java 名称别名：对应 `org.ofdrw.pkg.container.OFDDir`。
+///
+/// 已有 Rust 类型：[`OfdPkgDir`]。
+pub type OFDDir = OfdPkgDir;
+
+/// Java 名称别名：对应 `org.ofdrw.archive.convert.OFDArchiveConverter`。
+///
+/// 已有 Rust 类型：[`OfdArchiveConverter`]。
+pub type OFDArchiveConverter = OfdArchiveConverter;
+
+/// Java 名称别名：对应 `org.ofdrw.pkg.tool.OFDNameSpaceModifier`。
+///
+/// 已有 Rust 类型：[`OfdNameSpaceModifier`]。
+pub type OFDNameSpaceModifier = OfdNameSpaceModifier;
+
+/// Java 名称别名：对应 `org.ofdrw.archive.check.OFDArchiveChecker`。
+///
+/// 已有 Rust 类型：[`OfdArchiveChecker`]。
+pub type OFDArchiveChecker = OfdArchiveChecker;
 
 /// 运行全部合规规则。
 ///
@@ -129,7 +155,14 @@ fn read_all_entries(ofd_bytes: &[u8]) -> OfdResult<Vec<(String, Vec<u8>)>> {
     Ok(entries)
 }
 
+/// 对应 Java: OFDPackageFileIterator（Rust 命名别名）。
+pub use OfdPackageFileIterator as OFDPackageFileIterator;
+
+/// 对应 Java: SAXReaderFactory（Rust 命名别名）。
+pub type SAXReaderFactory = SaxReaderFactory;
+
 #[cfg(test)]
+#[allow(clippy::items_after_statements)]
 mod tests {
     use super::*;
     use std::io::Write;

@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 easyofd-core = { workspace = true }
+easyofd-font = { workspace = true }
 easyofd-reader = { workspace = true }
 easyofd-writer = { workspace = true }
 lopdf = { workspace = true }

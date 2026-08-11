@@ -61,7 +61,53 @@ pub fn module_name() -> &'static str {
     "easyofd-crypto"
 }
 
+// ── Java 名称别名（对齐 ofdrw 命名） ─────────────────────────────────────────
+//
+// 以下别名用于 Java → Rust 迁移场景，使 Java 代码中的 `OFDDecryptor`、
+// `UserFEKDecryptor` 等名称在 Rust 中可直接使用。
+
+/// Java 名称别名：对应 `org.ofdrw.crypto.OFDDecryptor`。
+///
+/// 已有 Rust 类型：[`OfdDecryptor`]。
+pub type OFDDecryptor = OfdDecryptor;
+
+/// Java 名称别名：对应 `org.ofdrw.crypto.OFDEncryptor`。
+///
+/// 已有 Rust 类型：[`OfdEncryptor`]。
+pub type OFDEncryptor = OfdEncryptor;
+
+// 注意：`UserFekDecryptor` 和 `UserFekEncryptor` 是 trait，无法做 type alias。
+// Java 中的 `UserFEKDecryptor` / `UserFEKEncryptor` 对应 Rust 的
+// `UserFekDecryptor` / `UserFekEncryptor` trait，已通过 `pub use` 导出。
+
+/// Java 名称别名：对应 `org.ofdrw.crypto.integrity.OFDIntegrity`。
+///
+/// 已有 Rust 类型：[`OfdIntegrity`]。
+pub type OFDIntegrity = OfdIntegrity;
+
+/// Java 名称别名：对应 `org.ofdrw.crypto.integrity.GMProtectSigner`。
+///
+/// 已有 Rust 类型：[`GmProtectSigner`]。
+pub type GMProtectSigner = GmProtectSigner;
+
+/// Java 名称别名：对应 `org.ofdrw.crypto.integrity.GMProtectVerifier`。
+///
+/// 已有 Rust 类型：[`GmProtectVerifier`]。
+pub type GMProtectVerifier = GmProtectVerifier;
+
+/// Java 名称别名：对应 `org.ofdrw.crypto.integrity.OFDIntegrityVerifier`。
+///
+/// 已有 Rust 类型：[`OfdIntegrityVerifier`]。
+pub type OFDIntegrityVerifier = OfdIntegrityVerifier;
+
+/// 对应 Java: UserFEKDecryptor（Rust trait 别名）。
+pub use UserFekDecryptor as UserFEKDecryptor;
+
+/// 对应 Java: UserFEKEncryptor（Rust trait 别名）。
+pub use UserFekEncryptor as UserFEKEncryptor;
+
 #[cfg(test)]
+#[allow(clippy::items_after_statements)]
 mod tests {
     use super::*;
     use easyofd_core::OfdError;

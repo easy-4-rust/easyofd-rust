@@ -168,8 +168,7 @@ mod tests {
 
     #[test]
     fn test_area_holder_block_entry_builder() {
-        let entry = AreaHolderBlockEntry::new(5, "10 20 80 30")
-            .name("footer");
+        let entry = AreaHolderBlockEntry::new(5, "10 20 80 30").name("footer");
         assert_eq!(entry.id, 5);
         assert_eq!(entry.boundary, "10 20 80 30");
         assert_eq!(entry.name.unwrap(), "footer");

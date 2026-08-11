@@ -58,7 +58,7 @@ pub use sign_id_parser::{NumberFormatAtomicSignId, SignIdParser, StandFormatAtom
 pub use sign_id_provider::{NumberSignIdProvider, SignIdProvider, StandardSignIdProvider};
 pub use signed_ofd::SignedOfd;
 pub use signs_dir::SignsDir;
-pub use stamppos::{CuttingRatio, NormalStampPos, RidingStampPos, Side};
+pub use stamppos::{CuttingRatio, CuttingRideStampPos, NormalStampPos, RidingStampPos, Side};
 pub use timestamp::{
     TimeStamp, create_timestamp, decode_der as decode_timestamp_der,
     encode_der as encode_timestamp_der,
@@ -70,3 +70,82 @@ pub use verify_containers::{
     SesV4ValidateContainer, SesV5ValidateContainer, SignedDataValidateContainer,
 };
 pub use verify_signature::{SignatureVerificationResult, verify_signature, verify_signature_multi};
+
+// ── Java 名称别名（对齐 ofdrw 命名） ─────────────────────────────────────────
+//
+// 以下别名用于 Java → Rust 迁移场景，使 Java 代码中的 `OFDVerifyException`、
+// `GBT35275DSContainer` 等名称在 Rust 中可直接使用。
+// trait 无法做 type alias，`SignIdProvider` 已通过 `pub use` 导出。
+
+/// Java 名称别名：对应 `org.ofdrw.sign.verify.exceptions.OFDVerifyException`。
+///
+/// 已有 Rust 类型：[`OfdVerifyException`]。
+pub type OFDVerifyException = OfdVerifyException;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.OFDSigner`。
+///
+/// 已有 Rust 类型：[`OfdSignatureBuilder`]。
+pub type OFDSigner = OfdSignatureBuilder;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.signContainer.GBT35275DSContainer`。
+///
+/// 已有 Rust 类型：[`Gbt35275DsContainer`]。
+pub type GBT35275DSContainer = Gbt35275DsContainer;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.signContainer.GBT35275PKCS9DSContainer`。
+///
+/// 已有 Rust 类型：[`Gbt35275Pkcs9DsContainer`]。
+pub type GBT35275PKCS9DSContainer = Gbt35275Pkcs9DsContainer;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.signContainer.SESV1Container`。
+///
+/// 已有 Rust 类型：[`SesV1Container`]。
+pub type SESV1Container = SesV1Container;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.signContainer.SESV4Container`。
+///
+/// 已有 Rust 类型：[`SesV4Container`]。
+pub type SESV4Container = SesV4Container;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.signContainer.SESV5Container`。
+///
+/// 已有 Rust 类型：[`SesV5Container`]。
+pub type SESV5Container = SesV5Container;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.NumberFormatAtomicSignID`。
+///
+/// 已有 Rust 类型：[`sign_id_parser::NumberFormatAtomicSignId`]。
+pub type NumberFormatAtomicSignID = sign_id_parser::NumberFormatAtomicSignId;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.StandFormatAtomicSignID`。
+///
+/// 已有 Rust 类型：[`sign_id_parser::StandFormatAtomicSignId`]。
+pub type StandFormatAtomicSignID = sign_id_parser::StandFormatAtomicSignId;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.verify.container.GBT35275ValidateContainer`。
+///
+/// 已有 Rust 类型：[`verify_containers::Gbt35275ValidateContainer`]。
+pub type GBT35275ValidateContainer = Gbt35275ValidateContainer;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.verify.OFDValidator`。
+///
+/// 已有 Rust 类型：[`OfdValidator`]。
+pub type OFDValidator = OfdValidator;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.verify.container.SESV1ValidateContainer`。
+///
+/// 已有 Rust 类型：[`SesV1ValidateContainer`]。
+pub type SESV1ValidateContainer = SesV1ValidateContainer;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.verify.container.SESV4ValidateContainer`。
+///
+/// 已有 Rust 类型：[`SesV4ValidateContainer`]。
+pub type SESV4ValidateContainer = SesV4ValidateContainer;
+
+/// Java 名称别名：对应 `org.ofdrw.sign.verify.container.SESV5ValidateContainer`。
+///
+/// 已有 Rust 类型：[`SesV5ValidateContainer`]。
+pub type SESV5ValidateContainer = SesV5ValidateContainer;
+
+/// 对应 Java: SignIDProvider（Rust trait 别名）。
+pub use SignIdProvider as SignIDProvider;

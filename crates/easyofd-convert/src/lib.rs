@@ -32,6 +32,7 @@ pub mod error;
 pub mod exporter;
 pub mod font;
 pub mod html;
+pub mod image;
 mod image_convert_format;
 pub mod importer;
 pub mod point;
@@ -39,20 +40,39 @@ pub mod utils;
 
 pub use convert_helper::ConvertHelper;
 pub use convert_options::ConvertOptions;
-pub use converter::{CgTransformEntry, CgTransformMap, DocConverter};
+pub use converter::{
+    AWTMaker, CgTransformEntry, CgTransformMap, Config, DocConverter, HtmlMaker, ItextMaker, Lib,
+    PdfboxMaker, SVGMaker,
+};
 pub use error::GeneralConvertError;
-pub use exporter::{Exporter, ImageExporter, PdfExporter, SvgExporter, TextExporter};
+pub use exporter::{
+    Exporter, HTMLExporter, ImageExporter, OFDExporter, PDFExporterIText, PDFExporterPDFBox,
+    PdfExporter, SvgExporter, TextExporter,
+};
 pub use font::{
-    BoundingBox, CmapSubtable, FontWrapper, GlyfCompositeComp, GlyfCompositeDescript, GlyfDescript,
-    GlyfSimpleDescript, GlyphData, GlyphDataProvider, HorizontalHeaderTable,
-    HorizontalMetricsTable, NameRecord, NamingTable,
+    BoundingBox, CmapSubtable, FontDrawPathProvider, FontLoader, FontWrapper, GlyfCompositeComp,
+    GlyfCompositeDescript, GlyfDescript, GlyfSimpleDescript, GlyphData, GlyphDataProvider,
+    GlyphPath, GlyphPoint, HorizontalHeaderTable, HorizontalMetricsTable, MemoryTTFDataStream,
+    NameRecord, NamingTable, PdfFontWrapper, Type1Seg, Type1SegSplitParser, Type1SegType,
 };
 pub use html::Element;
+pub use image::ImageMedia;
 pub use image_convert_format::ImageConvertFormat;
 pub use importer::{Importer, PdfImporter};
 pub use point::{PathPoint, TextCodePoint, Tuple2};
 pub use utils::{EPlatform, Matrix3x3};
 
+// ── ofdrw Java 类名别名 ──
+
+/// 对应 Java: `org.ofdrw.converter.ConvertHelper`（Lib 枚举）
+///
+/// Java 原始类名为 `ConvertHelper`，Rust 版的 Lib 枚举在 [`converter::lib_enum`] 中。
+pub use converter::Lib as ConvertHelperLib;
+
+/// 对应 Java: `org.ofdrw.converter.font.FontDrawPathProvider`
+///
+/// trait 别名，保持 Java 接口名兼容。
+/// 详细实现见 [`font::FontDrawPathProvider`]。
 use std::path::Path;
 
 use easyofd_core::{
@@ -784,7 +804,23 @@ pub fn convert_image(_input: &[u8], _target_format: ImageConvertFormat) -> OfdRe
     ))
 }
 
+/// 对应 Java: CGTransformMap（Rust 命名别名）。
+pub type CGTransformMap = CgTransformMap;
+
+/// 对应 Java: SVGExporter（Rust 命名别名）。
+pub type SVGExporter = SvgExporter;
+
+/// 对应 Java: ImageConverter（Rust 命名别名）。
+pub type ImageConverter = ImageExporter;
+
+/// 对应 Java: PDFConverter（Rust 命名别名）。
+pub type PDFConverter = PdfExporter;
+
+/// 对应 Java: TextConverter（Rust 命名别名）。
+pub type TextConverter = TextExporter;
+
 #[cfg(test)]
+#[allow(clippy::items_after_statements)]
 mod tests {
     use super::*;
 
@@ -1020,4 +1056,173 @@ mod tests {
         let _ = std::fs::remove_file(ofd_path);
         let _ = std::fs::remove_file(pdf_path);
     }
+
+    // ─── Java 名称别名测试 ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_lib_enum() {
+        assert_eq!(Lib::Itext.name(), "iText");
+        assert_eq!(Lib::default_backend(), Lib::PrintPdf);
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert!((config.dpi - 72.0).abs() < f32::EPSILON);
+        assert!(config.anti_aliasing);
+    }
+
+    #[test]
+    fn test_svg_maker_exclusion() {
+        assert_eq!(
+            SVGMaker::replacement(),
+            "easyofd_convert::exporter::SvgExporter"
+        );
+    }
+
+    #[test]
+    fn test_html_maker_exclusion() {
+        assert!(HtmlMaker::replacement().contains("Element"));
+    }
+
+    #[test]
+    fn test_pdfbox_maker_exclusion() {
+        assert_eq!(
+            PdfboxMaker::replacement(),
+            "easyofd_convert::exporter::PdfExporter"
+        );
+    }
+
+    #[test]
+    fn test_itext_maker_exclusion() {
+        assert_eq!(
+            ItextMaker::replacement(),
+            "easyofd_convert::exporter::PdfExporter"
+        );
+    }
+
+    #[test]
+    fn test_awt_maker_exclusion() {
+        assert!(AWTMaker::replacement().contains("SvgExporter"));
+    }
+
+    #[test]
+    fn test_pdf_exporter_itext_exclusion() {
+        assert_eq!(
+            PDFExporterIText::replacement(),
+            "easyofd_convert::exporter::PdfExporter"
+        );
+    }
+
+    #[test]
+    fn test_pdf_exporter_pdfbox_exclusion() {
+        assert_eq!(
+            PDFExporterPDFBox::replacement(),
+            "easyofd_convert::exporter::PdfExporter"
+        );
+    }
+
+    #[test]
+    fn test_memory_ttf_data_stream() {
+        let data = vec![0x00, 0x01, 0x00, 0x00];
+        let mts = MemoryTTFDataStream::new(data);
+        assert_eq!(mts.len(), 4);
+        let mut stream = mts.as_stream();
+        assert_eq!(stream.read_u16(), Some(1));
+    }
+
+    #[test]
+    fn test_ttf_data_stream_alias() {
+        let data = [0x48, 0x65, 0x6C, 0x6C, 0x6F];
+        let mut stream = font::TTFDataStream::new(&data);
+        let bytes = stream.read_bytes(5).unwrap();
+        assert_eq!(bytes, b"Hello");
+    }
+
+    #[test]
+    fn test_font_loader() {
+        let mut loader = FontLoader::new();
+        loader.register_font("TestFont", "/usr/share/fonts/test.ttf");
+        assert!(loader.font_map().contains_key("TestFont"));
+    }
+
+    #[test]
+    fn test_pdf_font_wrapper() {
+        let wrapper = PdfFontWrapper::new("SimSun", "SimSun").with_subset_tag("ABCDEF");
+        assert_eq!(wrapper.full_name(), "ABCDEF+SimSun");
+    }
+
+    #[test]
+    fn test_type1_seg_split_parser() {
+        assert!(!Type1SegSplitParser::is_pfb(&[]));
+        assert!(Type1SegSplitParser::parse(&[]).is_empty());
+    }
+
+    #[test]
+    fn test_font_draw_path_provider() {
+        struct Mock;
+        impl FontDrawPathProvider for Mock {
+            fn glyph_path(&self, cp: u32) -> Option<GlyphPath> {
+                if cp == 0x41 {
+                    Some(GlyphPath::default())
+                } else {
+                    None
+                }
+            }
+            fn glyph_path_by_id(&self, _: u32) -> Option<GlyphPath> {
+                None
+            }
+        }
+        let provider = Mock;
+        assert!(provider.has_glyph(0x41));
+        assert!(!provider.has_glyph(0x42));
+    }
+
+    #[test]
+    fn test_font_utils() {
+        assert!(font::FontUtils::is_cjk_font("SimSun"));
+        assert!(!font::FontUtils::is_cjk_font("Arial"));
+    }
+
+    #[test]
+    fn test_image_media() {
+        let media = ImageMedia::new(
+            vec![0xFF],
+            image::image_media::MediaImageFormat::Jpeg,
+            100,
+            200,
+        );
+        assert_eq!(media.width, 100);
+        assert_eq!(media.data_size(), 1);
+    }
+
+    #[test]
+    fn test_convert_helper_lib_alias() {
+        assert_eq!(ConvertHelperLib::default_backend(), Lib::PrintPdf);
+    }
+
+    #[test]
+    fn test_common_util_module_alias() {
+        let px = utils::CommonUtil::millimeters_to_pixel(25.4, 72.0);
+        assert!((px - 72.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_point_util_module_alias() {
+        let ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let [x, y] = utils::PointUtil::ctm_transform_point(5.0, 10.0, &ctm);
+        assert!((x - 5.0).abs() < 1e-10);
+        assert!((y - 10.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_os_info_module_alias() {
+        assert!(!utils::OSinfo::temp_dir_path().is_empty());
+    }
+
+    #[test]
+    fn test_string_utils_module_alias() {
+        assert_eq!(utils::StringUtils::escape_xml("<tag>"), "&lt;tag&gt;");
+    }
 }
+pub mod itext_exclusions;
