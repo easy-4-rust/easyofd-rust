@@ -86,9 +86,9 @@ mod tests {
     fn test_write_options_default() {
         let opts = WriteOptions::default();
         assert_eq!(opts.metadata.version, "1.0");
-        assert_eq!(opts.metadata.title.as_deref(), Some("EasyOFD Document"));
-        assert_eq!(opts.metadata.author.as_deref(), Some("easyofd-rust"));
-        assert_eq!(opts.metadata.creator.as_deref(), Some("easyofd-rust"));
+        assert!(opts.metadata.title.is_none());
+        assert!(opts.metadata.author.is_none());
+        assert!(opts.metadata.creator.is_none());
         assert!(opts.metadata.creation_date.is_some());
     }
 

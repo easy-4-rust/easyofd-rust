@@ -15,9 +15,9 @@ impl Default for WriteOptions {
         Self {
             metadata: OfdMetadata {
                 version: "1.0".to_string(),
-                title: Some("EasyOFD Document".to_string()),
-                author: Some("easyofd-rust".to_string()),
-                creator: Some("easyofd-rust".to_string()),
+                title: None,
+                author: None,
+                creator: None,
                 creation_date: Some(Utc::now().naive_utc()),
             },
         }
