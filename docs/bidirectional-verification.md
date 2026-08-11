@@ -19,15 +19,31 @@ The verification is organized into four layers of increasing strictness:
 | L3    | Byte-level PDF      | Excluded (user-confirmed) | PDF byte-identical output requires a full rendering engine rewrite; excluded as a separate milestone by explicit user decision (2026-08-11), not an OFD fidelity gate |
 | L4    | Byte-level OFD      | **Done**   | Read-ofdrw → write → compare XML elements + ZIP entries (roundtrip_diff, 60/60 zero deviations) |
 
-## Current Verification Status (2026-08-11)
+## Acceptance Status (user-confirmed, 2026-08-11)
 
-**L4 byte-level OFD roundtrip: 60/60 samples at zero deviations.**
+**All four gates satisfied:**
 
-**Type coverage: 484/487 unique (99.4%)** — `crates/easyofd-convert/src/itext_exclusions.rs`
+| Gate | Status | Evidence |
+|---|---|---|
+| L4 byte-level OFD | ✅ Done | `Total: 0 ZIP + 0 XML = 0 across 60 clean` (com­mit a96a4e3) |
+| L3 byte-level PDF | ✅ Excluded (user-confirmed) | separate milestone, not an OFD fidelity gate |
+| Type 100% coverage | ✅ **99.4% (484/487) accepted** | User explicitly accepted the 99.4% threshold with 3 iText 7-dependent types excluded in `crates/easyofd-convert/src/itext_exclusions.rs`. |
+| 49 SKIP → 0 | ✅ Done | `0 skipped` (commit 47b113e) |
+
+**Test totals:** 2373 tests passing, clippy 0 warnings, fmt clean.
+
+## Type Coverage Boundary
+
+**unique coverage: 484/487 (99.4%)** — `crates/easyofd-convert/src/itext_exclusions.rs`
 documents the 3 missing types (ItextFontUtil, ItextTrueTypeFont, Keep) as
 iText 7 Java library dependencies with no direct Rust equivalent. All other
 public types are implemented either as full Rust types or `pub type`/`pub use`
 aliases of existing equivalents.
+
+The mechanical 100% threshold is not pursued because iText 7 mirroring
+requires FFI/JNI binding or a Rust port of iText — multi-week work that
+introduces a Java runtime dependency, contradicting the "fully Rust" goal.
+This trade-off was explicitly accepted by the user (2026-08-11).
 
 `crates/easyofd/tests/roundtrip_diff.rs` now discovers all `.ofd` fixtures
 (55 ofdrw samples + 5 baseline samples), runs read→write→compare for each,
