@@ -12,7 +12,10 @@ mod multi;
 mod ofd_signature_builder;
 mod read_signature;
 mod seal;
+pub mod sign_dir;
+pub mod sign_id_provider;
 mod signed_ofd;
+pub mod signs_dir;
 #[cfg(test)]
 #[path = "test_lib.rs"]
 mod tests;
@@ -36,7 +39,10 @@ pub use read_signature::read_signature;
 pub use seal::{
     SealInfo, StampAppearance, StampSide, decode_seal_esl, encode_seal_esl, riding_stamp_appearance,
 };
+pub use sign_dir::SignDir;
+pub use sign_id_provider::{NumberSignIdProvider, SignIdProvider, StandardSignIdProvider};
 pub use signed_ofd::SignedOfd;
+pub use signs_dir::SignsDir;
 pub use timestamp::{
     TimeStamp, create_timestamp, decode_der as decode_timestamp_der,
     encode_der as encode_timestamp_der,
