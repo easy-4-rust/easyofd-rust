@@ -48,8 +48,10 @@ impl VersionParser {
     /// 对应 Java: `parseSES_SignatureVersion`
     ///
     /// SES_Signature 的顶层 SEQUENCE 包含：
-    /// - V1: version, seal, signInfo（3 个子元素）
-    /// - V4/V5: version, seal, cert, signatureAlgorithm, signData（4-5 个子元素）
+    /// - V1: TBS_Sign, signature（2 个子元素）
+    /// - V4/V5: TBS_Sign, cert, signatureAlgorithm, signData（4 个子元素）
+    ///
+    /// 版本号从 TBS_Sign 内部的 version INTEGER 读取。
     ///
     /// # 错误
     ///
@@ -58,11 +60,11 @@ impl VersionParser {
         let (seq_val, _) = decode_sequence(der, 0)?;
         let child_count = count_sequence_children(&seq_val)?;
         let version = match child_count {
-            3 => SESVersion::V1,
+            2 => SESVersion::V1,
             n if n >= 4 => {
-                // V4/V5: 通过内部 SESeal 的 header version 区分
-                let header_ver = Self::extract_signature_seal_header_version(&seq_val)?;
-                if header_ver == 5 {
+                // V4/V5: 从 TBS_Sign 的 version 字段读取
+                let tbs_ver = Self::extract_tbs_sign_version(&seq_val)?;
+                if tbs_ver == 5 {
                     SESVersion::V5
                 } else {
                     SESVersion::V4
@@ -107,21 +109,27 @@ impl VersionParser {
         Ok(ver)
     }
 
-    /// 从签章结构中提取 SESeal 的 header version。
+    /// 从 SES_Signature 结构中提取 TBS_Sign 的 version 字段。
     ///
-    /// SES_Signature 结构中，seal 是第二个子元素。
-    fn extract_signature_seal_header_version(sig_seq: &[u8]) -> DerResult<u32> {
-        let mut pos = 0;
-        // 跳过第一个子元素 (version INTEGER)
-        let (_, _, next) = decode_tlv(sig_seq, pos)?;
-        pos = next;
-        // 第二个子元素是 seal (SEQUENCE)
-        let (tag, seal_val, _) = decode_tlv(sig_seq, pos)?;
-        if tag != 0x30 {
-            return Err(DerError("期望 seal 为 SEQUENCE"));
+    /// SES_Signature 首元素是 TBS_Sign SEQUENCE，
+    /// TBS_Sign 首元素是 version INTEGER。
+    fn extract_tbs_sign_version(sig_seq: &[u8]) -> DerResult<u32> {
+        // 第一个子元素是 TBS_Sign (SEQUENCE)
+        let (tbs_val, _) = {
+            let (tag, val, _) = decode_tlv(sig_seq, 0)?;
+            if tag != 0x30 {
+                return Err(DerError("期望 TBS_Sign 为 SEQUENCE"));
+            }
+            (val, 0)
+        };
+        // TBS_Sign 第一个子元素是 version (INTEGER)
+        let (tag, ver_val, _) = decode_tlv(&tbs_val, 0)?;
+        if tag != 0x02 {
+            return Err(DerError("期望 TBS_Sign.version 为 INTEGER"));
         }
-        // seal 就是 SESeal，提取其 header version
-        Self::extract_header_version(&seal_val)
+        #[allow(clippy::cast_possible_truncation)]
+        let ver = decode_uint(&ver_val) as u32;
+        Ok(ver)
     }
 }
 
@@ -148,74 +156,82 @@ mod tests {
 
     fn make_v1_signature_der() -> Vec<u8> {
         let sig = V1Sig {
-            version: 1,
-            seal: v1::SESeal {
-                eseal_info: v1::SealInfo {
-                    header: v1::SESHeader {
-                        id: "ES".into(),
-                        version: 1,
-                        vid: "test".into(),
+            to_sign: v1::TBSSign {
+                version: 1,
+                seal: v1::SESeal {
+                    eseal_info: v1::SealInfo {
+                        header: v1::SESHeader {
+                            id: "ES".into(),
+                            version: 1,
+                            vid: "test".into(),
+                        },
+                        es_id: "ES001".into(),
+                        property: v1::SESPropertyInfo {
+                            seal_type: 0,
+                            name: "Test".into(),
+                            cert_list: vec![vec![0x01]],
+                            create_date: "250101000000Z".into(),
+                            valid_start: "250101000000Z".into(),
+                            valid_end: "300101000000Z".into(),
+                        },
+                        picture: v1::SESPictureInfo {
+                            pic_type: "PNG".into(),
+                            data: vec![0x01],
+                            width: 100,
+                            height: 100,
+                        },
                     },
-                    es_id: "ES001".into(),
-                    property: v1::SESPropertyInfo {
-                        seal_type: 0,
-                        name: "Test".into(),
-                        cert_list: vec![vec![0x01]],
-                        create_date: "250101000000Z".into(),
-                        valid_start: "250101000000Z".into(),
-                        valid_end: "300101000000Z".into(),
-                    },
-                    picture: v1::SESPictureInfo {
-                        pic_type: "PNG".into(),
-                        data: vec![0x01],
-                        width: 100,
-                        height: 100,
+                    sign_info: v1::SignInfo {
+                        cert: vec![0x01],
+                        signature_algorithm: SM2_SM3_OID.to_vec(),
+                        sign_data: vec![0xAA; 32],
                     },
                 },
-                sign_info: v1::SignInfo {
-                    cert: vec![0x01],
-                    signature_algorithm: SM2_SM3_OID.to_vec(),
-                    sign_data: vec![0xAA; 32],
-                },
-            },
-            sign_info: v1::SignInfo {
+                time_info: b"2025-01-01 00:00:00".to_vec(),
+                data_hash: vec![0xBB; 32],
+                property_info: "test".into(),
                 cert: vec![0x01],
                 signature_algorithm: SM2_SM3_OID.to_vec(),
-                sign_data: vec![0xBB; 32],
             },
+            sign_data: vec![0xBB; 32],
         };
         sig.encode_der()
     }
 
     fn make_v4_signature_der() -> Vec<u8> {
         let sig = V4Sig {
-            version: 4,
-            seal: v4::SESeal {
-                eseal_info: v4::SealInfo {
-                    header: v4::SESHeader {
-                        id: "ES".into(),
-                        version: 4,
-                        vid: "test".into(),
+            to_sign: v4::TBSSign {
+                version: 4,
+                seal: v4::SESeal {
+                    eseal_info: v4::SealInfo {
+                        header: v4::SESHeader {
+                            id: "ES".into(),
+                            version: 4,
+                            vid: "test".into(),
+                        },
+                        es_id: "ES004".into(),
+                        property: v4::SESPropertyInfo {
+                            seal_type: 0,
+                            name: "Test".into(),
+                            cert_list: vec![v4::CertChoice::FullCert(vec![0x01])],
+                            create_date: "20250101000000Z".into(),
+                            valid_start: "20250101000000Z".into(),
+                            valid_end: "20300101000000Z".into(),
+                        },
+                        picture: v4::SESPictureInfo {
+                            pic_type: "PNG".into(),
+                            data: vec![0x01],
+                            width: 100,
+                            height: 100,
+                        },
                     },
-                    es_id: "ES004".into(),
-                    property: v4::SESPropertyInfo {
-                        seal_type: 0,
-                        name: "Test".into(),
-                        cert_list: vec![v4::CertChoice::FullCert(vec![0x01])],
-                        create_date: "20250101000000Z".into(),
-                        valid_start: "20250101000000Z".into(),
-                        valid_end: "20300101000000Z".into(),
-                    },
-                    picture: v4::SESPictureInfo {
-                        pic_type: "PNG".into(),
-                        data: vec![0x01],
-                        width: 100,
-                        height: 100,
-                    },
+                    cert: vec![0x01],
+                    signature_algorithm: SM2_SM3_OID.to_vec(),
+                    sign_data: vec![0xCC; 32],
                 },
-                cert: vec![0x01],
-                signature_algorithm: SM2_SM3_OID.to_vec(),
-                sign_data: vec![0xCC; 32],
+                time_info: "20250101000000Z".into(),
+                data_hash: vec![0xDD; 32],
+                property_info: "test".into(),
             },
             cert: vec![0x01],
             signature_algorithm: SM2_SM3_OID.to_vec(),
@@ -226,34 +242,39 @@ mod tests {
 
     fn make_v5_signature_der() -> Vec<u8> {
         let sig = V5Sig {
-            version: 5,
-            seal: v5::SESeal {
-                eseal_info: v5::SealInfo {
-                    header: v5::SESHeader {
-                        id: "ES".into(),
-                        version: 5,
-                        vid: "test".into(),
+            to_sign: v5::TBSSign {
+                version: 5,
+                seal: v5::SESeal {
+                    eseal_info: v5::SealInfo {
+                        header: v5::SESHeader {
+                            id: "ES".into(),
+                            version: 5,
+                            vid: "test".into(),
+                        },
+                        es_id: "ES005".into(),
+                        property: v5::SESPropertyInfo {
+                            seal_type: 0,
+                            name: "Test".into(),
+                            cert_list: vec![v5::CertChoice::FullCert(vec![0x01])],
+                            create_date: "20250101000000Z".into(),
+                            valid_start: "20250101000000Z".into(),
+                            valid_end: "20300101000000Z".into(),
+                        },
+                        picture: v5::SESPictureInfo {
+                            pic_type: "PNG".into(),
+                            data: vec![0x01],
+                            width: 100,
+                            height: 100,
+                        },
                     },
-                    es_id: "ES005".into(),
-                    property: v5::SESPropertyInfo {
-                        seal_type: 0,
-                        name: "Test".into(),
-                        cert_list: vec![v5::CertChoice::FullCert(vec![0x01])],
-                        create_date: "20250101000000Z".into(),
-                        valid_start: "20250101000000Z".into(),
-                        valid_end: "20300101000000Z".into(),
-                    },
-                    picture: v5::SESPictureInfo {
-                        pic_type: "PNG".into(),
-                        data: vec![0x01],
-                        width: 100,
-                        height: 100,
-                    },
+                    cert: vec![0x01],
+                    signature_algorithm: SM2_SM3_OID.to_vec(),
+                    sign_data: vec![0xEE; 32],
+                    time_stamp: None,
                 },
-                cert: vec![0x01],
-                signature_algorithm: SM2_SM3_OID.to_vec(),
-                sign_data: vec![0xEE; 32],
-                time_stamp: None,
+                time_info: "20250101000000Z".into(),
+                data_hash: vec![0xFF; 32],
+                property_info: "test".into(),
             },
             cert: vec![0x01],
             signature_algorithm: SM2_SM3_OID.to_vec(),

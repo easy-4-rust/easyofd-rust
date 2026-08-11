@@ -192,27 +192,52 @@ pub struct SESeal {
 /// V1 待签名数据。
 ///
 /// 对应 Java: `org.ofdrw.gm.ses.v1.TBS_Sign`
+///
+/// ```asn1
+/// TBS_Sign ::= SEQUENCE {
+///     version             INTEGER,
+///     eseal               SESeal,
+///     timeInfo            BIT STRING,
+///     dataHash            BIT STRING,
+///     propertyInfo        IA5String,
+///     cert                OCTET STRING,
+///     signatureAlgorithm  OBJECT IDENTIFIER
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TBSSign {
-    /// 印章头。
-    pub header: SESHeader,
-    /// 签名算法 OID 弧段。
-    pub signature_algorithm: Vec<u32>,
+    /// 版本号，V1 固定为 1。
+    pub version: u64,
     /// 电子印章。
     pub seal: SESeal,
+    /// 签章时间信息。
+    pub time_info: Vec<u8>,
+    /// 原文杂凑值（SM3 摘要）。
+    pub data_hash: Vec<u8>,
+    /// 签章属性信息。
+    pub property_info: String,
+    /// 签章者证书（DER 编码）。
+    pub cert: Vec<u8>,
+    /// 签名算法 OID 弧段。
+    pub signature_algorithm: Vec<u32>,
 }
 
 /// V1 印章签名。
 ///
 /// 对应 Java: `org.ofdrw.gm.ses.v1.SES_Signature`
+///
+/// ```asn1
+/// SES_Signature ::= SEQUENCE {
+///     toSign      TBS_Sign,
+///     signature   BIT STRING
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SESSignature {
-    /// 版本号，V1 固定为 1。
-    pub version: u64,
-    /// 电子印章。
-    pub seal: SESeal,
-    /// 签名信息。
-    pub sign_info: SignInfo,
+    /// 待签名数据（含 cert 和 signatureAlgorithm）。
+    pub to_sign: TBSSign,
+    /// 签名数据。
+    pub sign_data: Vec<u8>,
 }
 
 // ── 编码/解码实现 ─────────────────────────────────────────────────────
@@ -462,49 +487,23 @@ impl SESeal {
 
 impl TBSSign {
     /// DER 编码。
-    pub fn encode_der(&self) -> Vec<u8> {
-        build_sequence(|inner| {
-            inner.extend_from_slice(&self.header.encode_der());
-            encode_oid(&self.signature_algorithm, inner);
-            inner.extend_from_slice(&self.seal.encode_der());
-        })
-    }
-
-    /// DER 解码。
-    pub fn decode_der(der: &[u8]) -> DerResult<Self> {
-        let (val, _) = decode_sequence(der, 0)?;
-        let mut pos = 0;
-
-        let (hdr_seq, next) = decode_sequence(&val, pos)?;
-        let header = SESHeader::decode_der(&repack_sequence(&hdr_seq))?;
-        pos = next;
-
-        let (oid_val, next) = expect_tlv(&val, pos, TAG_OBJECT_IDENTIFIER)?;
-        let signature_algorithm = decode_oid(&oid_val)?;
-        pos = next;
-
-        let (seal_seq, _) = decode_sequence(&val, pos)?;
-        let seal = SESeal::decode_der(&repack_sequence(&seal_seq))?;
-
-        Ok(Self {
-            header,
-            signature_algorithm,
-            seal,
-        })
-    }
-}
-
-impl SESSignature {
-    /// DER 编码。
+    ///
+    /// 对应 Java: `org.ofdrw.gm.ses.v1.TBS_Sign#toASN1Primitive`
     pub fn encode_der(&self) -> Vec<u8> {
         build_sequence(|inner| {
             encode_integer(self.version, inner);
             inner.extend_from_slice(&self.seal.encode_der());
-            inner.extend_from_slice(&self.sign_info.encode_der());
+            encode_bit_string(&self.time_info, inner);
+            encode_bit_string(&self.data_hash, inner);
+            encode_ia5_string(&self.property_info, inner);
+            encode_octet_string(&self.cert, inner);
+            encode_oid(&self.signature_algorithm, inner);
         })
     }
 
     /// DER 解码。
+    ///
+    /// 对应 Java: `org.ofdrw.gm.ses.v1.TBS_Sign(ASN1Sequence)`
     pub fn decode_der(der: &[u8]) -> DerResult<Self> {
         let (val, _) = decode_sequence(der, 0)?;
         let mut pos = 0;
@@ -517,14 +516,78 @@ impl SESSignature {
         let seal = SESeal::decode_der(&repack_sequence(&seal_seq))?;
         pos = next;
 
-        let (sign_seq, _) = decode_sequence(&val, pos)?;
-        let sign_info = SignInfo::decode_der(&repack_sequence(&sign_seq))?;
+        let (time_val, next) = expect_tlv(&val, pos, 0x03)?;
+        let time_info = if time_val.is_empty() {
+            Vec::new()
+        } else {
+            time_val[1..].to_vec()
+        };
+        pos = next;
+
+        let (hash_val, next) = expect_tlv(&val, pos, 0x03)?;
+        let data_hash = if hash_val.is_empty() {
+            Vec::new()
+        } else {
+            hash_val[1..].to_vec()
+        };
+        pos = next;
+
+        // propertyInfo: IA5String (0x16) 或兼容 DERIA5String
+        let (prop_val, next) = expect_tlv(&val, pos, TAG_IA5_STRING)?;
+        let property_info = String::from_utf8_lossy(&prop_val).into_owned();
+        pos = next;
+
+        let (cert_val, next) = expect_tlv(&val, pos, 0x04)?;
+        let cert = cert_val;
+        pos = next;
+
+        let (oid_val, _next) = expect_tlv(&val, pos, TAG_OBJECT_IDENTIFIER)?;
+        let signature_algorithm = decode_oid(&oid_val)?;
 
         Ok(Self {
             version,
             seal,
-            sign_info,
+            time_info,
+            data_hash,
+            property_info,
+            cert,
+            signature_algorithm,
         })
+    }
+}
+
+impl SESSignature {
+    /// DER 编码。
+    ///
+    /// 对应 Java: `org.ofdrw.gm.ses.v1.SES_Signature#toASN1Primitive`
+    pub fn encode_der(&self) -> Vec<u8> {
+        build_sequence(|inner| {
+            inner.extend_from_slice(&self.to_sign.encode_der());
+            encode_bit_string(&self.sign_data, inner);
+        })
+    }
+
+    /// DER 解码。
+    ///
+    /// 对应 Java: `org.ofdrw.gm.ses.v1.SES_Signature(ASN1Sequence)`
+    pub fn decode_der(der: &[u8]) -> DerResult<Self> {
+        let (val, _) = decode_sequence(der, 0)?;
+        let mut pos = 0;
+
+        // TBS_Sign（SEQUENCE）
+        let (tbs_seq, next) = decode_sequence(&val, pos)?;
+        let to_sign = TBSSign::decode_der(&repack_sequence(&tbs_seq))?;
+        pos = next;
+
+        // signature（BIT STRING）
+        let (sig_val, _next) = expect_tlv(&val, pos, 0x03)?;
+        let sign_data = if sig_val.is_empty() {
+            Vec::new()
+        } else {
+            sig_val[1..].to_vec()
+        };
+
+        Ok(Self { to_sign, sign_data })
     }
 }
 
@@ -625,9 +688,16 @@ mod tests {
     #[test]
     fn ses_signature_roundtrip() {
         let sig = SESSignature {
-            version: 1,
-            seal: sample_seseal(),
-            sign_info: sample_sign_info(),
+            to_sign: TBSSign {
+                version: 1,
+                seal: sample_seseal(),
+                time_info: b"2025-01-01 00:00:00".to_vec(),
+                data_hash: vec![0xAA; 32],
+                property_info: "test".into(),
+                cert: vec![0x30, 0x03, 0x02, 0x01, 0x01],
+                signature_algorithm: SM2_SM3_OID.to_vec(),
+            },
+            sign_data: vec![0xBB; 64],
         };
         let der = sig.encode_der();
         let decoded = SESSignature::decode_der(&der).unwrap();
@@ -637,9 +707,13 @@ mod tests {
     #[test]
     fn tbs_sign_roundtrip() {
         let tbs = TBSSign {
-            header: sample_header(),
-            signature_algorithm: SM2_SM3_OID.to_vec(),
+            version: 1,
             seal: sample_seseal(),
+            time_info: b"2025-01-01 00:00:00".to_vec(),
+            data_hash: vec![0xAA; 32],
+            property_info: "test-property".into(),
+            cert: vec![0x30, 0x03, 0x02, 0x01, 0x01],
+            signature_algorithm: SM2_SM3_OID.to_vec(),
         };
         let der = tbs.encode_der();
         let decoded = TBSSign::decode_der(&der).unwrap();

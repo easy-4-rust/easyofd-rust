@@ -10,6 +10,8 @@
 //! - [`segment_engine`] — 流式版面分段引擎（SegmentationEngine）。
 //! - [`streaming_layout`] — 流式布局分析器（StreamingLayoutAnalyzer）。
 //! - [`vpage_parser`] — 虚拟页面 → OFD XML 转换引擎（VPageParseEngine）。
+//! - [`page_layout`] — 页面样式（PageLayout：尺寸、边距、背景）。
+//! - [`res_manager`] — 资源管理器（ResManager：字体/图片/绘制参数去重注册）。
 //!
 //! ## 新增类型（移植自 ofdrw）
 //!
@@ -22,6 +24,8 @@
 //! - 回调接口：[`TextFontInfo`]、[`DivContainer`]、[`Processor`]、[`RenderFinishHandler`]、[`VPageHandler`]、[`ElementRenderFinishHandler`]、[`ElementSplit`]、[`RenderPrepare`]
 //! - 错误类型：[`RenderException`]、[`DocReadException`]
 //! - 工具：[`ArrayParamTool`]、[`TextMeasureTool`]、[`GraphHelper`]
+//! - 页面样式：[`PageLayout`]
+//! - 资源管理：[`ResManager`]
 //! - 其他：[`AdditionVPage`]、[`WatermarkDrawer`]、[`ExistCtFont`]、[`StreamCollect`]、[`DocContentReplace`]、[`AnnotationRender`]
 
 // ── 已有模块 ──────────────────────────────────────────────────────────────────
@@ -35,9 +39,11 @@ mod layout_block;
 mod layout_options;
 mod layout_result;
 mod ofd_doc;
+mod page_layout;
 mod paragraph;
 mod position;
 mod rectangle;
+mod res_manager;
 mod segment_engine;
 mod span;
 mod streaming_layout;
@@ -123,9 +129,11 @@ pub use layout_block::LayoutBlock;
 pub use layout_options::LayoutOptions;
 pub use layout_result::LayoutResult;
 pub use ofd_doc::{AreaHolderBlockEntry, AreaHolderBlocks, OfdLayoutDoc};
+pub use page_layout::PageLayout;
 pub use paragraph::{Paragraph, TextAlign};
 pub use position::Position;
 pub use rectangle::Rectangle;
+pub use res_manager::ResManager;
 pub use segment_engine::{Segment, SegmentationEngine};
 pub use span::Span;
 pub use streaming_layout::{StreamingLayoutAnalyzer, VirtualPage};

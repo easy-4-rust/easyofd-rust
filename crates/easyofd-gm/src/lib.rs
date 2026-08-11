@@ -23,8 +23,14 @@ pub fn module_name() -> &'static str {
     "easyofd-gm"
 }
 
-/// 证书工具（对应 Java: org.ofdrw.gm.cert）。
-pub mod cert;
+/// 证书解析工具（对应 Java: org.ofdrw.gm.cert.CertTools）。
+pub mod cert_tools;
+/// PEM 编解码工具（对应 Java: org.ofdrw.gm.cert.PEMLoader）。
+pub mod pem_loader;
+/// SM2 自签名证书生成（对应 Java: org.ofdrw.gm.cert.PKCGenerate）。
+pub mod pkc_generate;
+/// PKCS#12 解析工具（对应 Java: org.ofdrw.gm.cert.PKCS12Tools）。
+pub mod pkcs12_tools;
 /// SES（Secure Electronic Seal）电子印章 ASN.1 结构定义。
 pub mod ses;
 /// GB/T 35275 SM2 签名数据结构（对应 Java: org.ofdrw.gm.sm2strut）。

@@ -1,4 +1,7 @@
 //! OFD → SVG 导出器。
+//!
+//! 支持 TextObject → `<text>`、PathObject → `<path>`、ImageObject → `<image>` 的映射。
+//! 图片以 data URI（base64 编码）方式嵌入 SVG。
 
 use std::fmt::Write;
 use std::path::Path;
@@ -14,7 +17,8 @@ use crate::ConvertOptions;
 /// 对应 Java: org.ofdrw.converter.ofdconverter.SVGConverter
 ///
 /// 将 OFD 页面内容转换为 SVG 矢量图形。
-/// 支持 TextObject → `<text>` 和 PathObject → `<path>` 的映射。
+/// 支持 TextObject → `<text>`、PathObject → `<path>`、ImageObject → `<image>` 的映射。
+/// 图片以 data URI（base64 编码）方式嵌入 SVG。
 pub struct SvgExporter {
     /// 转换选项。
     options: ConvertOptions,
@@ -91,7 +95,7 @@ impl Exporter for SvgExporter {
 /// 遍历页面中的所有内容对象：
 /// - TextObject → `<text>` 元素
 /// - PathObject → `<path>` 元素
-/// - ImageObject → 跳过（当前版本不支持图片嵌入）
+/// - ImageObject → `<image>` 元素（data URI + base64 编码）
 fn render_page_to_svg(page: &easyofd_core::OfdPage) -> OfdResult<String> {
     let width = page.width;
     let height = page.height;
@@ -138,9 +142,14 @@ fn render_page_to_svg(page: &easyofd_core::OfdPage) -> OfdResult<String> {
                     r#"  <path d="{d}" stroke="{stroke_color}" stroke-width="{stroke_width}" fill="{fill_color}" />"#
                 );
             }
-            ContentObject::Image(_) => {
-                // 图片对象当前版本不支持 SVG 嵌入
-                // TODO: 支持图片嵌入为 <image> 元素
+            ContentObject::Image(img) => {
+                let fmt_str = image_format_mime(img.format);
+                let b64 = base64_encode(&img.data);
+                let _ = writeln!(
+                    svg,
+                    r#"  <image href="data:image/{fmt_str};base64,{b64}" x="{}" y="{}" width="{}" height="{}" />"#,
+                    img.x, img.y, img.width, img.height
+                );
             }
         }
     }
@@ -250,6 +259,51 @@ fn xml_escape(text: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+/// 将 ImageFormat 映射为 MIME 子类型字符串。
+fn image_format_mime(format: easyofd_core::ImageFormat) -> &'static str {
+    match format {
+        easyofd_core::ImageFormat::Png => "png",
+        easyofd_core::ImageFormat::Jpeg => "jpeg",
+        easyofd_core::ImageFormat::Bmp => "bmp",
+        easyofd_core::ImageFormat::Tiff => "tiff",
+    }
+}
+
+/// 将原始字节编码为 base64 字符串（标准字母表，含 `+`、`/`、`=` 填充）。
+///
+/// 内联实现，避免引入额外依赖。
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = if chunk.len() > 1 {
+            u32::from(chunk[1])
+        } else {
+            0
+        };
+        let b2 = if chunk.len() > 2 {
+            u32::from(chunk[2])
+        } else {
+            0
+        };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        result.push(char::from(TABLE[((triple >> 18) & 0x3F) as usize]));
+        result.push(char::from(TABLE[((triple >> 12) & 0x3F) as usize]));
+        if chunk.len() > 1 {
+            result.push(char::from(TABLE[((triple >> 6) & 0x3F) as usize]));
+        } else {
+            result.push('=');
+        }
+        if chunk.len() > 2 {
+            result.push(char::from(TABLE[(triple & 0x3F) as usize]));
+        } else {
+            result.push('=');
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,5 +404,71 @@ mod tests {
     fn test_convert_path_data_with_curve() {
         let d = convert_path_data("M 0 0 C 10 20 30 40 50 60", 1.0, 2.0);
         assert_eq!(d, "M1 2 C11 22 31 42 51 62");
+    }
+
+    #[test]
+    fn test_base64_encode() {
+        // RFC 4648 测试向量
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
+        assert_eq!(base64_encode(b"fooba"), "Zm9vYmE=");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn test_svg_exporter_with_image() {
+        use easyofd_core::{ImageFormat, ImageObject};
+
+        let mut writer = OfdWriter::new();
+        let mut page = OfdPage::new(210.0, 297.0);
+        page.add_text(TextObject::new(10.0, 20.0, "SVG 图片测试"));
+        // 创建一个最小的 1x1 PNG（手写最小合法 PNG）
+        let min_png = create_minimal_png();
+        page.add_image(ImageObject::new(
+            50.0,
+            50.0,
+            30.0,
+            20.0,
+            min_png,
+            ImageFormat::Png,
+        ));
+        writer.add_page(page);
+        let ofd_bytes = writer.build().unwrap();
+
+        let ofd_path = "/tmp/test_svg_image.ofd";
+        let svg_path = "/tmp/test_svg_image.svg";
+        std::fs::write(ofd_path, &ofd_bytes).unwrap();
+
+        let exporter = SvgExporter::with_defaults();
+        let result = exporter.convert(Path::new(ofd_path), Path::new(svg_path));
+        assert!(result.is_ok(), "SVG 导出含图应该成功: {:?}", result.err());
+
+        let output = std::fs::read_to_string(svg_path).unwrap();
+        assert!(output.contains("<svg"));
+        assert!(output.contains("SVG 图片测试"));
+        assert!(output.contains("<image"), "SVG 应包含 <image> 元素");
+        assert!(
+            output.contains("data:image/png;base64,"),
+            "图片应以 base64 data URI 嵌入"
+        );
+
+        let _ = std::fs::remove_file(ofd_path);
+        let _ = std::fs::remove_file(svg_path);
+    }
+
+    /// 生成一个最小合法 PNG（1x1 白色像素），用于测试。
+    fn create_minimal_png() -> Vec<u8> {
+        // 使用 image crate 创建一个 1x1 RGB PNG
+        let img_buf = image::ImageBuffer::<image::Rgb<u8>, _>::from_fn(1, 1, |_x, _y| {
+            image::Rgb([255u8, 255, 255])
+        });
+        let mut cursor = std::io::Cursor::new(Vec::new());
+        img_buf
+            .write_to(&mut cursor, image::ImageFormat::Png)
+            .unwrap();
+        cursor.into_inner()
     }
 }

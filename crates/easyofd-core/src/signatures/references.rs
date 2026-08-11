@@ -4,6 +4,7 @@
 //!
 //! GB/T 33190 第 18.2.2 节 图 87 表 68。
 
+use super::check_method::CheckMethod;
 use super::reference::Reference;
 
 /// 签名的范围。
@@ -29,11 +30,52 @@ impl References {
         }
     }
 
-    /// 设置摘要方法。
+    /// 设置摘要方法（字符串形式，保持向后兼容）。
     #[must_use]
     pub fn check_method(mut self, method: impl Into<String>) -> Self {
         self.check_method = Some(method.into());
         self
+    }
+
+    /// 设置摘要方法（类型安全的枚举形式）。
+    ///
+    /// 使用 [`CheckMethod`] 枚举避免拼写错误，产出的字符串与 Java 完全一致。
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use easyofd_core::signatures::{CheckMethod, References};
+    ///
+    /// let refs = References::new().set_check_method(CheckMethod::Sm3);
+    /// assert_eq!(refs.check_method_str(), Some("SM3"));
+    /// ```
+    #[must_use]
+    pub fn set_check_method(mut self, method: CheckMethod) -> Self {
+        self.check_method = Some(method.as_str().to_owned());
+        self
+    }
+
+    /// 获取摘要方法的字符串值。
+    #[must_use]
+    pub fn check_method_str(&self) -> Option<&str> {
+        self.check_method.as_deref()
+    }
+
+    /// 获取摘要方法枚举值（若已设置且可解析）。
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use easyofd_core::signatures::{CheckMethod, References};
+    ///
+    /// let refs = References::new().check_method("SM3");
+    /// assert_eq!(refs.check_method_enum(), Some(CheckMethod::Sm3));
+    /// ```
+    #[must_use]
+    pub fn check_method_enum(&self) -> Option<CheckMethod> {
+        self.check_method
+            .as_deref()
+            .and_then(|s| CheckMethod::try_from_str(s).ok())
     }
 
     /// 添加一个文件摘要节点。
@@ -115,5 +157,45 @@ mod tests {
     fn test_references_default() {
         let refs = References::default();
         assert!(refs.references.is_empty());
+    }
+
+    #[test]
+    fn test_set_check_method_enum() {
+        let refs = References::new().set_check_method(CheckMethod::Sm3);
+        assert_eq!(refs.check_method.as_deref(), Some("SM3"));
+        assert_eq!(refs.check_method_str(), Some("SM3"));
+    }
+
+    #[test]
+    fn test_check_method_enum_roundtrip() {
+        for method in [
+            CheckMethod::Md5,
+            CheckMethod::Sha1,
+            CheckMethod::Sha256,
+            CheckMethod::Sm3,
+        ] {
+            let refs = References::new().set_check_method(method);
+            assert_eq!(refs.check_method_enum(), Some(method));
+        }
+    }
+
+    #[test]
+    fn test_check_method_enum_none() {
+        let refs = References::new();
+        assert!(refs.check_method_enum().is_none());
+    }
+
+    #[test]
+    fn test_check_method_enum_unknown_string() {
+        let refs = References::new().check_method("UNKNOWN");
+        assert!(refs.check_method_enum().is_none());
+    }
+
+    #[test]
+    fn test_set_check_method_xml_unchanged() {
+        // 确保枚举 API 产出的 XML 与字符串 API 完全一致
+        let refs_str = References::new().check_method("SM3");
+        let refs_enum = References::new().set_check_method(CheckMethod::Sm3);
+        assert_eq!(refs_str.to_xml_string(), refs_enum.to_xml_string());
     }
 }

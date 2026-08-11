@@ -1,6 +1,20 @@
-//! 加密参数。
+//! 加密子包。
 //!
-//! 对应 Java: org.ofdrw.core.crypto.encryt.Parameter
+//! 对应 Java: org.ofdrw.core.crypto.encryt
+//!
+//! 提供 OFD 加密相关的数据类型：
+//! - [`CryptoParameter`] — 加密参数
+//! - [`SigParameter`] — 签名参数
+//! - [`SigParameters`] — 签名参数列表
+//! - [`UserInfo`] — 用户信息
+//! - [`Encryptions`] — 加密信息列表
+//! - [`ExtendParams`] — 扩展参数
+//! - [`DecyptSeed`] — 解密种子
+//! - [`CryptoProvider`] — 加密组件提供者
+
+mod provider;
+
+pub use provider::CryptoProvider;
 
 /// 加密参数。
 ///

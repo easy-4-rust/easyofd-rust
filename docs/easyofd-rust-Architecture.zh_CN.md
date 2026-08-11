@@ -83,8 +83,8 @@ Rust 应用 / 服务
 │ easyofd-layout      确定性阅读顺序分析                       │
 │ easyofd-markdown    OFD → Markdown 流式转换 + 损失报告       │
 │ easyofd-template    {placeholder} 替换引擎                   │
-│ easyofd-signature   电子签章 API [实验性]                     │
-│ easyofd-convert     PDF ↔ OFD 桥接 API [计划中]              │
+│ easyofd-signature   电子签章（SM2 真签名 + SES DER 编解码）    │
+│ easyofd-convert     PDF ↔ OFD 转换（简化可用实现）            │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -140,7 +140,7 @@ OFD（Open Fixed-layout Document）是中国国家标准 GB/T 33190-2016，广�
 | OFD 文件安全读取 | OFD 可视化渲染 | OFD 阅读器 |
 | 模板占位符替换 | 数字签名密码学运算 | SM2/RSA 库（计划中） |
 | OFD → Markdown 转换 | Markdown → OFD 逆向 | 不在范围内 |
-| 电子签章 API 封装 | 证书管理 | PKI 基础设施 |
+| 电子签章（SM2 真签名 + SES DER） | 证书管理 | PKI 基础设施 |
 
 ### 4.2 外部依赖
 
@@ -168,17 +168,17 @@ OFD（Open Fixed-layout Document）是中国国家标准 GB/T 33190-2016，广�
 | OFD → Markdown | `easyofd-markdown` 流式转换 + 损失报告 | ✅ 已实现 | 10 测试 |
 | 模板填充 | `easyofd-template` {key} 替换 | ✅ 已实现 | 2 测试 |
 | 编辑器 | `OfdEditor` 打开 → 修改 → 保存 | ✅ 已实现 | 4 测试 |
-| 电子签章 | `easyofd-signature` API + 占位签名 | ⚠️ 实验性 | API 完整，密码学 stub |
-| PDF ↔ OFD | `easyofd-convert` API stub | 🗓️ 计划中 | 返回未实现错误 |
+| 电子签章 | `easyofd-signature` + 真 SM2 签名路径（OfdSignatureBuilder + sm2 crate），SES v1/v4/v5 ASN.1 DER 编解码（easyofd-gm） | ✅ 已实现 | gbt38540_full_pipeline 测试通过（2026-08-11 更新） |
+| PDF ↔ OFD | `easyofd-convert` 简化但可用的实现 | ✅ 已实现 | 文本提取+路径转换可用（2026-08-11 更新） |
 | 流式 Writer | `OfdStreamWriter` 逐页写入 | ✅ 已实现 | 1 测试 |
 
 ### 5.2 差距矩阵
 
 | 差距 | 当前 | 目标 | 优先级 |
 |---|---|---|:---:|
-| 数字签名密码学 | 占位签名 | SM2/RSA 真实签名 | P2 |
-| PDF → OFD 转换 | API stub | 完整转换管线 | P2 |
-| OFD → PDF 转换 | API stub | 完整渲染管线 | P2 |
+| 数字签名密码学 | SM2 真实签名路径已实现 | RSA 签名 + 完整证书链验证 | P5 |
+| PDF → OFD 转换 | 简化实现可用 | 完整转换管线 | P7 |
+| OFD → PDF 转换 | 简化实现可用 | 完整渲染管线 | P7 |
 | 字体嵌入 | 注册 API | 完整字体资源生成 | P2 |
 | OCR 回退 | OcrProvider trait | 外部 OCR 集成 | P3 |
 
@@ -296,8 +296,8 @@ flowchart TB
 | `easyofd-layout` | 159 | 确定性阅读顺序分析 | `LayoutAnalyzer`, `LayoutBlock`, `LayoutOptions` |
 | `easyofd-markdown` | 307 | OFD → Markdown 流式转换 | `MarkdownConverter`, `MarkdownOptions`, `ConversionReport` |
 | `easyofd-template` | 160 | {placeholder} 替换引擎 | `OfdTemplateFiller` |
-| `easyofd-signature` | 180 | 电子签章 API [实验性] | `OfdSignatureBuilder`, `ElectronicSeal`, `SignedOfd` |
-| `easyofd-convert` | 80 | PDF ↔ OFD API [计划中] | `pdf_to_ofd`, `ofd_to_pdf`, `ConvertOptions` |
+| `easyofd-signature` | 180 | 电子签章（SM2 真签名 + SES DER 编解码） | `OfdSignatureBuilder`, `ElectronicSeal`, `SignedOfd` |
+| `easyofd-convert` | 80 | PDF ↔ OFD 转换（简化可用实现） | `pdf_to_ofd`, `ofd_to_pdf`, `ConvertOptions` |
 
 ### 8.2 核心数据模型
 
@@ -669,8 +669,8 @@ cargo run --release -p easyofd --example benchmark -- 10000
 |---|---|:---:|
 | v0.1 | Writer + Derive + 基础 API | ✅ |
 | v0.2 | Reader + Template + Package 安全 | ✅ |
-| v0.3 | Signature API 设计 | ✅ 实验性 |
-| v0.4 | Convert API 设计 | ✅ 计划中 |
+| v0.3 | Signature API + SM2 真签名 + SES DER | ✅ |
+| v0.4 | Convert API + 简化 PDF ↔ OFD 实现 | ✅ |
 | v0.5 | Layout + Markdown + Editor + StreamWriter | ✅ |
 | v0.6 | 签章密码学实现 | 🗓️ |
 | v0.7 | PDF ↔ OFD 转换实现 | 🗓️ |

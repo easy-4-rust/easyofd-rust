@@ -50,17 +50,17 @@
 | 模块 (ofdrw) | 子模块数 | 当前 easyofd-rust | 完成度 | 目标阶段 |
 |:---|:---:|:---|:---:|:---:|
 | **ofdrw-core** | | | | |
-| └ action (超链接/跳转/音视频) | 14 | 未实现 | 0% | P2 |
-| └ annotation (批注/高亮) | 6 | 未实现 | 0% | P2 |
-| └ attachment | 2 | 未实现 | 0% | P2 |
-| └ versions (文档版本管理) | 5 | 未实现 | 0% | P2 |
-| └ crypto/encryt (加密) | 9 | 未实现 | 0% | P6 |
-| └ integrity (防夹带) | 3 | 未实现 | 0% | P6 |
-| └ extensions | 3 | 未实现 | 0% | P3 |
-| └ doc/bookmark | 2 | 未实现 | 0% | P3 |
-| └ doc/permission | 3 | 未实现 | 0% | P3 |
-| └ compositeObj | 3 | 未实现 | 0% | P3 |
-| └ customTags | 2 | 未实现 | 0% | P3 |
+| └ action (超链接/跳转/音视频) | 14 | ✅ 已实现（2026-08-11） | 80% | P2 |
+| └ annotation (批注/高亮) | 6 | ✅ 已实现（2026-08-11） | 80% | P2 |
+| └ attachment | 2 | ✅ 已实现（2026-08-11） | 80% | P2 |
+| └ versions (文档版本管理) | 5 | ✅ 已实现（2026-08-11） | 80% | P2 |
+| └ crypto/encryt (加密) | 9 | ✅ 已实现（2026-08-11） | 70% | P6 |
+| └ integrity (防夹带) | 3 | ✅ 已实现（2026-08-11） | 70% | P6 |
+| └ extensions | 3 | ✅ 已实现（2026-08-11） | 80% | P3 |
+| └ doc/bookmark | 2 | ✅ 已实现（2026-08-11） | 80% | P3 |
+| └ doc/permission | 3 | ✅ 已实现（2026-08-11） | 80% | P3 |
+| └ compositeObj | 3 | ✅ 已实现（2026-08-11） | 80% | P3 |
+| └ customTags | 2 | ✅ 已实现（2026-08-11） | 80% | P3 |
 | **ofdrw-reader** | | | | |
 | └ SAX 解析 | 1 | 已实现 (quick-xml) | 90% | P0 |
 | └ BaseLoc 路径解析 | 1 | 已实现 + 5 个 conformance 测试 ignored | 85% | P1 |
@@ -87,11 +87,11 @@
 | └ 签名容器体系 (5 种) | 5 | 仅简化版 SealInfo | 20% | P3/P5 |
 | **ofdrw-gm (SES)** | | | | |
 | └ SES V1 完整结构 | 1 | 简化版 (version+cert+signature) | 30% | P3 |
-| └ SES V4 (展平 cert/alg/sig) | 1 | 未实现 | 0% | P5 |
-| └ SES V5 (+ timeStamp) | 1 | 未实现 | 0% | P5 |
+| └ SES V4 (展平 cert/alg/sig) | 1 | ✅ 已实现（2026-08-11） | 80% | P5 |
+| └ SES V5 (+ timeStamp) | 1 | ✅ 已实现（2026-08-11） | 80% | P5 |
 | **ofdrw-convert** | | | | |
-| └ PDF → OFD | 1 | 基础实现 (文本提取) | 40% | P7 |
-| └ OFD → PDF | 1 | 基础实现 (文本+路径) | 50% | P7 |
+| └ PDF → OFD | 1 | ✅ 简化实现可用（2026-08-11） | 40% | P7 |
+| └ OFD → PDF | 1 | ✅ 简化实现可用（2026-08-11） | 50% | P7 |
 | **ofdrw-markdown** | | | | |
 | └ 流式转换 | 1 | 已实现 | 75% | P0 |
 | └ 损失报告 | 1 | 已实现 | 80% | P0 |

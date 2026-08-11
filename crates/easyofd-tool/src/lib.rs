@@ -15,12 +15,13 @@
 //! | `org.ofdrw.tool.merge.DocPage` | [`merge::DocPage`] | 文档页面描述 |
 //! | `org.ofdrw.tool.merge.BareOFDDoc` | [`merge::BareOFDDoc`] | 裸 OFD 文档 |
 //! | `org.ofdrw.tool.merge.OFDMerger` | [`merge::OfdMerger`] | OFD 合并器 |
+//! | `org.ofdrw.tool.merge.PageEntry` | [`merge::PageEntry`] | 页面项目 |
 //! | `org.ofdrw.tool.merge.OFDPageDeleter` | [`page_deleter::OfdPageDeleter`] | 页面删除器 |
 
 pub mod merge;
 pub mod page_deleter;
 
-pub use merge::{BareOFDDoc, DocContext, DocPage, OfdMerger};
+pub use merge::{BareOFDDoc, DocContext, DocPage, OfdMerger, PageEntry};
 pub use page_deleter::OfdPageDeleter;
 
 /// 对应 Java: OFDMerger（Rust 命名别名）。

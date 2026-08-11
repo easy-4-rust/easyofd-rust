@@ -10,6 +10,10 @@ publish = true
 
 [dependencies]
 der = { workspace = true }
+x509-cert = { workspace = true }
+pem = { workspace = true }
+sm2 = { workspace = true }
+chrono = { workspace = true }
 
 [lints]
 workspace = true

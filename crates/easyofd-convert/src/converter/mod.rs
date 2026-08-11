@@ -10,6 +10,7 @@ pub mod html_maker;
 pub mod itext_maker;
 pub mod lib_enum;
 pub mod pdfbox_maker;
+pub mod raster;
 pub mod svg_maker;
 
 pub use awt_maker::AWTMaker;
@@ -22,4 +23,5 @@ pub use html_maker::HtmlMaker;
 pub use itext_maker::ItextMaker;
 pub use lib_enum::Lib;
 pub use pdfbox_maker::PdfboxMaker;
+pub use raster::RasterRenderer;
 pub use svg_maker::SVGMaker;

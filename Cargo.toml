@@ -71,6 +71,10 @@ x509-cert = "0.3.0"
 pem = "4.0.0"
 lopdf = "0.35"
 printpdf = { version = "0.7", default-features = false, features = ["font_subsetting"] }
+# ═══ 转换渲染（AWTMaker/PDF 替换，纯 Rust）═══
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+fontdue = "0.9.4"
+tiny-skia = "0.12.0"
 ttf-parser = "0.21"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }

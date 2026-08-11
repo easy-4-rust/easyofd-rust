@@ -57,7 +57,7 @@ const CONTEXT_SPECIFIC: u8 = 0xA0;
 
 /// 编码 DER 长度字段（variable-length）。
 #[allow(clippy::cast_possible_truncation)]
-pub(crate) fn encode_length(len: usize, out: &mut Vec<u8>) {
+pub fn encode_length(len: usize, out: &mut Vec<u8>) {
     if len < 0x80 {
         out.push(len as u8);
     } else if len <= 0xFF {
@@ -101,7 +101,7 @@ pub(crate) fn encode_integer(val: u64, out: &mut Vec<u8>) {
 }
 
 /// 编码 DER OCTET STRING。
-pub(crate) fn encode_octet_string(data: &[u8], out: &mut Vec<u8>) {
+pub fn encode_octet_string(data: &[u8], out: &mut Vec<u8>) {
     out.push(TAG_OCTET_STRING);
     encode_length(data.len(), out);
     out.extend_from_slice(data);
@@ -119,7 +119,7 @@ pub(crate) fn encode_bit_string(data: &[u8], out: &mut Vec<u8>) {
 ///
 /// `arcs` 是 OID 的各个弧段，例如 `[1, 2, 840, 113549, 1, 1, 11]`。
 #[allow(clippy::cast_possible_truncation)]
-pub(crate) fn encode_oid(arcs: &[u32], out: &mut Vec<u8>) {
+pub fn encode_oid(arcs: &[u32], out: &mut Vec<u8>) {
     debug_assert!(arcs.len() >= 2, "OID must have at least 2 arcs");
     let mut body = Vec::new();
     // 前两个弧段合并为 `40 * first + second`。
@@ -173,7 +173,7 @@ pub(crate) fn encode_printable_string(s: &str, out: &mut Vec<u8>) {
 }
 
 /// 编码 SEQUENCE 头并追加内部字节到 `out`。
-pub(crate) fn encode_sequence(inner: &[u8], out: &mut Vec<u8>) {
+pub fn encode_sequence(inner: &[u8], out: &mut Vec<u8>) {
     out.push(TAG_SEQUENCE);
     encode_length(inner.len(), out);
     out.extend_from_slice(inner);

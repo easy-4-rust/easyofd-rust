@@ -17,6 +17,9 @@ printpdf = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 ttf-parser = { workspace = true }
+image = { workspace = true }
+fontdue = { workspace = true }
+tiny-skia = { workspace = true }
 
 [lints.rust]
 unsafe_code = "forbid"

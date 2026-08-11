@@ -76,8 +76,8 @@ pub use page_obj::{
     LineCapType, LineJoinType, TemplateZOrder,
 };
 pub use signatures::{
-    Provider, Reference, References, Seal, SealImageType, SigType, Signature, Signatures,
-    SignedInfo, StampAnnot, StampAnnotEntity,
+    CheckMethod, Provider, Reference, References, Seal, SealImageType, SigType, Signature,
+    Signatures, SignedInfo, StampAnnot, StampAnnotEntity,
 };
 pub use text::{CT_CGTransform, CT_Font, CT_Text, Direction, TextCode};
 pub use versions::{DocVersion, File, FileList, Version, Versions};
@@ -86,7 +86,8 @@ pub use watermark::Watermark;
 // ── 新增类型导出 ──────────────────────────────────────────────────────────
 
 pub use crypto::{
-    CryptoParameter, DecyptSeed, Encryptions, ExtendParams, SigParameter, SigParameters, UserInfo,
+    CryptoParameter, CryptoProvider, DecyptSeed, Encryptions, ExtendParams, SigParameter,
+    SigParameters, UserInfo,
 };
 pub use graphics2d::{
     GraphicsDeviceType, OfdGraphics2DDrawParam, OfdGraphicsDocument, OfdPageGraphics2D,
