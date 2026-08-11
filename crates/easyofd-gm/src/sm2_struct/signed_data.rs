@@ -190,6 +190,7 @@ impl SignedData {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::sm2_struct::issuer_and_serial_number::IssuerAndSerialNumber;

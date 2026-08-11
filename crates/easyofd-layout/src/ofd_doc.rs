@@ -48,9 +48,9 @@ pub struct OfdLayoutDoc {
     /// 资源管理器。
     res_manager: ResManager,
     /// 页面解析前回调（可选）。
-    on_page_handler: Option<Box<dyn VPageHandler>>,
+    on_page_handler: Option<Box<dyn VPageHandler + Send + Sync>>,
     /// 渲染完成回调（可选）。
-    on_render_finish_handler: Option<Box<dyn RenderFinishHandler>>,
+    on_render_finish_handler: Option<Box<dyn RenderFinishHandler + Send + Sync>>,
     /// 注释集合：key = 页码（从 1 开始）。
     annotations: BTreeMap<u32, Vec<Annotation>>,
     /// 文档水印（可选）。
@@ -155,12 +155,13 @@ impl OfdLayoutDoc {
         }
 
         // 2. 流式集合 → 虚拟页面
+        //
+        // 对应 Java: OFDDoc.close() 中 sPageList 逐个 analyze 并合并到 vPageList
         if !self.s_page_list.is_empty() {
-            let collects = std::mem::take(&mut self.s_page_list);
-            for _collect in collects {
-                // StreamCollect 在当前实现中为数据收集器，
-                // 编辑模式下的完整 analyze 需要 OFD 容器支持（reader 模式）。
-                // 此处保留队列消费，确保数据不丢失。
+            let mut collects = std::mem::take(&mut self.s_page_list);
+            for sc in &mut collects {
+                let vpages = sc.analyze(&self.page_layout);
+                self.v_page_list.extend(vpages);
             }
         }
 
@@ -260,14 +261,14 @@ impl OfdLayoutDoc {
     /// 设置页面解析前回调。
     ///
     /// 对应 Java: `OFDDoc.onPage(VPageHandler)`
-    pub fn on_page(&mut self, handler: Box<dyn VPageHandler>) {
+    pub fn on_page(&mut self, handler: Box<dyn VPageHandler + Send + Sync>) {
         self.on_page_handler = Some(handler);
     }
 
     /// 设置渲染完成回调。
     ///
     /// 对应 Java: `OFDDoc.onRenderFinish(RenderFinishHandler)`
-    pub fn on_render_finish(&mut self, handler: Box<dyn RenderFinishHandler>) {
+    pub fn on_render_finish(&mut self, handler: Box<dyn RenderFinishHandler + Send + Sync>) {
         self.on_render_finish_handler = Some(handler);
     }
 
@@ -651,6 +652,7 @@ mod tests {
             divs: Vec::new(),
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         });
         // 页面列表应为空（close 后 add_v_page 被忽略）
         assert_eq!(doc.page_count(), 0);

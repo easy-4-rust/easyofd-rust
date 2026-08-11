@@ -33,6 +33,7 @@ pub use sm2_cipher::Sm2Cipher;
 pub use verify_info::VerifyInfo;
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

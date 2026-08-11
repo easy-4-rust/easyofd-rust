@@ -143,6 +143,7 @@ impl SignerInfo {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::sm2_struct::oids::{SM2_SIGN, SM3};

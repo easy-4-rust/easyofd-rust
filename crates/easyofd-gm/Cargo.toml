@@ -13,7 +13,17 @@ der = { workspace = true }
 x509-cert = { workspace = true }
 pem = { workspace = true }
 sm2 = { workspace = true }
+sm3 = { workspace = true }
 chrono = { workspace = true }
+# ── PKCS#5 PBES2/PBKDF2 解密 ──
+aes = { workspace = true }
+cbc = { workspace = true }
+cipher = { workspace = true }
+pbkdf2 = { workspace = true }
+hmac = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+sm4 = { workspace = true }
 
 [lints]
 workspace = true

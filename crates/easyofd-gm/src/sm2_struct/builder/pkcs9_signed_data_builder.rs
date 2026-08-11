@@ -140,6 +140,7 @@ fn encode_signing_time_attr(time: &str) -> Vec<u8> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::sm2_struct::IssuerAndSerialNumber;

@@ -61,10 +61,12 @@ impl ExtendSignatureContainer for Gbt35275Pkcs9DsContainer {
         easyofd_gm::ses::encode_octet_string(&plaintext, &mut content_bytes);
         let data_ci = ContentInfo::new(parse_oid(DATA), content_bytes);
 
-        // 5. 构建 SignerInfo（含认证属性）
+        // 5. 从证书 DER 提取真实的颁发者和序列号，构建 SignerInfo（含认证属性）。
+        //    对应 Java: `new IssuerAndSerialNumber(cert.getIssuerX500Principal(), cert.getSerialNumber())`
+        let issuer_serial = IssuerAndSerialNumber::from_certificate_der(&self.cert_der);
         let signer = SignerInfo {
             version: 1,
-            issuer_serial: IssuerAndSerialNumber::from_serial(1),
+            issuer_serial,
             digest_algorithm: parse_oid(SM3),
             authenticated_attributes: auth_attrs,
             digest_encryption_algorithm: parse_oid(SM2_SIGN),
@@ -146,24 +148,29 @@ fn build_pkcs9_auth_attrs(sm3_hash: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use easyofd_gm::pkc_generate::PkcGenerate;
+    use easyofd_gm::sm2_struct::SignedData;
     use sm2::elliptic_curve::Generate;
+
+    /// 生成 SM2 密钥对和对应的自签名证书 DER。
+    fn generate_key_and_cert() -> (sm2::SecretKey, Vec<u8>) {
+        let sk = sm2::SecretKey::generate();
+        let cert_der = PkcGenerate::generate_self_signed("CN=Test Signer,O=TestOrg,C=CN");
+        (sk, cert_der)
+    }
 
     #[test]
     fn gbt35275_pkcs9_sign_returns_non_empty() {
-        let c = Gbt35275Pkcs9DsContainer::new(
-            sm2::SecretKey::generate(),
-            vec![0x30, 0x03, 0x02, 0x01, 0x01],
-        );
+        let (sk, cert_der) = generate_key_and_cert();
+        let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der);
         let result = c.sign(b"test data", "");
         assert!(!result.is_empty());
     }
 
     #[test]
     fn gbt35275_pkcs9_sign_produces_valid_content_info() {
-        let c = Gbt35275Pkcs9DsContainer::new(
-            sm2::SecretKey::generate(),
-            vec![0x30, 0x03, 0x02, 0x01, 0x01],
-        );
+        let (sk, cert_der) = generate_key_and_cert();
+        let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der);
         let result = c.sign(b"test data", "");
         let ci = ContentInfo::from_der(&result).expect("ContentInfo DER 解码失败");
         assert_eq!(
@@ -173,8 +180,34 @@ mod tests {
     }
 
     #[test]
+    fn gbt35275_pkcs9_sign_issuer_serial_matches_cert() {
+        let (sk, cert_der) = generate_key_and_cert();
+        let expected_iasn = IssuerAndSerialNumber::from_certificate_der(&cert_der);
+
+        let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der.clone());
+        let result = c.sign(b"test data", "");
+
+        // 解码 ContentInfo → SignedData → 提取 SignerInfo 的 issuer/serial。
+        let ci = ContentInfo::from_der(&result).expect("ContentInfo DER 解码失败");
+        let sd = SignedData::from_der(&ci.content).expect("SignedData DER 解码失败");
+        assert_eq!(sd.signer_infos.len(), 1, "应有且仅有一个签名者");
+
+        let actual_iasn = &sd.signer_infos[0].issuer_serial;
+        assert_eq!(
+            actual_iasn.issuer_der, expected_iasn.issuer_der,
+            "SignerInfo 的 issuer 应与证书一致"
+        );
+        assert_eq!(
+            actual_iasn.cert_serial_number, expected_iasn.cert_serial_number,
+            "SignerInfo 的 serial number 应与证书一致"
+        );
+    }
+
+    #[test]
     fn gbt35275_pkcs9_properties() {
-        let c = Gbt35275Pkcs9DsContainer::new(sm2::SecretKey::generate(), vec![0x01]);
+        let sk = sm2::SecretKey::generate();
+        let cert_der = vec![0x01]; // properties 不触发 sign，不需要真实证书
+        let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der);
         assert_eq!(c.sign_alg_oid(), "1.2.156.10197.1.501");
         assert_eq!(c.sign_type(), SigType::Sign);
         assert!(c.seal().is_none());

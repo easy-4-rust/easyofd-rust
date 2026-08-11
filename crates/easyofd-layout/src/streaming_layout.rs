@@ -19,6 +19,10 @@ pub struct VirtualPage {
     pub page_width: f64,
     /// 页面高度，单位 mm。
     pub page_height: f64,
+    /// 页面编号（从 1 开始），`None` 表示未指定。
+    ///
+    /// 对应 Java: `VirtualPage.getPageNum()` / `VirtualPage.setPageNum()`
+    pub page_num: Option<u32>,
 }
 
 impl VirtualPage {
@@ -28,6 +32,7 @@ impl VirtualPage {
             divs: Vec::new(),
             page_width,
             page_height,
+            page_num: None,
         }
     }
 }

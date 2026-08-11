@@ -8,7 +8,10 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use der::Encode;
+use der::asn1::{ObjectIdentifier, OctetString};
 use sm2::elliptic_curve::Generate;
+use x509_cert::ext::Extension;
+use x509_cert::ext::pkix::{BasicConstraints, ExtendedKeyUsage, KeyUsage, KeyUsages};
 use x509_cert::name::Name;
 use x509_cert::serial_number::SerialNumber;
 use x509_cert::time::{Time, Validity};
@@ -23,6 +26,21 @@ pub struct PkcGenerate;
 
 /// SM2withSM3 签名算法 OID: 1.2.156.10197.1.501
 const SM2_WITH_SM3_OID: &str = "1.2.156.10197.1.501";
+
+/// X.509 BasicConstraints 扩展 OID: 2.5.29.19
+const OID_BASIC_CONSTRAINTS: &str = "2.5.29.19";
+
+/// X.509 KeyUsage 扩展 OID: 2.5.29.15
+const OID_KEY_USAGE: &str = "2.5.29.15";
+
+/// X.509 ExtendedKeyUsage 扩展 OID: 2.5.29.37
+const OID_EXTENDED_KEY_USAGE: &str = "2.5.29.37";
+
+/// Netscape Cert Type 扩展 OID: 2.16.840.1.113730.1.1
+const OID_NETSCAPE_CERT_TYPE: &str = "2.16.840.1.113730.1.1";
+
+/// id-kp-clientAuth 扩展密钥用途 OID: 1.3.6.1.5.5.7.3.2
+const OID_KP_CLIENT_AUTH: &str = "1.3.6.1.5.5.7.3.2";
 
 impl PkcGenerate {
     /// 生成自签名 SM2 证书。
@@ -100,6 +118,10 @@ impl PkcGenerate {
         let subject_der = name.to_der().expect("使用者编码失败");
         let spki_der = spki.to_der().expect("公钥编码失败");
 
+        // 4.1 构造 X.509 V3 Extensions（对应 Java: PKCGenerate GenCert 的 addExtensions）
+        let extensions = build_x509_extensions();
+        let exts_field = encode_extensions_tbs_field(&extensions);
+
         let tbs_content = [
             version_der.as_slice(),
             serial_der.as_slice(),
@@ -108,6 +130,7 @@ impl PkcGenerate {
             validity_der.as_slice(),
             subject_der.as_slice(),
             spki_der.as_slice(),
+            exts_field.as_slice(),
         ]
         .concat();
         let tbs_cert = der_sequence(&tbs_content);
@@ -197,6 +220,111 @@ fn encode_der_length(buf: &mut Vec<u8>, len: usize) {
     }
 }
 
+/// 构造 DER 上下文特定构造标签: [tag_num] constructed content
+///
+/// 用于 TBS 证书的 extensions 字段 `[3] EXPLICIT Extensions`。
+/// context-specific tag 编码: 0xA0 | tag_num（constructed 位已置位）。
+fn der_context_specific_constructed(tag_num: u8, content: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(2 + content.len());
+    result.push(0xA0 | tag_num);
+    encode_der_length(&mut result, content.len());
+    result.extend_from_slice(content);
+    result
+}
+
+/// 构造 TBS 证书的 X.509 V3 扩展列表。
+///
+/// 对应 Java: org.ofdrw.gm.cert.PKCGenerate GenCert 中的 addExtensions 调用。
+///
+/// 包含四个扩展，均设为非关键扩展（critical=false），与 Java 源码一致：
+/// 1. BasicConstraints（cA=false）
+/// 2. KeyUsage（digitalSignature | nonRepudiation | keyCertSign）
+/// 3. ExtendedKeyUsage（clientAuth）
+/// 4. NetscapeCertType（sslClient）
+fn build_x509_extensions() -> Vec<Extension> {
+    // 1. BasicConstraints (cA=false, 非关键扩展)
+    // 对应 Java: .addExtension(Extension.basicConstraints, false, new BasicConstraints(false))
+    // cA=false 为 DEFAULT 值，DER 编码中省略，结果为 SEQUENCE {}（空序列）
+    let bc = BasicConstraints {
+        ca: false,
+        path_len_constraint: None,
+    };
+    let bc_oid =
+        ObjectIdentifier::new(OID_BASIC_CONSTRAINTS).expect("BasicConstraints OID 解析失败");
+    let bc_ext = Extension {
+        extn_id: bc_oid,
+        critical: false,
+        extn_value: OctetString::new(bc.to_der().expect("BasicConstraints DER 编码失败"))
+            .expect("BasicConstraints OctetString 构造失败"),
+    };
+
+    // 2. KeyUsage (digitalSignature | nonRepudiation | keyCertSign, 非关键扩展)
+    // 对应 Java: .addExtension(Extension.keyUsage, false,
+    //     new X509KeyUsage(X509KeyUsage.digitalSignature | nonRepudiation | keyCertSign))
+    let ku =
+        KeyUsage(KeyUsages::DigitalSignature | KeyUsages::NonRepudiation | KeyUsages::KeyCertSign);
+    let ku_oid = ObjectIdentifier::new(OID_KEY_USAGE).expect("KeyUsage OID 解析失败");
+    let ku_ext = Extension {
+        extn_id: ku_oid,
+        critical: false,
+        extn_value: OctetString::new(ku.to_der().expect("KeyUsage DER 编码失败"))
+            .expect("KeyUsage OctetString 构造失败"),
+    };
+
+    // 3. ExtendedKeyUsage (clientAuth, 非关键扩展)
+    // 对应 Java: .addExtension(Extension.extendedKeyUsage, false,
+    //     new ExtendedKeyUsage(KeyPurposeId.id_kp_clientAuth))
+    let client_auth_oid =
+        ObjectIdentifier::new(OID_KP_CLIENT_AUTH).expect("clientAuth OID 解析失败");
+    let eku = ExtendedKeyUsage(vec![client_auth_oid]);
+    let eku_oid =
+        ObjectIdentifier::new(OID_EXTENDED_KEY_USAGE).expect("ExtendedKeyUsage OID 解析失败");
+    let eku_ext = Extension {
+        extn_id: eku_oid,
+        critical: false,
+        extn_value: OctetString::new(eku.to_der().expect("ExtendedKeyUsage DER 编码失败"))
+            .expect("ExtendedKeyUsage OctetString 构造失败"),
+    };
+
+    // 4. NetscapeCertType (sslClient, 非关键扩展)
+    // 对应 Java: .addExtension(MiscObjectIdentifiers.netscapeCertType, false,
+    //     new NetscapeCertType(NetscapeCertType.sslClient))
+    // BouncyCastle sslClient = 128 (0x80)，BIT STRING DER 编码: 03 02 00 80
+    let netscape_oid =
+        ObjectIdentifier::new(OID_NETSCAPE_CERT_TYPE).expect("NetscapeCertType OID 解析失败");
+    let netscape_bit_string_der: Vec<u8> = vec![0x03, 0x02, 0x00, 0x80];
+    let netscape_ext = Extension {
+        extn_id: netscape_oid,
+        critical: false,
+        extn_value: OctetString::new(netscape_bit_string_der)
+            .expect("NetscapeCertType OctetString 构造失败"),
+    };
+
+    vec![bc_ext, ku_ext, eku_ext, netscape_ext]
+}
+
+/// 将扩展列表编码为 TBS 证书中的 `[3] EXPLICIT Extensions` 字段。
+///
+/// 编码步骤：
+/// 1. 逐个将 Extension 编码为 DER（SEQUENCE { extnID, critical?, extnValue }）
+/// 2. 拼接为 SEQUENCE OF Extension 的内容
+/// 3. 用 `der_sequence` 包装为完整 SEQUENCE
+/// 4. 用 `der_context_specific_constructed` 添加 [3] EXPLICIT 标签
+fn encode_extensions_tbs_field(extensions: &[Extension]) -> Vec<u8> {
+    // 步骤 1+2: 编码每个 Extension 并拼接
+    let mut exts_content = Vec::new();
+    for ext in extensions {
+        let ext_der = ext.to_der().expect("Extension DER 编码失败");
+        exts_content.extend_from_slice(&ext_der);
+    }
+
+    // 步骤 3: 包装为 SEQUENCE OF Extension
+    let exts_sequence = der_sequence(&exts_content);
+
+    // 步骤 4: 添加 [3] EXPLICIT 标签
+    der_context_specific_constructed(3, &exts_sequence)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,5 +389,70 @@ mod tests {
         let subject = CertTools::get_subject(&cert_der);
         assert!(subject.contains("CN=Test Certificate"), "subject 应包含 CN");
         assert!(subject.contains("O=OFD R&W"), "subject 应包含 O");
+    }
+
+    /// 验证生成的证书包含正确的 X.509 V3 扩展。
+    ///
+    /// 对应 Java: org.ofdrw.gm.cert.PKCGenerate GenCert 的 addExtensions 验证。
+    /// 使用 x509_cert::Certificate::from_der 解析证书，断言四个扩展均存在且值正确。
+    #[test]
+    fn test_generate_self_signed_has_extensions() {
+        use x509_cert::Certificate;
+        use x509_cert::der::Decode;
+
+        let cert_der = PkcGenerate::generate_self_signed("CN=Test Extensions,O=TestOrg");
+        let cert = Certificate::from_der(&cert_der).expect("证书 DER 解析失败");
+        let tbs = cert.tbs_certificate();
+
+        // 验证扩展字段存在
+        let extensions = tbs.extensions().expect("证书应包含 extensions 字段");
+        assert_eq!(extensions.len(), 4, "应包含 4 个扩展");
+
+        // 验证 BasicConstraints: cA=false, 非关键扩展
+        let (critical, bc) = tbs
+            .get_extension::<BasicConstraints>()
+            .expect("BasicConstraints 解析失败")
+            .expect("应包含 BasicConstraints 扩展");
+        assert!(!critical, "BasicConstraints 应为非关键扩展（与 Java 一致）");
+        assert!(!bc.ca, "cA 应为 false");
+        assert!(
+            bc.path_len_constraint.is_none(),
+            "pathLenConstraint 应为 None"
+        );
+
+        // 验证 KeyUsage: 包含 digitalSignature、nonRepudiation、keyCertSign
+        let (critical, ku) = tbs
+            .get_extension::<KeyUsage>()
+            .expect("KeyUsage 解析失败")
+            .expect("应包含 KeyUsage 扩展");
+        assert!(!critical, "KeyUsage 应为非关键扩展（与 Java 一致）");
+        assert!(ku.digital_signature(), "应包含 digitalSignature");
+        assert!(ku.non_repudiation(), "应包含 nonRepudiation");
+        assert!(ku.key_cert_sign(), "应包含 keyCertSign");
+
+        // 验证 ExtendedKeyUsage 存在
+        let (critical, _eku) = tbs
+            .get_extension::<ExtendedKeyUsage>()
+            .expect("ExtendedKeyUsage 解析失败")
+            .expect("应包含 ExtendedKeyUsage 扩展");
+        assert!(!critical, "ExtendedKeyUsage 应为非关键扩展（与 Java 一致）");
+
+        // 验证 NetscapeCertType 存在（通过 OID 查找，x509-cert 无内置类型）
+        let netscape_oid =
+            ObjectIdentifier::new(OID_NETSCAPE_CERT_TYPE).expect("NetscapeCertType OID");
+        let netscape_ext = extensions
+            .iter()
+            .find(|e| e.extn_id == netscape_oid)
+            .expect("应包含 NetscapeCertType 扩展");
+        assert!(
+            !netscape_ext.critical,
+            "NetscapeCertType 应为非关键扩展（与 Java 一致）"
+        );
+        // NetscapeCertType sslClient = 0x80，BIT STRING DER: 03 02 00 80
+        assert_eq!(
+            netscape_ext.extn_value.as_bytes(),
+            &[0x03, 0x02, 0x00, 0x80],
+            "NetscapeCertType 值应为 sslClient"
+        );
     }
 }

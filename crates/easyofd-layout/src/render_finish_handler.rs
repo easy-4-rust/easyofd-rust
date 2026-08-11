@@ -5,7 +5,7 @@
 /// 渲染完成回调接口。
 ///
 /// 对应 Java: ofdrw layout handler RenderFinishHandler（interface）。
-pub trait RenderFinishHandler {
+pub trait RenderFinishHandler: Send + Sync {
     /// 渲染完成时的回调。
     ///
     /// # Arguments
@@ -18,11 +18,11 @@ pub trait RenderFinishHandler {
 /// 闭包形式的渲染完成回调。
 pub struct FnRenderFinishHandler<F>(pub F)
 where
-    F: Fn(u32, u32);
+    F: Fn(u32, u32) + Send + Sync;
 
 impl<F> RenderFinishHandler for FnRenderFinishHandler<F>
 where
-    F: Fn(u32, u32),
+    F: Fn(u32, u32) + Send + Sync,
 {
     fn on_render_finish(&self, page_index: u32, page_count: u32) {
         (self.0)(page_index, page_count);
@@ -32,23 +32,23 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use std::sync::Mutex;
 
     struct TestHandler {
-        last_page: Cell<(u32, u32)>,
+        last_page: Mutex<(u32, u32)>,
     }
 
     impl TestHandler {
         fn new() -> Self {
             Self {
-                last_page: Cell::new((0, 0)),
+                last_page: Mutex::new((0, 0)),
             }
         }
     }
 
     impl RenderFinishHandler for TestHandler {
         fn on_render_finish(&self, page_index: u32, page_count: u32) {
-            self.last_page.set((page_index, page_count));
+            *self.last_page.lock().unwrap() = (page_index, page_count);
         }
     }
 
@@ -56,18 +56,17 @@ mod tests {
     fn test_handler() {
         let handler = TestHandler::new();
         handler.on_render_finish(2, 10);
-        assert_eq!(handler.last_page.get(), (2, 10));
+        assert_eq!(*handler.last_page.lock().unwrap(), (2, 10));
     }
 
     #[test]
     fn test_fn_handler() {
-        use std::cell::RefCell;
-        let captured = RefCell::new(Vec::new());
+        let captured = Mutex::new(Vec::new());
         let handler = FnRenderFinishHandler(|idx, total| {
-            captured.borrow_mut().push((idx, total));
+            captured.lock().unwrap().push((idx, total));
         });
         handler.on_render_finish(0, 3);
         handler.on_render_finish(1, 3);
-        assert_eq!(*captured.borrow(), vec![(0, 3), (1, 3)]);
+        assert_eq!(*captured.lock().unwrap(), vec![(0, 3), (1, 3)]);
     }
 }

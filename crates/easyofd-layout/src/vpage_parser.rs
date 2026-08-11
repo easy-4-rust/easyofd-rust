@@ -143,6 +143,7 @@ mod tests {
             divs: vec![div],
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         };
         let pages = VPageParseEngine::process(&[vpage]);
         assert_eq!(pages.len(), 1);
@@ -166,6 +167,7 @@ mod tests {
             divs: vec![div],
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         };
         let pages = VPageParseEngine::process(&[vpage]);
         match &pages[0].content[0] {
@@ -197,6 +199,7 @@ mod tests {
             divs: vec![div],
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         };
         let pages = VPageParseEngine::process(&[vpage]);
         match &pages[0].content[0] {
@@ -230,6 +233,7 @@ mod tests {
             divs: vec![parent],
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         };
         let pages = VPageParseEngine::process(&[vpage]);
         // Children 被展开为 2 个 ContentObject
@@ -252,11 +256,13 @@ mod tests {
             divs: vec![text_div("p1", 0.0, 0.0, 50.0, 10.0)],
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         };
         let vpage2 = VirtualPage {
             divs: vec![text_div("p2", 0.0, 0.0, 50.0, 10.0)],
             page_width: 297.0,
             page_height: 210.0,
+            page_num: None,
         };
         let pages = VPageParseEngine::process(&[vpage1, vpage2]);
         assert_eq!(pages.len(), 2);
@@ -292,6 +298,7 @@ mod tests {
             divs: vec![div],
             page_width: 210.0,
             page_height: 297.0,
+            page_num: None,
         };
         let pages = VPageParseEngine::process(&[vpage]);
         match &pages[0].content[0] {

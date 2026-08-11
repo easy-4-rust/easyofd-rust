@@ -7,7 +7,7 @@ use crate::div::Div;
 /// 元素渲染完成回调接口。
 ///
 /// 对应 Java: ofdrw layout handler ElementRenderFinishHandler（interface）。
-pub trait ElementRenderFinishHandler {
+pub trait ElementRenderFinishHandler: Send + Sync {
     /// 元素渲染完成时的回调。
     ///
     /// # Arguments
@@ -20,23 +20,23 @@ pub trait ElementRenderFinishHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     struct TestHandler {
-        count: Cell<u32>,
+        count: AtomicU32,
     }
 
     impl TestHandler {
         fn new() -> Self {
             Self {
-                count: Cell::new(0),
+                count: AtomicU32::new(0),
             }
         }
     }
 
     impl ElementRenderFinishHandler for TestHandler {
         fn on_element_render_finish(&self, _page_index: u32, _div: &Div) {
-            self.count.set(self.count.get() + 1);
+            self.count.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -46,6 +46,6 @@ mod tests {
         let div = Div::from_text_object(&easyofd_core::TextObject::new(0.0, 0.0, "test"));
         handler.on_element_render_finish(0, &div);
         handler.on_element_render_finish(1, &div);
-        assert_eq!(handler.count.get(), 2);
+        assert_eq!(handler.count.load(Ordering::Relaxed), 2);
     }
 }

@@ -7,7 +7,7 @@ use crate::rectangle::Rectangle;
 /// 虚拟页面处理回调接口。
 ///
 /// 对应 Java: ofdrw layout handler VPageHandler（interface）。
-pub trait VPageHandler {
+pub trait VPageHandler: Send + Sync {
     /// 页面创建时的回调。
     ///
     /// # Arguments
@@ -27,16 +27,16 @@ pub trait VPageHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use std::sync::Mutex;
 
     struct TestPageHandler {
-        events: RefCell<Vec<String>>,
+        events: Mutex<Vec<String>>,
     }
 
     impl TestPageHandler {
         fn new() -> Self {
             Self {
-                events: RefCell::new(Vec::new()),
+                events: Mutex::new(Vec::new()),
             }
         }
     }
@@ -44,13 +44,15 @@ mod tests {
     impl VPageHandler for TestPageHandler {
         fn on_page_created(&self, page_index: u32, _page_area: &Rectangle) {
             self.events
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .push(format!("created:{page_index}"));
         }
 
         fn on_page_finished(&self, page_index: u32) {
             self.events
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .push(format!("finished:{page_index}"));
         }
     }
@@ -64,7 +66,7 @@ mod tests {
         handler.on_page_created(1, &area);
         handler.on_page_finished(1);
         assert_eq!(
-            handler.events.borrow().clone(),
+            *handler.events.lock().unwrap(),
             vec!["created:0", "finished:0", "created:1", "finished:1"]
         );
     }

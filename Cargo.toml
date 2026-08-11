@@ -75,6 +75,14 @@ printpdf = { version = "0.7", default-features = false, features = ["font_subset
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 fontdue = "0.9.4"
 tiny-skia = "0.12.0"
+# ═══ PKCS#12 解密（PBES2/PBKDF2，纯 Rust）═══
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+cipher = "0.4"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+hmac = "0.12"
+sha1 = "0.10"
+sm4 = "0.5"
 ttf-parser = "0.21"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }

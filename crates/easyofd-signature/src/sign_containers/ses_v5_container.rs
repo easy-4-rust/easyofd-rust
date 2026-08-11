@@ -9,6 +9,7 @@ use super::{
     sm2_sign_with_sm3,
 };
 use crate::internal_helpers::compute_sm3;
+use crate::timestamp_hook::TimeStampHook;
 
 /// SES V5 签名容器。
 ///
@@ -20,6 +21,10 @@ pub struct SesV5Container {
     seal_der: Vec<u8>,
     /// 签章者证书 DER 编码。
     cert_der: Vec<u8>,
+    /// 可选时间戳 Hook，在签名完成后获取签名值的时间戳。
+    ///
+    /// 对应 Java: `SESV5Container#timeStampHook`
+    time_stamp_hook: Option<Box<dyn TimeStampHook>>,
 }
 
 impl SesV5Container {
@@ -32,7 +37,19 @@ impl SesV5Container {
             secret_key,
             seal_der,
             cert_der,
+            time_stamp_hook: None,
         }
+    }
+
+    /// 设置时间戳 Hook。
+    ///
+    /// 对应 Java: `SESV5Container#setTimeStampHook(TimeStampHook)`
+    ///
+    /// 在签名完成后调用 `hook.apply(sig_val)` 获取签名值的可信时间戳。
+    #[must_use]
+    pub fn with_time_stamp_hook(mut self, hook: impl TimeStampHook + 'static) -> Self {
+        self.time_stamp_hook = Some(Box::new(hook));
+        self
     }
 }
 
@@ -61,11 +78,18 @@ impl ExtendSignatureContainer for SesV5Container {
 
         let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der);
 
+        // 对应 Java: `if (timeStampHook != null) { ... signature.setTimeStamp(...) }`
+        let time_stamp = self.time_stamp_hook.as_ref().and_then(|hook| {
+            let ts = hook.apply(&sig_val);
+            if ts.is_empty() { None } else { Some(ts) }
+        });
+
         let ses_sig = easyofd_gm::ses::v5::SESSignature {
             to_sign: tbs,
             cert: self.cert_der.clone(),
             signature_algorithm: SM2_SM3_OID_ARCS.to_vec(),
             sign_data: sig_val,
+            time_stamp,
         };
 
         ses_sig.encode_der()
@@ -83,6 +107,7 @@ impl ExtendSignatureContainer for SesV5Container {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::timestamp_hook::ClosureTimeStampHook;
     use easyofd_gm::ses::v5::*;
     use sm2::elliptic_curve::Generate;
 
@@ -156,5 +181,62 @@ mod tests {
         let ses_sig = SESSignature::decode_der(&result).unwrap();
         let expected_hash = compute_sm3(in_data);
         assert_eq!(ses_sig.to_sign.data_hash, expected_hash.to_vec());
+    }
+
+    /// 无 hook 时 time_stamp 为 None（DER 解码验证）。
+    #[test]
+    fn ses_v5_sign_no_hook_time_stamp_is_none() {
+        let c = SesV5Container::new(
+            sm2::SecretKey::generate(),
+            build_test_seal_der(),
+            vec![0x30, 0x03, 0x02, 0x01, 0x01],
+        );
+        let result = c.sign(b"test data", "prop");
+        let ses_sig = SESSignature::decode_der(&result).unwrap();
+        assert!(
+            ses_sig.time_stamp.is_none(),
+            "无 hook 时 time_stamp 应为 None"
+        );
+    }
+
+    /// 有 hook（返回固定字节）时 SESSignature 解码出 time_stamp 等于 hook 输出。
+    #[test]
+    fn ses_v5_sign_with_hook_sets_time_stamp() {
+        let expected_ts = vec![0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE];
+        let hook = ClosureTimeStampHook::new({
+            let ts = expected_ts.clone();
+            move |_sig: &[u8]| ts.clone()
+        });
+        let c = SesV5Container::new(
+            sm2::SecretKey::generate(),
+            build_test_seal_der(),
+            vec![0x30, 0x03, 0x02, 0x01, 0x01],
+        )
+        .with_time_stamp_hook(hook);
+        let result = c.sign(b"test data", "prop");
+        let ses_sig = SESSignature::decode_der(&result).unwrap();
+        assert_eq!(
+            ses_sig.time_stamp,
+            Some(expected_ts),
+            "有 hook 时 time_stamp 应等于 hook 输出"
+        );
+    }
+
+    /// hook 返回空 Vec 时不设置 time_stamp（对齐 Java 的 null 检查）。
+    #[test]
+    fn ses_v5_sign_hook_returns_empty_vec_no_time_stamp() {
+        let hook = ClosureTimeStampHook::new(|_sig: &[u8]| Vec::new());
+        let c = SesV5Container::new(
+            sm2::SecretKey::generate(),
+            build_test_seal_der(),
+            vec![0x30, 0x03, 0x02, 0x01, 0x01],
+        )
+        .with_time_stamp_hook(hook);
+        let result = c.sign(b"test data", "prop");
+        let ses_sig = SESSignature::decode_der(&result).unwrap();
+        assert!(
+            ses_sig.time_stamp.is_none(),
+            "hook 返回空 Vec 时 time_stamp 应为 None"
+        );
     }
 }

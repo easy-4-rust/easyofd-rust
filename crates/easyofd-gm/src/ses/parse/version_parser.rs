@@ -279,6 +279,7 @@ mod tests {
             cert: vec![0x01],
             signature_algorithm: SM2_SM3_OID.to_vec(),
             sign_data: vec![0xFF; 32],
+            time_stamp: None,
         };
         sig.encode_der()
     }

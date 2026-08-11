@@ -73,6 +73,7 @@ impl Gbt35275Validate {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::sm2_struct::IssuerAndSerialNumber;

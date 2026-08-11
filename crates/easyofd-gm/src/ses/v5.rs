@@ -252,7 +252,8 @@ pub struct TBSSign {
 ///     toSign              TBS_Sign,
 ///     cert                OCTET STRING,
 ///     signatureAlgorithm  OBJECT IDENTIFIER,
-///     signature           BIT STRING
+///     signature           BIT STRING,
+///     timeStamp           [0] EXPLICIT BIT STRING OPTIONAL
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,6 +266,8 @@ pub struct SESSignature {
     pub signature_algorithm: Vec<u32>,
     /// 签名数据。
     pub sign_data: Vec<u8>,
+    /// 可选可信时间戳（[0] EXPLICIT BIT STRING）。
+    pub time_stamp: Option<Vec<u8>>,
 }
 
 // ── 编码/解码实现 ─────────────────────────────────────────────────────
@@ -623,6 +626,13 @@ impl SESSignature {
             encode_octet_string(&self.cert, inner);
             encode_oid(&self.signature_algorithm, inner);
             encode_bit_string(&self.sign_data, inner);
+            // 可选 timeStamp [0] EXPLICIT BIT STRING
+            // 对应 Java: `new DERTaggedObject(true, 0, timeStamp)`
+            if let Some(ref ts) = self.time_stamp {
+                let mut ts_inner = Vec::new();
+                encode_bit_string(ts, &mut ts_inner);
+                encode_context_explicit(0, &ts_inner, inner);
+            }
         })
     }
 
@@ -649,18 +659,41 @@ impl SESSignature {
         pos = next;
 
         // signature（BIT STRING）
-        let (sig_val, _next) = expect_tlv(&val, pos, 0x03)?;
+        let (sig_val, next) = expect_tlv(&val, pos, 0x03)?;
         let sign_data = if sig_val.is_empty() {
             Vec::new()
         } else {
             sig_val[1..].to_vec()
         };
+        pos = next;
+
+        // 可选 timeStamp [0] EXPLICIT BIT STRING
+        // 对应 Java: `SES_Signature(ASN1Sequence)` 中 timeStamp 解码
+        let (ts_data, _) = decode_context_explicit_optional(&val, pos, 0)?;
+        let time_stamp = ts_data.and_then(|inner| {
+            if inner.is_empty() {
+                return None;
+            }
+            // 解码内部的 BIT STRING
+            if inner[0] == 0x03 {
+                expect_tlv(&inner, 0, 0x03).ok().map(|(val, _)| {
+                    if val.is_empty() {
+                        Vec::new()
+                    } else {
+                        val[1..].to_vec()
+                    }
+                })
+            } else {
+                Some(inner)
+            }
+        });
 
         Ok(Self {
             to_sign,
             cert,
             signature_algorithm,
             sign_data,
+            time_stamp,
         })
     }
 }
@@ -779,10 +812,52 @@ mod tests {
             cert: vec![0x30, 0x03, 0x02, 0x01, 0x01],
             signature_algorithm: SM2_SM3_OID.to_vec(),
             sign_data: vec![0xEE; 32],
+            time_stamp: None,
         };
         let der = sig.encode_der();
         let decoded = SESSignature::decode_der(&der).unwrap();
         assert_eq!(decoded, sig);
+    }
+
+    #[test]
+    fn ses_signature_with_timestamp_roundtrip() {
+        let sig = SESSignature {
+            to_sign: TBSSign {
+                version: 5,
+                seal: sample_seseal(),
+                time_info: "20250101000000Z".into(),
+                data_hash: vec![0xAA; 32],
+                property_info: "test".into(),
+            },
+            cert: vec![0x30, 0x03, 0x02, 0x01, 0x01],
+            signature_algorithm: SM2_SM3_OID.to_vec(),
+            sign_data: vec![0xEE; 32],
+            time_stamp: Some(vec![0xCA, 0xFE, 0xBA, 0xBE]),
+        };
+        let der = sig.encode_der();
+        let decoded = SESSignature::decode_der(&der).unwrap();
+        assert_eq!(decoded, sig);
+        assert_eq!(decoded.time_stamp, Some(vec![0xCA, 0xFE, 0xBA, 0xBE]));
+    }
+
+    #[test]
+    fn ses_signature_without_timestamp_decoded() {
+        let sig = SESSignature {
+            to_sign: TBSSign {
+                version: 5,
+                seal: sample_seseal(),
+                time_info: "20250101000000Z".into(),
+                data_hash: vec![0xAA; 32],
+                property_info: "test".into(),
+            },
+            cert: vec![0x30, 0x03, 0x02, 0x01, 0x01],
+            signature_algorithm: SM2_SM3_OID.to_vec(),
+            sign_data: vec![0xEE; 32],
+            time_stamp: None,
+        };
+        let der = sig.encode_der();
+        let decoded = SESSignature::decode_der(&der).unwrap();
+        assert!(decoded.time_stamp.is_none());
     }
 
     #[test]

@@ -20,6 +20,7 @@ use crate::sm2_struct::signer_info::SignerInfo;
 /// # 示例
 ///
 /// ```rust
+/// # #[allow(deprecated)]
 /// use easyofd_gm::sm2_struct::builder::SignedDataBuilder;
 /// use easyofd_gm::sm2_struct::ContentInfo;
 /// use easyofd_gm::sm2_struct::IssuerAndSerialNumber;
@@ -146,6 +147,7 @@ impl Default for SignedDataBuilder {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::sm2_struct::IssuerAndSerialNumber;
