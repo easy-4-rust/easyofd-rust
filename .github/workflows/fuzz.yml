@@ -1,0 +1,47 @@
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # Daily at 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fuzz_xml, fuzz_ofd_reader, fuzz_ses_der, fuzz_pdf]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Rust (nightly)
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: nightly
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Fuzz ${{ matrix.target }}
+        working-directory: fuzz
+        run: cargo fuzz run ${{ matrix.target }} -- -runs=100000 -max_len=65536
+        timeout-minutes: 30
+
+      - name: Upload artifacts on crash
+        if: failure()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}/
+          retention-days: 30
