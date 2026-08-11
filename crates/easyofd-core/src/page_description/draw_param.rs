@@ -3,8 +3,8 @@
 //! 对应 Java: org.ofdrw.core.pageDescription.drawParam.CT_DrawParam
 
 use crate::basic_type::{ST_Array, ST_ID};
-
-use super::color::CT_Color;
+use crate::page_description::color::CT_Color;
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
 
 /// 绘制参数。
 ///
@@ -219,9 +219,164 @@ impl Default for CT_DrawParam {
     }
 }
 
+impl XmlElement for CT_DrawParam {
+    /// 对应 Java: CT_DrawParam 元素名 "DrawParam"。
+    fn element_name(&self) -> &'static str {
+        "DrawParam"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        let mut attrs = Vec::new();
+        if let Some(id) = self.id {
+            attrs.push(("ID".to_string(), id.to_xml_string()));
+        }
+        if let Some(lw) = self.line_width {
+            attrs.push(("LineWidth".to_string(), lw.to_string()));
+        }
+        if let Some(lc) = self.line_cap {
+            attrs.push((
+                "LineCap".to_string(),
+                match lc {
+                    LineCap::Butt => "Butt",
+                    LineCap::Round => "Round",
+                    LineCap::Square => "Square",
+                }
+                .to_string(),
+            ));
+        }
+        if let Some(lj) = self.line_join {
+            attrs.push((
+                "LineJoin".to_string(),
+                match lj {
+                    LineJoin::Miter => "Miter",
+                    LineJoin::Round => "Round",
+                    LineJoin::Bevel => "Bevel",
+                }
+                .to_string(),
+            ));
+        }
+        if let Some(doff) = self.dash_offset {
+            attrs.push(("DashOffset".to_string(), doff.to_string()));
+        }
+        if let Some(ref dp) = self.dash_pattern {
+            attrs.push(("DashPattern".to_string(), dp.to_xml_string()));
+        }
+        if let Some(ml) = self.miter_limit {
+            attrs.push(("MiterLimit".to_string(), ml.to_string()));
+        }
+        if let Some(ref tf) = self.transform {
+            attrs.push(("Transform".to_string(), tf.to_xml_string()));
+        }
+        attrs
+    }
+
+    fn child_nodes(&self) -> Vec<XmlNode> {
+        let mut children = Vec::new();
+        if let Some(ref fc) = self.fill_color {
+            let mut node = XmlNode::element("FillColor");
+            for (k, v) in fc.attributes() {
+                node.attrs.push((k, v));
+            }
+            children.push(node);
+        }
+        if let Some(ref sc) = self.stroke_color {
+            let mut node = XmlNode::element("StrokeColor");
+            for (k, v) in sc.attributes() {
+                node.attrs.push((k, v));
+            }
+            children.push(node);
+        }
+        children
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let id = node
+            .get_attr("ID")
+            .map(|s| {
+                ST_ID::from_str(s)
+                    .map_err(|e| XmlElementError(format!("解析 DrawParam.ID 失败: {e}")))
+            })
+            .transpose()?;
+        let line_width = node
+            .get_attr("LineWidth")
+            .map(|s| {
+                s.parse::<f64>()
+                    .map_err(|e| XmlElementError(format!("解析 DrawParam.LineWidth 失败: {e}")))
+            })
+            .transpose()?;
+        let line_cap = node
+            .get_attr("LineCap")
+            .map(|s| match s {
+                "Butt" => Ok(LineCap::Butt),
+                "Round" => Ok(LineCap::Round),
+                "Square" => Ok(LineCap::Square),
+                other => Err(XmlElementError(format!("未知 LineCap 值: {other}"))),
+            })
+            .transpose()?;
+        let line_join = node
+            .get_attr("LineJoin")
+            .map(|s| match s {
+                "Miter" => Ok(LineJoin::Miter),
+                "Round" => Ok(LineJoin::Round),
+                "Bevel" => Ok(LineJoin::Bevel),
+                other => Err(XmlElementError(format!("未知 LineJoin 值: {other}"))),
+            })
+            .transpose()?;
+        let dash_offset = node
+            .get_attr("DashOffset")
+            .map(|s| {
+                s.parse::<f64>()
+                    .map_err(|e| XmlElementError(format!("解析 DrawParam.DashOffset 失败: {e}")))
+            })
+            .transpose()?;
+        let dash_pattern = node
+            .get_attr("DashPattern")
+            .map(|s| {
+                ST_Array::from_str(s)
+                    .map_err(|e| XmlElementError(format!("解析 DrawParam.DashPattern 失败: {e}")))
+            })
+            .transpose()?;
+        let miter_limit = node
+            .get_attr("MiterLimit")
+            .map(|s| {
+                s.parse::<f64>()
+                    .map_err(|e| XmlElementError(format!("解析 DrawParam.MiterLimit 失败: {e}")))
+            })
+            .transpose()?;
+        let transform = node
+            .get_attr("Transform")
+            .map(|s| {
+                ST_Array::from_str(s)
+                    .map_err(|e| XmlElementError(format!("解析 DrawParam.Transform 失败: {e}")))
+            })
+            .transpose()?;
+        let fill_color = node
+            .child("FillColor")
+            .map(CT_Color::from_xml)
+            .transpose()?;
+        let stroke_color = node
+            .child("StrokeColor")
+            .map(CT_Color::from_xml)
+            .transpose()?;
+        Ok(Self {
+            id,
+            line_width,
+            line_cap,
+            line_join,
+            dash_offset,
+            dash_pattern,
+            miter_limit,
+            fill_color,
+            stroke_color,
+            transform,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn test_basic_creation() {
@@ -266,5 +421,71 @@ mod tests {
     #[test]
     fn test_from_str_empty() {
         assert!(CT_DrawParam::from_str("").is_err());
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let dp = CT_DrawParam::new();
+        assert_eq!(dp.element_name(), "DrawParam");
+    }
+
+    #[test]
+    fn test_xml_element_to_xml_attrs() {
+        let mut dp = CT_DrawParam::new();
+        dp.set_id(ST_ID::new(10).unwrap());
+        dp.set_line_width(2.5);
+        dp.set_line_cap(LineCap::Round);
+        dp.set_line_join(LineJoin::Bevel);
+        dp.set_miter_limit(4.0);
+        let xml = dp.to_xml();
+        assert!(xml.contains("ID=\"10\""));
+        assert!(xml.contains("LineWidth=\"2.5\""));
+        assert!(xml.contains("LineCap=\"Round\""));
+        assert!(xml.contains("LineJoin=\"Bevel\""));
+        assert!(xml.contains("MiterLimit=\"4\""));
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_basic() {
+        let mut dp = CT_DrawParam::new();
+        dp.set_id(ST_ID::new(5).unwrap());
+        dp.set_line_width(3.0);
+        dp.set_line_cap(LineCap::Square);
+        dp.set_line_join(LineJoin::Miter);
+        dp.set_miter_limit(10.0);
+        let xml = dp.to_xml();
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let dp2 = CT_DrawParam::from_xml(&node).unwrap();
+        assert_eq!(dp.id(), dp2.id());
+        assert_eq!(dp.line_width(), dp2.line_width());
+        assert_eq!(dp.line_cap(), dp2.line_cap());
+        assert_eq!(dp.line_join(), dp2.line_join());
+        assert_eq!(dp.miter_limit(), dp2.miter_limit());
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_with_colors() {
+        let mut dp = CT_DrawParam::new();
+        dp.set_line_width(1.5);
+        dp.set_fill_color(CT_Color::rgb(255, 0, 0));
+        dp.set_stroke_color(CT_Color::rgb(0, 0, 255));
+        let xml = dp.to_xml();
+        assert!(xml.contains("FillColor"));
+        assert!(xml.contains("StrokeColor"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let dp2 = CT_DrawParam::from_xml(&node).unwrap();
+        assert_eq!(dp.line_width(), dp2.line_width());
+        assert!(dp2.fill_color().is_some());
+        assert!(dp2.stroke_color().is_some());
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_empty() {
+        let dp = CT_DrawParam::new();
+        let xml = dp.to_xml();
+        assert_eq!(xml, "<DrawParam/>");
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let dp2 = CT_DrawParam::from_xml(&node).unwrap();
+        assert_eq!(dp.line_width(), dp2.line_width());
     }
 }

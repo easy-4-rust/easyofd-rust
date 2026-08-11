@@ -11,7 +11,7 @@ use super::DestType;
 /// 定义页面跳转的目标位置参数，包括目标页码、显示类型和坐标。
 ///
 /// 对应 Java: org.ofdrw.core.action.CT_Dest
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CTDest {
     /// 目标页码。
     ///

@@ -8,7 +8,7 @@
 /// 包含一个或多个页面叶节点，页顺序根据页树前序遍历确定。
 ///
 /// 对应 Java: org.ofdrw.core.basicStructure.pageTree.Pages
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Pages {
     /// 页面列表（ID, BaseLoc）。
     pub pages: Vec<PageEntry>,

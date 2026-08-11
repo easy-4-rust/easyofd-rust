@@ -5,7 +5,7 @@
 /// 模板页描述，定义可复用的页面模板。
 /// 对应 GB/T 33190-2016 图 14。
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CT_TemplatePage {
     /// 模板页 ID。
     pub id: u32,

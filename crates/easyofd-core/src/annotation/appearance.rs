@@ -5,7 +5,7 @@ use std::fmt::Write;
 /// 对应 Java: org.ofdrw.core.annotation.Appearance
 ///
 /// 注释的静态外观，描述注释在页面上的绘制方式。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Appearance {
     /// 外观标识符。
     pub id: String,

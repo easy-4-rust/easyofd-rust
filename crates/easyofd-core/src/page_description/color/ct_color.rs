@@ -3,6 +3,7 @@
 //! 对应 Java: org.ofdrw.core.pageDescription.color.color.CT_Color
 
 use crate::basic_type::{ST_Array, ST_RefID};
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
 
 /// 颜色值，支持 RGB、CMYK、灰度、命名色。
 ///
@@ -199,9 +200,73 @@ impl Default for CT_Color {
     }
 }
 
+impl XmlElement for CT_Color {
+    /// 对应 Java: CT_Color 元素名 "Color"。
+    fn element_name(&self) -> &'static str {
+        "Color"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        let mut attrs = Vec::new();
+        if let Some(ref value) = self.value {
+            attrs.push(("Value".to_string(), value.to_xml_string()));
+        }
+        if let Some(index) = self.index {
+            attrs.push(("Index".to_string(), index.to_string()));
+        }
+        if let Some(cs) = self.color_space {
+            attrs.push(("ColorSpace".to_string(), cs.to_xml_string()));
+        }
+        if let Some(alpha) = self.alpha {
+            attrs.push(("Alpha".to_string(), alpha.to_string()));
+        }
+        attrs
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let value = node
+            .get_attr("Value")
+            .map(|s| {
+                ST_Array::from_str(s)
+                    .map_err(|e| XmlElementError(format!("解析 Color.Value 失败: {e}")))
+            })
+            .transpose()?;
+        let index = node
+            .get_attr("Index")
+            .map(|s| {
+                s.parse::<u32>()
+                    .map_err(|e| XmlElementError(format!("解析 Color.Index 失败: {e}")))
+            })
+            .transpose()?;
+        let color_space = node
+            .get_attr("ColorSpace")
+            .map(|s| {
+                s.parse::<u64>()
+                    .map_err(|e| XmlElementError(format!("解析 Color.ColorSpace 失败: {e}")))
+                    .map(ST_RefID::new)
+            })
+            .transpose()?;
+        let alpha = node
+            .get_attr("Alpha")
+            .map(|s| {
+                s.parse::<u8>()
+                    .map_err(|e| XmlElementError(format!("解析 Color.Alpha 失败: {e}")))
+            })
+            .transpose()?;
+        Ok(Self {
+            value,
+            index,
+            color_space,
+            alpha,
+            color: None, // color 字段从 Value 推导，解析时不恢复
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn test_rgb_color() {
@@ -245,5 +310,49 @@ mod tests {
     fn test_from_str_gray() {
         let c = CT_Color::from_str("128").unwrap();
         assert_eq!(c.color(), Some(&ColorClusterType::Gray(128)));
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let c = CT_Color::new();
+        assert_eq!(c.element_name(), "Color");
+    }
+
+    #[test]
+    fn test_xml_element_to_xml_contains_attrs() {
+        let mut c = CT_Color::rgb(255, 128, 0);
+        c.set_alpha(200);
+        c.set_index(5);
+        let xml = c.to_xml();
+        assert!(xml.contains("Value=\"255 128 0\""));
+        assert!(xml.contains("Alpha=\"200\""));
+        assert!(xml.contains("Index=\"5\""));
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        let mut c = CT_Color::rgb(10, 20, 30);
+        c.set_alpha(128);
+        c.set_index(3);
+        c.set_color_space(ST_RefID::new(7));
+        let xml = c.to_xml();
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let c2 = CT_Color::from_xml(&node).unwrap();
+        // value/index/color_space/alpha 应一致
+        assert_eq!(c.value(), c2.value());
+        assert_eq!(c.index(), c2.index());
+        assert_eq!(c.color_space(), c2.color_space());
+        assert_eq!(c.alpha(), c2.alpha());
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_empty() {
+        let c = CT_Color::new();
+        let xml = c.to_xml();
+        assert_eq!(xml, "<Color/>");
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let c2 = CT_Color::from_xml(&node).unwrap();
+        assert_eq!(c.value(), c2.value());
+        assert_eq!(c.index(), c2.index());
     }
 }

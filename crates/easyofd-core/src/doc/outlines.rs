@@ -5,7 +5,7 @@
 /// 大纲树。
 ///
 /// 对应 Java: org.ofdrw.core.basicStructure.outlines.Outlines
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Outlines {
     /// 大纲元素列表。
     pub elements: Vec<CT_OutlineElem>,
@@ -15,7 +15,7 @@ pub struct Outlines {
 ///
 /// 对应 Java: org.ofdrw.core.basicStructure.outlines.CT_OutlineElem
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CT_OutlineElem {
     /// 标题。
     pub title: String,

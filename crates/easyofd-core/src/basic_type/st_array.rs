@@ -114,6 +114,47 @@ impl Default for ST_Array {
     }
 }
 
+impl crate::xml_element::XmlElement for ST_Array {
+    /// 对应 Java: ST_Array 元素名 "ST_Array"。
+    fn element_name(&self) -> &'static str {
+        "ST_Array"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml 以处理计算得到的文本内容。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<ST_Array>");
+        if !self.array.is_empty() {
+            out.push_str(&crate::xml_element::xml_escape(&self.array.join(" ")));
+        }
+        out.push_str("</ST_Array>");
+    }
+
+    fn from_xml(
+        node: &crate::xml_element::XmlNode,
+    ) -> Result<Self, crate::xml_element::XmlElementError> {
+        let text = node.text.as_deref().ok_or_else(|| {
+            crate::xml_element::XmlElementError("ST_Array 缺少文本内容".to_string())
+        })?;
+        Self::from_str(text)
+            .map_err(|e| crate::xml_element::XmlElementError(format!("解析 ST_Array 失败: {e}")))
+    }
+}
+
+impl ST_Array {
+    /// 生成包含文本子节点的 XmlNode（供嵌套序列化）。
+    pub fn to_xml_node(&self) -> crate::xml_element::XmlNode {
+        let mut node = crate::xml_element::XmlNode::element("ST_Array");
+        if !self.array.is_empty() {
+            node.text = Some(self.array.join(" "));
+        }
+        node
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +205,25 @@ mod tests {
     fn test_is_empty() {
         let arr = ST_Array::new();
         assert!(arr.is_empty());
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        use crate::xml_element::XmlElement;
+        use crate::xml_parse::parse_xml_to_nodes;
+        let arr = ST_Array::from_str("1 2.5 3").unwrap();
+        let xml = arr.to_xml();
+        assert!(xml.contains("<ST_Array>"));
+        assert!(xml.contains("1 2.5 3"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let arr2 = ST_Array::from_xml(&node).unwrap();
+        assert_eq!(arr, arr2);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        use crate::xml_element::XmlElement;
+        let arr = ST_Array::new();
+        assert_eq!(arr.element_name(), "ST_Array");
     }
 }

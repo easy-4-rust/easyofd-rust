@@ -2,6 +2,8 @@
 //!
 //! 对应 Java: org.ofdrw.core.graph.tight.method.CubicBezier
 
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
+
 /// 三次贝塞尔曲线路径方法。
 ///
 /// 图 53 三次贝塞尔曲线结构。
@@ -50,9 +52,60 @@ impl std::fmt::Display for CubicBezier {
     }
 }
 
+impl XmlElement for CubicBezier {
+    /// 对应 Java: CubicBezier 元素名 "CubicBezier"。
+    fn element_name(&self) -> &'static str {
+        "CubicBezier"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml：文本内容为 B 命令格式。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<CubicBezier>");
+        out.push_str(&crate::xml_element::xml_escape(
+            &self.to_abbreviated_string(),
+        ));
+        out.push_str("</CubicBezier>");
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let text = node
+            .text
+            .as_deref()
+            .ok_or_else(|| XmlElementError("CubicBezier 缺少文本内容".to_string()))?;
+        let parts: Vec<&str> = text.split_whitespace().collect();
+        if parts.len() < 7 || parts[0] != "B" {
+            return Err(XmlElementError(format!("CubicBezier 格式错误: {text}")));
+        }
+        let x1: f64 = parts[1]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 CubicBezier.x1 失败: {e}")))?;
+        let y1: f64 = parts[2]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 CubicBezier.y1 失败: {e}")))?;
+        let x2: f64 = parts[3]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 CubicBezier.x2 失败: {e}")))?;
+        let y2: f64 = parts[4]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 CubicBezier.y2 失败: {e}")))?;
+        let x3: f64 = parts[5]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 CubicBezier.x3 失败: {e}")))?;
+        let y3: f64 = parts[6]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 CubicBezier.y3 失败: {e}")))?;
+        Ok(Self::new(x1, y1, x2, y2, x3, y3))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn cubic_bezier_new() {
@@ -79,6 +132,23 @@ mod tests {
     fn cubic_bezier_clone_eq() {
         let cb = CubicBezier::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
         let cb2 = cb.clone();
+        assert_eq!(cb, cb2);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let cb = CubicBezier::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+        assert_eq!(cb.element_name(), "CubicBezier");
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        let cb = CubicBezier::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+        let xml = cb.to_xml();
+        assert!(xml.contains("<CubicBezier>"));
+        assert!(xml.contains("B 1 2 3 4 5 6"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let cb2 = CubicBezier::from_xml(&node).unwrap();
         assert_eq!(cb, cb2);
     }
 }

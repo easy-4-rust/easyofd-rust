@@ -50,6 +50,35 @@ impl ST_ID {
     }
 }
 
+impl crate::xml_element::XmlElement for ST_ID {
+    /// 对应 Java: ST_ID 元素名 "ST_ID"。
+    fn element_name(&self) -> &'static str {
+        "ST_ID"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml 以处理计算得到的文本内容。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<ST_ID>");
+        out.push_str(&crate::xml_element::xml_escape(&self.to_xml_string()));
+        out.push_str("</ST_ID>");
+    }
+
+    fn from_xml(
+        node: &crate::xml_element::XmlNode,
+    ) -> Result<Self, crate::xml_element::XmlElementError> {
+        let text = node
+            .text
+            .as_deref()
+            .ok_or_else(|| crate::xml_element::XmlElementError("ST_ID 缺少文本内容".to_string()))?;
+        Self::from_str(text)
+            .map_err(|e| crate::xml_element::XmlElementError(format!("解析 ST_ID 失败: {e}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +117,25 @@ mod tests {
         let s = id.to_xml_string();
         let id2 = ST_ID::from_str(&s).unwrap();
         assert_eq!(id, id2);
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        use crate::xml_element::XmlElement;
+        use crate::xml_parse::parse_xml_to_nodes;
+        let id = ST_ID::new(42).unwrap();
+        let xml = id.to_xml();
+        assert!(xml.contains("<ST_ID>"));
+        assert!(xml.contains("42"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let id2 = ST_ID::from_xml(&node).unwrap();
+        assert_eq!(id, id2);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        use crate::xml_element::XmlElement;
+        let id = ST_ID::new(1).unwrap();
+        assert_eq!(id.element_name(), "ST_ID");
     }
 }

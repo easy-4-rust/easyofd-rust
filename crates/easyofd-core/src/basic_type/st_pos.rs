@@ -39,6 +39,34 @@ impl ST_Pos {
     }
 }
 
+impl crate::xml_element::XmlElement for ST_Pos {
+    /// 对应 Java: ST_Pos 元素名 "ST_Pos"。
+    fn element_name(&self) -> &'static str {
+        "ST_Pos"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml 以处理计算得到的文本内容。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<ST_Pos>");
+        out.push_str(&crate::xml_element::xml_escape(&self.to_xml_string()));
+        out.push_str("</ST_Pos>");
+    }
+
+    fn from_xml(
+        node: &crate::xml_element::XmlNode,
+    ) -> Result<Self, crate::xml_element::XmlElementError> {
+        let text = node.text.as_deref().ok_or_else(|| {
+            crate::xml_element::XmlElementError("ST_Pos 缺少文本内容".to_string())
+        })?;
+        Self::from_str(text)
+            .map_err(|e| crate::xml_element::XmlElementError(format!("解析 ST_Pos 失败: {e}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +102,25 @@ mod tests {
         let s = p.to_xml_string();
         let p2 = ST_Pos::from_str(&s).unwrap();
         assert_eq!(p, p2);
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        use crate::xml_element::XmlElement;
+        use crate::xml_parse::parse_xml_to_nodes;
+        let p = ST_Pos::new(10.5, 20.5);
+        let xml = p.to_xml();
+        assert!(xml.contains("<ST_Pos>"));
+        assert!(xml.contains("10.5 20.5"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let p2 = ST_Pos::from_xml(&node).unwrap();
+        assert_eq!(p, p2);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        use crate::xml_element::XmlElement;
+        let p = ST_Pos::new(0.0, 0.0);
+        assert_eq!(p.element_name(), "ST_Pos");
     }
 }

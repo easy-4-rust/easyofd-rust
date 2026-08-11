@@ -2,6 +2,8 @@
 //!
 //! 对应 Java: org.ofdrw.core.graph.tight.method.Line
 
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
+
 /// 线段路径方法。
 ///
 /// 图 51 线段结构。从当前点绘制直线到指定结束点。
@@ -33,9 +35,48 @@ impl std::fmt::Display for Line {
     }
 }
 
+impl XmlElement for Line {
+    /// 对应 Java: Line 元素名 "Line"。
+    fn element_name(&self) -> &'static str {
+        "Line"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml：文本内容为 L 命令格式。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<Line>");
+        out.push_str(&crate::xml_element::xml_escape(
+            &self.to_abbreviated_string(),
+        ));
+        out.push_str("</Line>");
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let text = node
+            .text
+            .as_deref()
+            .ok_or_else(|| XmlElementError("Line 缺少文本内容".to_string()))?;
+        let parts: Vec<&str> = text.split_whitespace().collect();
+        if parts.len() < 3 || parts[0] != "L" {
+            return Err(XmlElementError(format!("Line 格式错误: {text}")));
+        }
+        let x: f64 = parts[1]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Line.x 失败: {e}")))?;
+        let y: f64 = parts[2]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Line.y 失败: {e}")))?;
+        Ok(Self::new(x, y))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn line_new() {
@@ -60,5 +101,23 @@ mod tests {
         let l = Line::new(3.0, 4.0);
         let l2 = l.clone();
         assert_eq!(l, l2);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let l = Line::new(1.0, 2.0);
+        assert_eq!(l.element_name(), "Line");
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        let l = Line::new(10.5, 20.5);
+        let xml = l.to_xml();
+        assert!(xml.contains("<Line>"));
+        assert!(xml.contains("L 10.5 20.5"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let l2 = Line::from_xml(&node).unwrap();
+        assert!((l.point.0 - l2.point.0).abs() < f64::EPSILON);
+        assert!((l.point.1 - l2.point.1).abs() < f64::EPSILON);
     }
 }

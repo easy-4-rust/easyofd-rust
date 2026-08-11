@@ -117,6 +117,33 @@ impl std::fmt::Display for ST_Loc {
     }
 }
 
+impl crate::xml_element::XmlElement for ST_Loc {
+    /// 对应 Java: ST_Loc 元素名 "ST_Loc"。
+    fn element_name(&self) -> &'static str {
+        "ST_Loc"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml 以处理计算得到的文本内容。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<ST_Loc>");
+        out.push_str(&crate::xml_element::xml_escape(&self.loc));
+        out.push_str("</ST_Loc>");
+    }
+
+    fn from_xml(
+        node: &crate::xml_element::XmlNode,
+    ) -> Result<Self, crate::xml_element::XmlElementError> {
+        let text = node.text.as_deref().ok_or_else(|| {
+            crate::xml_element::XmlElementError("ST_Loc 缺少文本内容".to_string())
+        })?;
+        Ok(Self::new(text))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +207,25 @@ mod tests {
         assert!(empty.is_empty());
         let non_empty = ST_Loc::new("test");
         assert!(!non_empty.is_empty());
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        use crate::xml_element::XmlElement;
+        use crate::xml_parse::parse_xml_to_nodes;
+        let loc = ST_Loc::new("Doc_0/Res/image.png");
+        let xml = loc.to_xml();
+        assert!(xml.contains("<ST_Loc>"));
+        assert!(xml.contains("Doc_0/Res/image.png"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let loc2 = ST_Loc::from_xml(&node).unwrap();
+        assert_eq!(loc, loc2);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        use crate::xml_element::XmlElement;
+        let loc = ST_Loc::new("test");
+        assert_eq!(loc.element_name(), "ST_Loc");
     }
 }

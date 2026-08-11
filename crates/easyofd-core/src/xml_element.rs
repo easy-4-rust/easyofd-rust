@@ -80,6 +80,16 @@ impl XmlNode {
     pub fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a XmlNode> {
         self.children.iter().filter(move |c| c.name == name)
     }
+
+    /// 将节点序列化为 XML 片段（不含 XML 声明）。
+    ///
+    /// 对应 Java: OFDElement.toString()
+    #[must_use]
+    pub fn to_xml_string(&self) -> String {
+        let mut out = String::new();
+        self.write_self_xml(&mut out);
+        out
+    }
 }
 
 /// XML 元素 trait（对应 Java: ofdrw OFDElement）。

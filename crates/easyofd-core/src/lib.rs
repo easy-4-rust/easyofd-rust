@@ -32,6 +32,7 @@ pub mod text;
 pub mod versions;
 pub mod watermark;
 pub mod xml_element;
+mod xml_impls;
 pub mod xml_parse;
 
 // Re-export core types at crate root for convenience.

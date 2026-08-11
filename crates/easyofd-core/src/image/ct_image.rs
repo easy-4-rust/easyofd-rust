@@ -6,7 +6,7 @@
 ///
 /// 对应 Java: org.ofdrw.core.image.CT_Image
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CT_Image {
     /// 对象 ID。
     pub id: u32,

@@ -72,6 +72,34 @@ impl ST_Box {
     }
 }
 
+impl crate::xml_element::XmlElement for ST_Box {
+    /// 对应 Java: ST_Box 元素名 "ST_Box"。
+    fn element_name(&self) -> &'static str {
+        "ST_Box"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml 以处理计算得到的文本内容。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<ST_Box>");
+        out.push_str(&crate::xml_element::xml_escape(&self.to_xml_string()));
+        out.push_str("</ST_Box>");
+    }
+
+    fn from_xml(
+        node: &crate::xml_element::XmlNode,
+    ) -> Result<Self, crate::xml_element::XmlElementError> {
+        let text = node.text.as_deref().ok_or_else(|| {
+            crate::xml_element::XmlElementError("ST_Box 缺少文本内容".to_string())
+        })?;
+        Self::from_str(text)
+            .map_err(|e| crate::xml_element::XmlElementError(format!("解析 ST_Box 失败: {e}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,6 +136,19 @@ mod tests {
         let b = ST_Box::new(100.0, 200.0, 300.0, 400.0);
         let s = b.to_xml_string();
         let b2 = ST_Box::from_str(&s).unwrap();
+        assert_eq!(b, b2);
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        use crate::xml_element::XmlElement;
+        use crate::xml_parse::parse_xml_to_nodes;
+        let b = ST_Box::new(10.5, 20.5, 50.0, 80.0);
+        let xml = b.to_xml();
+        assert!(xml.contains("<ST_Box>"));
+        assert!(xml.contains("10.5 20.5 50 80"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let b2 = ST_Box::from_xml(&node).unwrap();
         assert_eq!(b, b2);
     }
 }

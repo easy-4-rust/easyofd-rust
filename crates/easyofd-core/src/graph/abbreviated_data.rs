@@ -1,5 +1,7 @@
 //! AbbreviatedData 路径缩写数据。
 
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
+
 /// 路径操作命令类型。
 #[derive(Debug, Clone, PartialEq)]
 pub enum PathCommand {
@@ -226,6 +228,33 @@ impl Default for AbbreviatedData {
     }
 }
 
+impl XmlElement for AbbreviatedData {
+    /// 对应 Java: AbbreviatedData 元素名 "AbbreviatedData"。
+    fn element_name(&self) -> &'static str {
+        "AbbreviatedData"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml：文本内容为路径命令字符串。
+    fn write_xml(&self, out: &mut String) {
+        if self.commands.is_empty() {
+            out.push_str("<AbbreviatedData/>");
+        } else {
+            out.push_str("<AbbreviatedData>");
+            out.push_str(&crate::xml_element::xml_escape(&self.to_data_string()));
+            out.push_str("</AbbreviatedData>");
+        }
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let text = node.text.as_deref().unwrap_or("");
+        Ok(Self::parse(text))
+    }
+}
+
 /// 从字符迭代器中读取下一个 f64 值。
 fn next_f64(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<f64> {
     skip_whitespace(chars);
@@ -275,6 +304,7 @@ fn skip_whitespace(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn test_abbreviated_data_new() {
@@ -401,5 +431,40 @@ mod tests {
         let ad2 = ad.clone();
         assert_eq!(ad2.len(), 1);
         assert!(format!("{ad:?}").contains("AbbreviatedData"));
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let ad = AbbreviatedData::new();
+        assert_eq!(ad.element_name(), "AbbreviatedData");
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        let ad = AbbreviatedData::new()
+            .move_to(0.0, 0.0)
+            .line_to(10.0, 10.0)
+            .quad_to(5.0, 5.0, 20.0, 0.0)
+            .cubic_to(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)
+            .arc_to(5.0, 5.0, 0.0, 1, 0, 10.0, 10.0)
+            .close();
+        let xml = ad.to_xml();
+        assert!(xml.contains("<AbbreviatedData>"));
+        assert!(xml.contains("M 0 0"));
+        assert!(xml.contains("L 10 10"));
+        assert!(xml.contains('C'));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let ad2 = AbbreviatedData::from_xml(&node).unwrap();
+        assert_eq!(ad.commands, ad2.commands);
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_empty() {
+        let ad = AbbreviatedData::new();
+        let xml = ad.to_xml();
+        assert_eq!(xml, "<AbbreviatedData/>");
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let ad2 = AbbreviatedData::from_xml(&node).unwrap();
+        assert!(ad2.is_empty());
     }
 }

@@ -10,7 +10,7 @@ use crate::basic_type::ST_Loc;
 /// Document.xml 文档根节点，定义了文档的页面、资源、权限等信息。
 ///
 /// 对应 Java: org.ofdrw.core.basicStructure.doc.Document
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Document {
     /// 文档公共数据引用。
     pub common_data: Option<String>,

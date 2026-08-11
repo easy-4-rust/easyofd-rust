@@ -5,7 +5,7 @@
 /// 页面区域结构，描述页面的物理区域、出血区域、裁切区域等。
 /// 对应 GB/T 33190-2016 图 7。
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CT_PageArea {
     /// 物理区域，格式 "topLeftX topLeftY width height"（单位 mm）。
     pub physical_box: Option<String>,
@@ -18,7 +18,7 @@ pub struct CT_PageArea {
 }
 
 /// 由四个值组成的矩形框。
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Box {
     /// 左上角 X 坐标（mm）。
     pub x: f64,

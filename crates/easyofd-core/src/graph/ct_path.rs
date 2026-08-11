@@ -1,6 +1,7 @@
 //! CT_Path 路径对象。
 
 use super::AbbreviatedData;
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
 
 /// 填充规则。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,9 +178,106 @@ impl CT_Path {
     }
 }
 
+impl XmlElement for CT_Path {
+    /// 对应 Java: CT_Path 元素名 "Path"。
+    fn element_name(&self) -> &'static str {
+        "Path"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        let mut attrs = Vec::new();
+        attrs.push(("ID".to_string(), self.id.to_string()));
+        attrs.push(("Boundary".to_string(), self.boundary.clone()));
+        if !self.stroke {
+            attrs.push(("Stroke".to_string(), "false".to_string()));
+        }
+        if self.fill {
+            attrs.push(("Fill".to_string(), "true".to_string()));
+        }
+        if self.rule != FillRule::NonZero {
+            attrs.push(("Rule".to_string(), self.rule.as_str().to_string()));
+        }
+        if let Some(lw) = self.line_width {
+            attrs.push(("LineWidth".to_string(), lw.to_string()));
+        }
+        if let Some(sc) = self.stroke_color {
+            attrs.push(("StrokeColor".to_string(), sc.to_string()));
+        }
+        if let Some(fc) = self.fill_color {
+            attrs.push(("FillColor".to_string(), fc.to_string()));
+        }
+        attrs
+    }
+
+    fn child_nodes(&self) -> Vec<XmlNode> {
+        let mut children = Vec::new();
+        if let Some(ref ad) = self.abbreviated_data {
+            let mut node = XmlNode::element("AbbreviatedData");
+            node.push_child(XmlNode::text_node(ad.to_data_string()));
+            children.push(node);
+        }
+        children
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let id = node
+            .get_attr("ID")
+            .ok_or_else(|| XmlElementError("Path 缺少 ID 属性".to_string()))?
+            .parse::<u32>()
+            .map_err(|e| XmlElementError(format!("解析 Path.ID 失败: {e}")))?;
+        let boundary = node
+            .get_attr("Boundary")
+            .ok_or_else(|| XmlElementError("Path 缺少 Boundary 属性".to_string()))?
+            .to_string();
+        let stroke = node.get_attr("Stroke").map_or(true, |s| s != "false");
+        let fill = node.get_attr("Fill").is_some_and(|s| s == "true");
+        let rule = match node.get_attr("Rule") {
+            Some("EvenOdd") => FillRule::EvenOdd,
+            _ => FillRule::NonZero,
+        };
+        let line_width = node
+            .get_attr("LineWidth")
+            .map(|s| {
+                s.parse::<f64>()
+                    .map_err(|e| XmlElementError(format!("解析 Path.LineWidth 失败: {e}")))
+            })
+            .transpose()?;
+        let stroke_color = node
+            .get_attr("StrokeColor")
+            .map(|s| {
+                s.parse::<u32>()
+                    .map_err(|e| XmlElementError(format!("解析 Path.StrokeColor 失败: {e}")))
+            })
+            .transpose()?;
+        let fill_color = node
+            .get_attr("FillColor")
+            .map(|s| {
+                s.parse::<u32>()
+                    .map_err(|e| XmlElementError(format!("解析 Path.FillColor 失败: {e}")))
+            })
+            .transpose()?;
+        let abbreviated_data = node.child("AbbreviatedData").map(|child| {
+            let text = child.text.as_deref().unwrap_or("");
+            AbbreviatedData::parse(text)
+        });
+        Ok(Self {
+            id,
+            boundary,
+            stroke,
+            fill,
+            rule,
+            line_width,
+            stroke_color,
+            fill_color,
+            abbreviated_data,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn test_ct_path_new() {
@@ -267,5 +365,71 @@ mod tests {
         let p2 = p.clone();
         assert_eq!(p2.id, 1);
         assert!(format!("{p:?}").contains("CT_Path"));
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let p = CT_Path::new(1, "0 0 1 1");
+        assert_eq!(p.element_name(), "Path");
+    }
+
+    #[test]
+    fn test_xml_element_to_xml_contains_attrs() {
+        let p = CT_Path::new(3, "10 20 50 50")
+            .stroke(false)
+            .fill(true)
+            .rule(FillRule::EvenOdd)
+            .line_width(2.5)
+            .stroke_color(0xFF_0000)
+            .fill_color(0x00_FF00);
+        let xml = p.to_xml();
+        assert!(xml.contains("ID=\"3\""));
+        assert!(xml.contains("Boundary=\"10 20 50 50\""));
+        assert!(xml.contains("Stroke=\"false\""));
+        assert!(xml.contains("Fill=\"true\""));
+        assert!(xml.contains("Rule=\"EvenOdd\""));
+        assert!(xml.contains("LineWidth=\"2.5\""));
+        assert!(xml.contains("StrokeColor=\"16711680\""));
+        assert!(xml.contains("FillColor=\"65280\""));
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_full() {
+        let data = AbbreviatedData::new()
+            .move_to(0.0, 0.0)
+            .line_to(10.0, 10.0)
+            .close();
+        let p = CT_Path::new(5, "0 0 100 100")
+            .stroke(false)
+            .fill(true)
+            .rule(FillRule::EvenOdd)
+            .line_width(2.0)
+            .stroke_color(0xFF_0000)
+            .fill_color(0x00_FF00)
+            .abbreviated_data(data);
+        let xml = p.to_xml();
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let p2 = CT_Path::from_xml(&node).unwrap();
+        assert_eq!(p.id, p2.id);
+        assert_eq!(p.boundary, p2.boundary);
+        assert_eq!(p.stroke, p2.stroke);
+        assert_eq!(p.fill, p2.fill);
+        assert_eq!(p.rule, p2.rule);
+        assert_eq!(p.line_width, p2.line_width);
+        assert_eq!(p.stroke_color, p2.stroke_color);
+        assert_eq!(p.fill_color, p2.fill_color);
+        assert_eq!(p.get_abbreviated_data(), p2.get_abbreviated_data());
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_minimal() {
+        let p = CT_Path::new(1, "0 0 10 10");
+        let xml = p.to_xml();
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let p2 = CT_Path::from_xml(&node).unwrap();
+        assert_eq!(p.id, p2.id);
+        assert_eq!(p.boundary, p2.boundary);
+        assert!(p2.stroke);
+        assert!(!p2.fill);
     }
 }

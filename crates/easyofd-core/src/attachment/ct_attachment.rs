@@ -6,7 +6,7 @@ use std::fmt::Write;
 ///
 /// 表示一个单独的附件对象，包含附件的标识、名称、格式、
 /// 创建日期、大小、可见性和文件数据。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CTAttachment {
     /// 附件 ID。
     pub id: String,

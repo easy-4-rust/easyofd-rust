@@ -2,6 +2,8 @@
 //!
 //! 对应 Java: org.ofdrw.core.graph.tight.method.Arc
 
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
+
 /// 圆弧路径方法。
 ///
 /// 图 56 圆弧的结构。用于描述椭圆弧线段。
@@ -63,9 +65,72 @@ impl std::fmt::Display for Arc {
     }
 }
 
+impl XmlElement for Arc {
+    /// 对应 Java: Arc 元素名 "Arc"。
+    fn element_name(&self) -> &'static str {
+        "Arc"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    /// 覆写 write_xml：文本内容为 A 命令格式。
+    fn write_xml(&self, out: &mut String) {
+        out.push_str("<Arc>");
+        out.push_str(&crate::xml_element::xml_escape(
+            &self.to_abbreviated_string(),
+        ));
+        out.push_str("</Arc>");
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let text = node
+            .text
+            .as_deref()
+            .ok_or_else(|| XmlElementError("Arc 缺少文本内容".to_string()))?;
+        // 解析 "A rx ry angle large sweep x y"
+        let parts: Vec<&str> = text.split_whitespace().collect();
+        if parts.len() < 8 || parts[0] != "A" {
+            return Err(XmlElementError(format!("Arc 格式错误: {text}")));
+        }
+        let rx: f64 = parts[1]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.rx 失败: {e}")))?;
+        let ry: f64 = parts[2]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.ry 失败: {e}")))?;
+        let rotation_angle: f64 = parts[3]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.rotation_angle 失败: {e}")))?;
+        let large_arc: i32 = parts[4]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.large_arc 失败: {e}")))?;
+        let sweep: i32 = parts[5]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.sweep 失败: {e}")))?;
+        let end_x: f64 = parts[6]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.end_x 失败: {e}")))?;
+        let end_y: f64 = parts[7]
+            .parse()
+            .map_err(|e| XmlElementError(format!("解析 Arc.end_y 失败: {e}")))?;
+        Ok(Self::new(
+            rx,
+            ry,
+            rotation_angle,
+            large_arc != 0,
+            sweep != 0,
+            end_x,
+            end_y,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn arc_new() {
@@ -102,5 +167,25 @@ mod tests {
         let a = Arc::new(1.0, 2.0, 30.0, true, true, 5.0, 6.0);
         let b = a.clone();
         assert!((a.rx - b.rx).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let a = Arc::new(1.0, 2.0, 0.0, false, false, 3.0, 4.0);
+        assert_eq!(a.element_name(), "Arc");
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip() {
+        let a = Arc::new(5.0, 5.0, 45.0, true, false, 10.0, 10.0);
+        let xml = a.to_xml();
+        assert!(xml.contains("<Arc>"));
+        assert!(xml.contains("A 5 5 45 1 0 10 10"));
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let a2 = Arc::from_xml(&node).unwrap();
+        assert!((a.rx - a2.rx).abs() < f64::EPSILON);
+        assert!((a.ry - a2.ry).abs() < f64::EPSILON);
+        assert_eq!(a.large_arc, a2.large_arc);
+        assert_eq!(a.sweep_direction, a2.sweep_direction);
     }
 }

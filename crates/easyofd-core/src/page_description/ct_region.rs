@@ -3,6 +3,7 @@
 //! 对应 Java: org.ofdrw.core.pageDescription.CT_Region
 
 use crate::basic_type::ST_Array;
+use crate::xml_element::{XmlElement, XmlElementError, XmlNode};
 
 /// 区域。
 ///
@@ -101,9 +102,71 @@ impl Default for CT_Region {
     }
 }
 
+impl XmlElement for CT_Region {
+    /// 对应 Java: CT_Region 元素名 "Region"。
+    fn element_name(&self) -> &'static str {
+        "Region"
+    }
+
+    fn attributes(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    fn child_nodes(&self) -> Vec<XmlNode> {
+        self.path
+            .iter()
+            .map(|p| {
+                let mut node = XmlNode::element("Path");
+                node.attrs.push(("Data".to_string(), p.data.clone()));
+                if let Some(ref tf) = p.transform {
+                    node.attrs
+                        .push(("Transform".to_string(), tf.to_xml_string()));
+                }
+                if let Some(dp) = p.draw_param {
+                    node.attrs.push(("DrawParam".to_string(), dp.to_string()));
+                }
+                node
+            })
+            .collect()
+    }
+
+    fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let path = node
+            .children_named("Path")
+            .map(|child| {
+                let data = child
+                    .get_attr("Data")
+                    .ok_or_else(|| XmlElementError("Path 缺少 Data 属性".to_string()))?
+                    .to_string();
+                let transform = child
+                    .get_attr("Transform")
+                    .map(|s| {
+                        ST_Array::from_str(s)
+                            .map_err(|e| XmlElementError(format!("解析 Path.Transform 失败: {e}")))
+                    })
+                    .transpose()?;
+                let draw_param = child
+                    .get_attr("DrawParam")
+                    .map(|s| {
+                        s.parse::<u64>()
+                            .map_err(|e| XmlElementError(format!("解析 Path.DrawParam 失败: {e}")))
+                    })
+                    .transpose()?;
+                Ok(RegionPath {
+                    data,
+                    transform,
+                    draw_param,
+                })
+            })
+            .collect::<Result<Vec<_>, XmlElementError>>()?;
+        Ok(Self { path })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::xml_parse::parse_xml_to_nodes;
 
     #[test]
     fn test_basic_creation() {
@@ -143,5 +206,41 @@ mod tests {
     #[test]
     fn test_from_str_empty() {
         assert!(CT_Region::from_str("").is_err());
+    }
+
+    #[test]
+    fn test_xml_element_name() {
+        let region = CT_Region::new();
+        assert_eq!(region.element_name(), "Region");
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_empty() {
+        let region = CT_Region::new();
+        let xml = region.to_xml();
+        assert_eq!(xml, "<Region/>");
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let region2 = CT_Region::from_xml(&node).unwrap();
+        assert_eq!(region, region2);
+    }
+
+    #[test]
+    fn test_xml_element_roundtrip_with_paths() {
+        let mut region = CT_Region::new();
+        let mut p1 = RegionPath::new("M 0 0 L 100 0 L 100 100 Z");
+        p1.set_draw_param(5);
+        region.add_path(p1);
+        let mut p2 = RegionPath::new("M 0 0 L 50 50");
+        p2.set_transform(ST_Array::transform(1.0, 0.0, 0.0, 1.0, 10.0, 20.0));
+        region.add_path(p2);
+
+        let xml = region.to_xml();
+        assert!(xml.contains("Path"));
+        assert!(xml.contains("Data=\"M 0 0 L 100 0 L 100 100 Z\""));
+        assert!(xml.contains("DrawParam=\"5\""));
+
+        let node = parse_xml_to_nodes(&xml).unwrap();
+        let region2 = CT_Region::from_xml(&node).unwrap();
+        assert_eq!(region, region2);
     }
 }
