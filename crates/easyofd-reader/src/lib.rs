@@ -252,7 +252,8 @@ mod tests {
         use parser::parse_document_resources;
 
         let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        let resources = parse_document_resources(&mut archive, "Doc_0").unwrap();
+        let resources =
+            parse_document_resources(&mut archive, "Doc_0", Some("DocumentRes.xml")).unwrap();
         resources
             .into_iter()
             .map(|(id, entry)| (id, entry.location))

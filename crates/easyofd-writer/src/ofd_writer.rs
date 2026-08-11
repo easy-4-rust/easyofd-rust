@@ -96,12 +96,27 @@ impl OfdWriter {
         })
     }
 
+    /// 计算页面的归档路径：优先使用 roundtrip 读取时保留的原始路径
+    /// （`OfdPage::base_path`），否则按 `Pages/Page_{index}/Content.xml` 命名。
+    fn page_archive_path(&self, page: &OfdPage, index: usize) -> String {
+        let doc_dir = &self.options.metadata.doc_dir;
+        let doc_dir_prefix = format!("{doc_dir}/");
+        match page.base_path.as_deref() {
+            Some(path) if path.starts_with(&doc_dir_prefix) || path.starts_with('/') => {
+                path.trim_start_matches('/').to_string()
+            }
+            Some(path) => format!("{doc_dir}/{path}"),
+            None => format!("{doc_dir}/Pages/Page_{index}/Content.xml"),
+        }
+    }
+
     pub(crate) fn write_zip<W: Write + std::io::Seek>(
         &self,
         zip: &mut ZipWriter<W>,
         options: &SimpleFileOptions,
     ) -> OfdResult<()> {
         // 收集所有页面中的图片资源。
+        let doc_dir = &self.options.metadata.doc_dir;
         let mut image_resources: Vec<(String, &[u8], ImageFormat)> = Vec::new();
 
         for page in &self.pages {
@@ -116,16 +131,21 @@ impl OfdWriter {
                             ImageFormat::Bmp => "bmp",
                             ImageFormat::Tiff => "tiff",
                         };
-                        format!("Doc_0/Res/Image_{}.{}", image_resources.len(), ext)
+                        format!("{doc_dir}/Res/Image_{}.{}", image_resources.len(), ext)
                     });
                     // Normalize to an archive path: the original resource path
                     // from a read is relative to the document directory
-                    // (e.g. "Res/qrcode.png"), while a writer-assigned name is
-                    // already archive-absolute ("Doc_0/Res/Image_0.png").
-                    let res_name = if res_name.starts_with("Doc_0/") || res_name.starts_with('/') {
+                    // (e.g. "Res/qrcode.png") or already archive-absolute with
+                    // the doc directory (case may differ, e.g. "DOC_0/Res/...").
+                    let doc_dir_prefix = format!("{doc_dir}/");
+                    let res_name = if res_name.starts_with('/')
+                        || res_name
+                            .get(..doc_dir_prefix.len())
+                            .is_some_and(|head| head.eq_ignore_ascii_case(&doc_dir_prefix))
+                    {
                         res_name
                     } else {
-                        format!("Doc_0/{res_name}")
+                        format!("{doc_dir}/{res_name}")
                     };
                     image_resources.push((res_name, img.data.as_slice(), img.format));
                 }
@@ -137,23 +157,23 @@ impl OfdWriter {
         zip.start_file("OFD.xml", *options).map_err(zip_err)?;
         zip.write_all(ofd_xml.as_bytes()).map_err(io_err)?;
 
-        // 2. 写入 Document.xml
+        // 2. 写入 Document（文件名为原始 DocRoot 的文件名）
+        let doc_path = format!("{doc_dir}/{}", self.options.metadata.document_file);
         let doc_xml = self.build_document_xml(&image_resources);
-        zip.start_file("Doc_0/Document.xml", *options)
-            .map_err(zip_err)?;
+        zip.start_file(&doc_path, *options).map_err(zip_err)?;
         zip.write_all(doc_xml.as_bytes()).map_err(io_err)?;
 
         // 3. 写入 DocumentRes.xml（与 Document.xml 中的引用保持一致：仅在
         // 存在图片资源时输出）
         if !image_resources.is_empty() {
             let doc_res_xml = self.build_document_res_xml(&image_resources);
-            zip.start_file("Doc_0/DocumentRes.xml", *options)
+            zip.start_file(format!("{doc_dir}/DocumentRes.xml"), *options)
                 .map_err(zip_err)?;
             zip.write_all(doc_res_xml.as_bytes()).map_err(io_err)?;
         }
 
         // PublicRes 在 Document.xml 中引用，即使没有自定义字体也始终写入。
-        zip.start_file("Doc_0/PublicRes.xml", *options)
+        zip.start_file(format!("{doc_dir}/PublicRes.xml"), *options)
             .map_err(zip_err)?;
         zip.write_all(self.build_public_res_xml(&image_resources).as_bytes())
             .map_err(io_err)?;
@@ -162,8 +182,8 @@ impl OfdWriter {
         let mut page_image_start = 0;
         for (i, page) in self.pages.iter().enumerate() {
             let page_xml = self.build_page_xml(page, i, page_image_start);
-            zip.start_file(format!("Doc_0/Pages/Page_{i}/Content.xml"), *options)
-                .map_err(zip_err)?;
+            let page_path = self.page_archive_path(page, i);
+            zip.start_file(&page_path, *options).map_err(zip_err)?;
             zip.write_all(page_xml.as_bytes()).map_err(io_err)?;
             page_image_start += page
                 .content
@@ -181,12 +201,16 @@ impl OfdWriter {
         // 6. 原样保留的条目（roundtrip 容器内容），跳过已生成的同名条目
         let mut written: std::collections::HashSet<String> = std::collections::HashSet::new();
         written.insert("OFD.xml".to_string());
-        written.insert("Doc_0/Document.xml".to_string());
-        written.insert("Doc_0/DocumentRes.xml".to_string());
-        written.insert("Doc_0/PublicRes.xml".to_string());
+        written.insert(doc_path);
+        // DocumentRes.xml is only regenerated when there are image resources;
+        // a leftover DocumentRes.xml in the source archive is preserved then.
+        if !image_resources.is_empty() {
+            written.insert(format!("{doc_dir}/DocumentRes.xml"));
+        }
+        written.insert(format!("{doc_dir}/PublicRes.xml"));
         written.extend(image_resources.iter().map(|(name, _, _)| name.clone()));
-        for i in 0..self.pages.len() {
-            written.insert(format!("Doc_0/Pages/Page_{i}/Content.xml"));
+        for (i, page) in self.pages.iter().enumerate() {
+            written.insert(self.page_archive_path(page, i));
         }
         for (name, data) in &self.preserved_entries {
             if !written.contains(name) {

@@ -68,7 +68,7 @@ fn impl_ofd_model(input: &DeriveInput) -> syn::Result<TokenStream> {
                 let (width, height) = Self::page_size();
                 let mut content = Vec::with_capacity(#schema_len);
                 #(#page_pushes)*
-                Ok(easyofd_core::OfdPage { width, height, content })
+                Ok(easyofd_core::OfdPage { width, height, content, base_path: None })
             }
         }
     };

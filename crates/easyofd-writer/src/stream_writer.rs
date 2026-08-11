@@ -40,12 +40,13 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
     pub fn write_page(&mut self, page: OfdPage) -> OfdResult<()> {
         let page_index = self.page_descriptors.len();
         let page_image_start = self.image_resources.len();
+        let doc_dir = self.options.metadata.doc_dir.clone();
         let mut page_images = Vec::new();
         for object in &page.content {
             if let ContentObject::Image(image) = object {
                 let resource_index = self.image_resources.len();
                 let name = format!(
-                    "Doc_0/Res/Image_{resource_index}.{}",
+                    "{doc_dir}/Res/Image_{resource_index}.{}",
                     image_extension(image.format)
                 );
                 self.image_resources.push((name.clone(), image.format));
@@ -58,7 +59,7 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
         let file_options = self.file_options;
         let zip = self.zip_mut()?;
         zip.start_file(
-            format!("Doc_0/Pages/Page_{page_index}/Content.xml"),
+            format!("{doc_dir}/Pages/Page_{page_index}/Content.xml"),
             file_options,
         )
         .map_err(zip_err)?;
@@ -90,6 +91,8 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
     ///
     /// 文档索引或 ZIP 完成失败时返回错误。
     pub fn finish(mut self) -> OfdResult<W> {
+        let doc_dir = self.options.metadata.doc_dir.clone();
+        let document_file = self.options.metadata.document_file.clone();
         let mut helper = OfdWriter::with_options(self.options.clone());
         let resources = self.resource_view();
         helper.pages = std::mem::take(&mut self.page_descriptors);
@@ -100,14 +103,24 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
         let file_options = self.file_options;
         let zip = self.zip_mut()?;
         write_xml(zip, file_options, "OFD.xml", &ofd_xml)?;
-        write_xml(zip, file_options, "Doc_0/Document.xml", &document_xml)?;
         write_xml(
             zip,
             file_options,
-            "Doc_0/DocumentRes.xml",
+            &format!("{doc_dir}/{document_file}"),
+            &document_xml,
+        )?;
+        write_xml(
+            zip,
+            file_options,
+            &format!("{doc_dir}/DocumentRes.xml"),
             &document_res_xml,
         )?;
-        write_xml(zip, file_options, "Doc_0/PublicRes.xml", &public_res_xml)?;
+        write_xml(
+            zip,
+            file_options,
+            &format!("{doc_dir}/PublicRes.xml"),
+            &public_res_xml,
+        )?;
         self.zip
             .take()
             .expect("stream writer ZIP exists until finish")

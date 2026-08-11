@@ -183,6 +183,19 @@ fn has_signature(ofd_path: &Path) -> bool {
 /// Roundtrip: read from file bytes -> OfdWriter -> written bytes.
 /// Preserves metadata (doc_id, creator, creator_version, mod_date) from the
 /// original OFD so that the roundtrip output matches ofdrw's element set.
+/// Extract the DocRoot target from OFD.xml (e.g. "Doc_0/Document.xml" or
+/// "/Doc_1/Document.xml"), normalized to an archive path without a leading
+/// slash.
+fn doc_root_target(ofd_bytes: &[u8]) -> Option<String> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(ofd_bytes)).ok()?;
+    let mut file = archive.by_name("OFD.xml").ok()?;
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut file, &mut xml).ok()?;
+    let start = xml.find("<ofd:DocRoot>")? + "<ofd:DocRoot>".len();
+    let end = xml[start..].find("</ofd:DocRoot>")? + start;
+    Some(xml[start..end].trim_start_matches('/').to_string())
+}
+
 fn roundtrip(bytes: &[u8]) -> Vec<u8> {
     let reader = OfdReader::from_bytes(bytes).expect("initial read should succeed");
     let mut opts = easyofd_writer::WriteOptions::default();
@@ -397,7 +410,7 @@ fn test_roundtrip_text_hash_preserved_for_ofdrw_samples() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// For each ofdrw sample, verify that the roundtrip OFD output is a valid ZIP
-/// containing OFD.xml and Doc_0/Document.xml.
+/// containing OFD.xml and the document XML referenced by DocRoot.
 #[test]
 fn test_roundtrip_ofd_has_valid_zip_structure() {
     for (name, filename) in ofdrw_samples() {
@@ -425,9 +438,13 @@ fn test_roundtrip_ofd_has_valid_zip_structure() {
             entries.contains(&"OFD.xml".to_string()),
             "{name}: roundtrip OFD missing OFD.xml"
         );
+        // The doc directory is preserved from the source (e.g. "Doc_0" or
+        // "Doc_1" in 1File samples), so check for the actual DocRoot target.
+        let doc_target = doc_root_target(&bytes)
+            .unwrap_or_else(|| panic!("{name}: cannot read DocRoot from source"));
         assert!(
-            entries.contains(&"Doc_0/Document.xml".to_string()),
-            "{name}: roundtrip OFD missing Doc_0/Document.xml"
+            entries.contains(&doc_target),
+            "{name}: roundtrip OFD missing {doc_target} (entries: {entries:?})"
         );
     }
 }

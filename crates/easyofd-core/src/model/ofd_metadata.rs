@@ -33,8 +33,14 @@ pub struct OfdMetadata {
     pub max_unit_id: u32,
     /// 书签集合（ofd:Bookmarks）。
     pub bookmarks: Option<Bookmarks>,
+    /// 大纲集合（ofd:Outlines，即 GB/T 33190-2016 的书签大纲）。
+    pub outlines: Option<Bookmarks>,
     /// 自定义数据集合（ofd:CustomDatas）。
     pub custom_datas: Option<CustomDatas>,
+    /// 文档用途（ofd:DocUsage），如 "Normal"。
+    pub doc_usage: Option<String>,
+    /// 文档关键词（ofd:Keywords）。
+    pub keywords: Option<String>,
     /// 应用区域（ofd:ApplicationBox），格式 "x y w h"。
     pub application_box: Option<String>,
     /// 内容区域（ofd:ContentBox），格式 "x y w h"。
@@ -57,6 +63,11 @@ pub struct OfdMetadata {
     pub custom_tags_path: Option<String>,
     /// 原始 Document.xml 是否声明了 ofd:PageArea（ofdrw 未显式设置页面大小时省略该元素）。
     pub page_area_present: bool,
+    /// 文档目录（ZIP 中的目录前缀，如 "Doc_0"）。
+    pub doc_dir: String,
+    /// Document XML 文件名（位于 `doc_dir` 下，通常为 "Document.xml"，
+    /// 非标准文件可能是 "Document_0.xml"）。
+    pub document_file: String,
 }
 
 impl Default for OfdMetadata {
@@ -72,7 +83,10 @@ impl Default for OfdMetadata {
             mod_date: None,
             max_unit_id: 0,
             bookmarks: None,
+            outlines: None,
             custom_datas: None,
+            doc_usage: None,
+            keywords: None,
             application_box: None,
             content_box: None,
             clip_box: None,
@@ -84,6 +98,8 @@ impl Default for OfdMetadata {
             attachments_path: None,
             custom_tags_path: None,
             page_area_present: true,
+            doc_dir: "Doc_0".to_string(),
+            document_file: "Document.xml".to_string(),
         }
     }
 }

@@ -172,6 +172,14 @@ const FIXTURES: &[&str] = &[
     "multi_page_image.ofd",
     "signed.ofd",
     "with_table.ofd",
+    // Previously unreadable samples: leading-slash DocRoot, non-standard
+    // Document file name, case-mismatched resource directories.
+    "ofdrw_containsJPEG.ofd",
+    "ofdrw_n.ofd",
+    "ofdrw_path_unstd.ofd",
+    "ofdrw_testImageNotFound.ofd",
+    "ofdrw_testImageOverridePage.ofd",
+    "ofdrw_testPathClip.ofd",
 ];
 
 #[test]

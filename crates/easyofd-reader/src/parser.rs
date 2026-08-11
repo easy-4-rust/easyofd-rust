@@ -19,7 +19,10 @@ use quick_xml::events::Event;
 /// Parsed result from OFD.xml.
 pub(crate) struct OfdEntry {
     /// Document directory path (e.g. "Doc_0").
-    pub(crate) doc_root: String,
+    pub(crate) doc_dir: String,
+    /// Document XML file name inside `doc_dir` (usually "Document.xml",
+    /// but ofdrw samples may use e.g. "Document_0.xml").
+    pub(crate) document_file: String,
     /// Document identifier (ofd:DocID), if present.
     pub(crate) doc_id: Option<String>,
     /// Document author (ofd:Author), if present.
@@ -38,6 +41,10 @@ pub(crate) struct OfdEntry {
     pub(crate) custom_datas: Option<CustomDatas>,
     /// Signature container path (ofd:Signatures), if present.
     pub(crate) signatures_path: Option<String>,
+    /// Document usage (ofd:DocUsage), if present.
+    pub(crate) doc_usage: Option<String>,
+    /// Document keywords (ofd:Keywords), if present.
+    pub(crate) keywords: Option<String>,
 }
 
 pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
@@ -57,6 +64,8 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     let mut max_unit_id = 0_u32;
     let mut custom_datas: Option<CustomDatas> = None;
     let mut signatures_path: Option<String> = None;
+    let mut doc_usage: Option<String> = None;
+    let mut keywords: Option<String> = None;
     let mut current_text_tag: Option<Vec<u8>> = None;
     let mut current_text = String::new();
     // Nested element tracking for CustomDatas
@@ -66,6 +75,36 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
 
     loop {
         match reader.read_event_into(&mut buf) {
+            Ok(Event::Empty(ref e)) => match e.name().as_ref() {
+                // Self-closing metadata elements (e.g. <ofd:DocID/>) carry an
+                // empty value; record them so a roundtrip keeps the element.
+                b"ofd:DocID" => doc_id = Some(String::new()),
+                b"ofd:Author" => author = Some(String::new()),
+                b"ofd:Creator" => creator = Some(String::new()),
+                b"ofd:CreatorVersion" => creator_version = Some(String::new()),
+                b"ofd:ModDate" => mod_date = Some(String::new()),
+                b"ofd:CreationDate" => creation_date = Some(String::new()),
+                b"ofd:Signatures" => signatures_path = Some(String::new()),
+                b"ofd:DocUsage" => doc_usage = Some(String::new()),
+                b"ofd:Keywords" => keywords = Some(String::new()),
+                b"ofd:CustomData" if in_custom_datas => {
+                    let mut name = String::new();
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"Name" {
+                            name = attr
+                                .decoded_and_normalized_value(
+                                    quick_xml::XmlVersion::Explicit1_0,
+                                    reader.decoder(),
+                                )
+                                .unwrap_or_default()
+                                .to_string();
+                        }
+                    }
+                    let datas = custom_datas.get_or_insert_with(CustomDatas::new);
+                    datas.push(CustomData::new(name, ""));
+                }
+                _ => {}
+            },
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
                 b"ofd:DocRoot" => {
                     current_text_tag = Some(b"ofd:DocRoot".to_vec());
@@ -103,6 +142,14 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
                     current_text_tag = Some(b"ofd:Signatures".to_vec());
                     current_text.clear();
                 }
+                b"ofd:DocUsage" => {
+                    current_text_tag = Some(b"ofd:DocUsage".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:Keywords" => {
+                    current_text_tag = Some(b"ofd:Keywords".to_vec());
+                    current_text.clear();
+                }
                 b"ofd:CustomDatas" => {
                     in_custom_datas = true;
                 }
@@ -130,9 +177,10 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
                     .xml10_content()
                     .map(|c| c.into_owned())
                     .unwrap_or_default();
-                if current_text_tag.is_some() {
-                    current_text = text;
-                } else if in_custom_data {
+                // Append, not assign: quick_xml may split a text node into
+                // multiple Text events around entities (e.g. "&apos;" splits
+                // "D:2022...+02'34'" into "D:2022...+02" + "34").
+                if current_text_tag.is_some() || in_custom_data {
                     current_text.push_str(&text);
                 }
             }
@@ -175,6 +223,14 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
                         signatures_path = Some(current_text.trim().to_string());
                         current_text_tag = None;
                     }
+                    b"ofd:DocUsage" => {
+                        doc_usage = Some(current_text.trim().to_string());
+                        current_text_tag = None;
+                    }
+                    b"ofd:Keywords" => {
+                        keywords = Some(current_text.trim().to_string());
+                        current_text_tag = None;
+                    }
                     b"ofd:CustomData" if in_custom_data => {
                         if let Some(name) = current_custom_data_name.take() {
                             let datas = custom_datas.get_or_insert_with(CustomDatas::new);
@@ -206,14 +262,19 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         return Err(OfdError::InvalidDocument("missing DocRoot".into()));
     }
 
-    // Strip "/Document.xml" suffix to get the doc directory
-    let doc_root = doc_root
-        .strip_suffix("/Document.xml")
-        .unwrap_or(&doc_root)
-        .to_string();
+    // DocRoot points at the Document XML file directly (e.g.
+    // "Doc_0/Document.xml" or "Doc_0/Document_0.xml").  Normalize a leading
+    // slash ("/Doc_0/Document.xml") and split into the document directory
+    // (doc_dir) and the Document file name (document_file).
+    let doc_root = doc_root.trim_start_matches('/').to_string();
+    let (doc_dir, document_file) = match doc_root.rfind('/') {
+        Some(idx) => (doc_root[..idx].to_string(), doc_root[idx + 1..].to_string()),
+        None => (String::new(), doc_root),
+    };
 
     Ok(OfdEntry {
-        doc_root,
+        doc_dir,
+        document_file,
         doc_id,
         author,
         creator,
@@ -223,6 +284,8 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         max_unit_id,
         custom_datas,
         signatures_path,
+        doc_usage,
+        keywords,
     })
 }
 
@@ -232,6 +295,8 @@ pub(crate) struct DocumentEntry {
     pub(crate) pages: Vec<String>,
     /// Bookmarks (ofd:Bookmarks), if present.
     pub(crate) bookmarks: Option<Bookmarks>,
+    /// Outlines (ofd:Outlines), if present.
+    pub(crate) outlines: Option<Bookmarks>,
     /// Application area (ofd:ApplicationBox), if present.
     pub(crate) application_box: Option<String>,
     /// Content area (ofd:ContentBox), if present.
@@ -253,6 +318,9 @@ pub(crate) struct DocumentEntry {
     /// Whether CommonData declared ofd:PageArea (ofdrw omits it when the
     /// page size is not explicitly configured).
     pub(crate) page_area_present: bool,
+    /// DocumentRes reference from CommonData (ofd:DocumentRes text, e.g.
+    /// "DocumentRes.xml" or the non-standard "DocumentRes_0.xml").
+    pub(crate) document_res: Option<String>,
 }
 
 /// Parse Document.xml → page BaseLoc paths, the bookmark collection
@@ -261,15 +329,18 @@ pub(crate) struct DocumentEntry {
 pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     doc_dir: &str,
+    document_file: &str,
 ) -> OfdResult<DocumentEntry> {
-    let path = format!("{doc_dir}/Document.xml");
+    let path = doc_path(doc_dir, document_file);
     let xml = read_zip_entry(archive, &path)?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut pages = Vec::new();
     let mut bookmarks: Option<Bookmarks> = None;
+    let mut outlines: Option<Bookmarks> = None;
     let mut in_bookmarks = false;
+    let mut in_outlines = false;
     let mut in_bookmark = false;
     let mut current_bookmark_name: Option<String> = None;
     let mut current_bookmark_goto: Option<String> = None;
@@ -287,6 +358,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     let mut attachments_path = None;
     let mut custom_tags_path = None;
     let mut page_area_present = false;
+    let mut document_res: Option<String> = None;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -346,12 +418,15 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
             Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:PageArea" => {
                 page_area_present = true;
             }
-            // Container references (Annotations/Attachments/CustomTags) hold
-            // a single relative path as text.
+            // Container references (Annotations/Attachments/CustomTags) and the
+            // DocumentRes reference hold a single relative path as text.
             Ok(Event::Start(ref e))
                 if matches!(
                     e.name().as_ref(),
-                    b"ofd:Annotations" | b"ofd:Attachments" | b"ofd:CustomTags"
+                    b"ofd:Annotations"
+                        | b"ofd:Attachments"
+                        | b"ofd:CustomTags"
+                        | b"ofd:DocumentRes"
                 ) =>
             {
                 container_path_tag = Some(e.name().as_ref().to_vec());
@@ -389,6 +464,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                 b"ofd:CustomTags" => {
                     custom_tags_path = Some(container_path_text.trim().to_string())
                 }
+                b"ofd:DocumentRes" => document_res = Some(container_path_text.trim().to_string()),
                 _ => {}
             },
             // Bookmarks: ofdrw writes <ofd:Bookmarks><Bookmark Name="...">
@@ -398,10 +474,25 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
             Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:Bookmarks" => {
                 in_bookmarks = true;
             }
+            // Outlines: GB/T 33190-2016 §7.3 bookmark outline, written as
+            // <ofd:Outlines><ofd:OutlineElem Title="..." Expanded="true">
+            // <ofd:Actions><ofd:Action Event="CLICK"><ofd:Goto>
+            // <ofd:Dest Type="XYZ" PageID="..."/>...</ofd:Goto>...
+            // We reuse the bookmark state machine and only record the
+            // Title + destination PageID per outline entry.
             Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if in_bookmarks
+                if e.name().as_ref() == b"ofd:Outlines" =>
+            {
+                in_outlines = true;
+                // Self-closing <ofd:Outlines/> has no End event; make the
+                // (empty) collection visible immediately.
+                outlines.get_or_insert_with(Bookmarks::new);
+            }
+            Ok(Event::Empty(ref e) | Event::Start(ref e))
+                if (in_bookmarks
                     && (e.name().as_ref() == b"Bookmark"
-                        || e.name().as_ref() == b"ofd:Bookmark") =>
+                        || e.name().as_ref() == b"ofd:Bookmark"))
+                    || (in_outlines && e.name().as_ref() == b"ofd:OutlineElem") =>
             {
                 in_bookmark = true;
                 current_bookmark_name = None;
@@ -415,7 +506,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                         .unwrap_or_default()
                         .to_string();
                     match attr.key.as_ref() {
-                        b"Name" => current_bookmark_name = Some(val),
+                        b"Name" | b"Title" => current_bookmark_name = Some(val),
                         b"GoTo" => current_bookmark_goto = Some(val),
                         _ => {}
                     }
@@ -440,19 +531,26 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                 }
             }
             Ok(Event::End(ref end)) => match end.name().as_ref() {
-                b"Bookmark" | b"ofd:Bookmark" if in_bookmark => {
+                b"Bookmark" | b"ofd:Bookmark" | b"ofd:OutlineElem" if in_bookmark => {
                     let name = current_bookmark_name.take().unwrap_or_default();
                     if !name.is_empty() {
                         let mut bm = Bookmark::new(name);
                         if let Some(target) = current_bookmark_goto.take() {
                             bm = bm.with_goto(target);
                         }
-                        bookmarks.get_or_insert_with(Bookmarks::new).push(bm);
+                        if in_outlines {
+                            outlines.get_or_insert_with(Bookmarks::new).push(bm);
+                        } else {
+                            bookmarks.get_or_insert_with(Bookmarks::new).push(bm);
+                        }
                     }
                     in_bookmark = false;
                 }
                 b"ofd:Bookmarks" => {
                     in_bookmarks = false;
+                }
+                b"ofd:Outlines" => {
+                    in_outlines = false;
                 }
                 b"ofd:ApplicationBox"
                 | b"ofd:ContentBox"
@@ -461,7 +559,8 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                 | b"ofd:TrimBox" => {
                     box_text_tag = None;
                 }
-                b"ofd:Annotations" | b"ofd:Attachments" | b"ofd:CustomTags" => {
+                b"ofd:Annotations" | b"ofd:Attachments" | b"ofd:CustomTags"
+                | b"ofd:DocumentRes" => {
                     container_path_tag = None;
                 }
                 _ => {}
@@ -475,6 +574,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     Ok(DocumentEntry {
         pages,
         bookmarks,
+        outlines,
         application_box,
         content_box,
         clip_box,
@@ -485,6 +585,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
         attachments_path,
         custom_tags_path,
         page_area_present,
+        document_res,
     })
 }
 
@@ -516,8 +617,15 @@ pub(crate) struct ResourceEntry {
 pub(crate) fn parse_document_resources<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     doc_dir: &str,
+    document_res: Option<&str>,
 ) -> OfdResult<HashMap<String, ResourceEntry>> {
-    let path = format!("{doc_dir}/DocumentRes.xml");
+    // The DocumentRes file name comes from the <ofd:DocumentRes> reference in
+    // Document.xml (usually "DocumentRes.xml", but non-standard files may use
+    // e.g. "DocumentRes_0.xml").
+    let path = match document_res {
+        Some(res) if !res.is_empty() => doc_path(doc_dir, res),
+        _ => format!("{doc_dir}/DocumentRes.xml"),
+    };
     let xml = match read_zip_entry(archive, &path) {
         Ok(xml) => xml,
         Err(_) => return Ok(HashMap::new()),
@@ -660,7 +768,12 @@ pub(crate) fn parse_page_entry<R: Read + std::io::Seek>(
                     let img = parse_image_object_attrs(e, reader.decoder())?;
                     if let Some(resource) = resources.get(&img.resource_id) {
                         let resource_path = resolve_resource_path(doc_dir, &resource.location)?;
-                        let data = read_zip_entry(archive, &resource_path)?;
+                        // Keep the actual archive entry name (case may differ,
+                        // e.g. "DOC_0/Res/Image_4.JPEG") so a roundtrip writes
+                        // the resource under the same name as the source.
+                        let actual_name =
+                            find_zip_entry_name(archive, &resource_path).unwrap_or(resource_path);
+                        let data = read_zip_entry(archive, &actual_name)?;
                         content.push(ContentObject::Image(
                             ImageObject::new(
                                 img.x,
@@ -670,18 +783,12 @@ pub(crate) fn parse_page_entry<R: Read + std::io::Seek>(
                                 data,
                                 resource.format,
                             )
-                            .with_res_name(resource.location.clone()),
+                            .with_res_name(actual_name),
                         ));
-                    } else {
-                        content.push(ContentObject::Image(ImageObject::new(
-                            img.x,
-                            img.y,
-                            img.width,
-                            img.height,
-                            Vec::new(),
-                            img.format,
-                        )));
                     }
+                    // Resource missing (broken reference in non-standard
+                    // samples): drop the image object so the writer does not
+                    // emit an empty resource file.
                 }
                 _ => {}
             },
@@ -770,6 +877,7 @@ pub(crate) fn parse_page_entry<R: Read + std::io::Seek>(
         width,
         height,
         content,
+        base_path: Some(page_path.to_string()),
     })
 }
 
@@ -911,7 +1019,6 @@ pub(crate) struct ImageObjectBuilder {
     y: f64,
     width: f64,
     height: f64,
-    format: ImageFormat,
     resource_id: String,
 }
 
@@ -953,28 +1060,77 @@ pub(crate) fn parse_image_object_attrs(
         y,
         width: w,
         height: h,
-        format: ImageFormat::Jpeg,
         resource_id,
     })
 }
 
 // ─── ZIP Helper ──────────────────────────────────────────────────────────────
 
+/// 在归档中定位条目，返回条目在归档中的实际名称。
+///
+/// 先尝试精确匹配；失败时做大小写不敏感扫描——部分 ofdrw 样本把资源放在
+/// 不同大小写的目录下（如 `DOC_0/Res/Image_4.JPEG`，而 DocRoot 使用
+/// `Doc_0`）。ZIP 条目查找本身是大小写敏感的，因此按忽略大小写扫描。
+fn find_zip_entry_name<R: Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    name: &str,
+) -> Option<String> {
+    if archive.by_name(name).is_ok() {
+        return Some(name.to_string());
+    }
+    let lower = name.to_lowercase();
+    for i in 0..archive.len() {
+        if archive.by_index(i).ok()?.name().to_lowercase() == lower {
+            let actual = archive.by_index(i).ok()?.name().to_string();
+            return Some(actual);
+        }
+    }
+    None
+}
+
 pub(crate) fn read_zip_entry<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     name: &str,
 ) -> OfdResult<Vec<u8>> {
+    let actual = find_zip_entry_name(archive, name)
+        .ok_or_else(|| OfdError::Zip(format!("{name}: specified file not found in archive")))?;
     let mut file = archive
-        .by_name(name)
-        .map_err(|e| OfdError::Zip(format!("{name}: {e}")))?;
+        .by_name(&actual)
+        .map_err(|e| OfdError::Zip(format!("{actual}: {e}")))?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).map_err(OfdError::Io)?;
     Ok(buf)
 }
 
+/// Join the document directory and a file name into an archive path.
+///
+/// Tolerates absolute file names: a leading "/" is stripped, and a file name
+/// that already starts with `doc_dir` (case-insensitively, e.g.
+/// "/Doc_0/Pages/Page_0/Content.xml") is not prefixed again.
+pub(crate) fn doc_path(doc_dir: &str, file_name: &str) -> String {
+    let file_name = file_name.trim_start_matches('/');
+    if doc_dir.is_empty() {
+        return file_name.to_string();
+    }
+    let head = &file_name[..file_name.len().min(doc_dir.len())];
+    if head.eq_ignore_ascii_case(doc_dir) && file_name.as_bytes().get(doc_dir.len()) == Some(&b'/')
+    {
+        format!("{doc_dir}{}", &file_name[doc_dir.len()..])
+    } else {
+        format!("{doc_dir}/{file_name}")
+    }
+}
+
 pub(crate) fn resolve_resource_path(doc_dir: &str, location: &str) -> OfdResult<String> {
     let location = location.trim_start_matches('/');
-    let path = if location.starts_with(doc_dir) {
+    // The location may already start with the doc directory (case may differ,
+    // e.g. "DOC_0/Res/Image_4.JPEG" from a non-standard source); keep its
+    // original spelling instead of re-prefixing.
+    let doc_dir_prefix = format!("{doc_dir}/");
+    let path = if location
+        .get(..doc_dir_prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(&doc_dir_prefix))
+    {
         location.to_string()
     } else {
         format!("{doc_dir}/{location}")

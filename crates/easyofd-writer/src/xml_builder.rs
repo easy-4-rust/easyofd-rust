@@ -20,6 +20,21 @@ fn format_number(val: f64) -> String {
     }
 }
 
+/// Strip the doc directory prefix from an archive path, ignoring case
+/// (a roundtrip resource may keep its original spelling, e.g.
+/// "DOC_0/Res/Image_4.JPEG" while the doc directory is "Doc_0").
+fn strip_doc_dir_prefix<'a>(res_name: &'a str, doc_dir: &str) -> &'a str {
+    let prefix = format!("{doc_dir}/");
+    if res_name
+        .get(..prefix.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(&prefix))
+    {
+        &res_name[prefix.len()..]
+    } else {
+        res_name
+    }
+}
+
 impl OfdWriter {
     pub(crate) fn build_ofd_xml(&self) -> String {
         let mut xml = String::with_capacity(512);
@@ -84,6 +99,20 @@ impl OfdWriter {
             ));
             xml.push('\n');
         }
+        if let Some(ref doc_usage) = self.options.metadata.doc_usage {
+            xml.push_str(&format!(
+                "      <ofd:DocUsage>{}</ofd:DocUsage>",
+                xml_escape(doc_usage)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref keywords) = self.options.metadata.keywords {
+            xml.push_str(&format!(
+                "      <ofd:Keywords>{}</ofd:Keywords>",
+                xml_escape(keywords)
+            ));
+            xml.push('\n');
+        }
 
         // CustomDatas
         if let Some(ref custom_datas) = self.options.metadata.custom_datas {
@@ -105,7 +134,11 @@ impl OfdWriter {
 
         xml.push_str(r"    </ofd:DocInfo>");
         xml.push('\n');
-        xml.push_str(r"    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>");
+        xml.push_str(&format!(
+            r"    <ofd:DocRoot>{doc_dir}/{doc_file}</ofd:DocRoot>",
+            doc_dir = self.options.metadata.doc_dir,
+            doc_file = self.options.metadata.document_file,
+        ));
         xml.push('\n');
 
         // Signatures container reference (ofdrw writes it inside DocBody,
@@ -226,9 +259,21 @@ impl OfdWriter {
         // Pages
         xml.push_str(r"  <ofd:Pages>");
         xml.push('\n');
-        for i in 0..self.pages.len() {
+        let doc_dir_prefix = format!("{}/", self.options.metadata.doc_dir);
+        for (i, page) in self.pages.iter().enumerate() {
+            // Prefer the original BaseLoc from a roundtrip read (relative to
+            // the doc directory); fall back to writer-assigned names.
+            let base_loc = page.base_path.as_deref().map_or_else(
+                || format!("Pages/Page_{i}/Content.xml"),
+                |p| {
+                    p.trim_start_matches('/')
+                        .strip_prefix(&doc_dir_prefix)
+                        .unwrap_or_else(|| p.trim_start_matches('/'))
+                        .to_string()
+                },
+            );
             xml.push_str(&format!(
-                r#"    <ofd:Page ID="{id}" BaseLoc="Pages/Page_{i}/Content.xml"/>"#,
+                r#"    <ofd:Page ID="{id}" BaseLoc="{base_loc}"/>"#,
                 id = i + 1
             ));
             xml.push('\n');
@@ -260,6 +305,48 @@ impl OfdWriter {
                     xml.push('\n');
                 }
                 xml.push_str(r"  </ofd:Bookmarks>");
+                xml.push('\n');
+            }
+        }
+
+        // Outlines (GB/T 33190-2016 §7.3 bookmark outline): keep the element
+        // even when empty (ofdrw emits <ofd:Outlines/> in that case).
+        if let Some(ref outlines) = self.options.metadata.outlines {
+            if outlines.is_empty() {
+                xml.push_str(r"  <ofd:Outlines/>");
+                xml.push('\n');
+            } else {
+                xml.push_str(r"  <ofd:Outlines>");
+                xml.push('\n');
+                for item in &outlines.items {
+                    xml.push_str(&format!(
+                        r#"    <ofd:OutlineElem Title="{}" Expanded="true">"#,
+                        xml_escape(&item.name)
+                    ));
+                    xml.push('\n');
+                    xml.push_str(r"      <ofd:Actions>");
+                    xml.push('\n');
+                    xml.push_str(r#"        <ofd:Action Event="CLICK">"#);
+                    xml.push('\n');
+                    xml.push_str(r"          <ofd:Goto>");
+                    xml.push('\n');
+                    if let Some(ref target) = item.goto_target {
+                        xml.push_str(&format!(
+                            r#"            <ofd:Dest Type="XYZ" PageID="{}"/>"#,
+                            xml_escape(target)
+                        ));
+                        xml.push('\n');
+                    }
+                    xml.push_str(r"          </ofd:Goto>");
+                    xml.push('\n');
+                    xml.push_str(r"        </ofd:Action>");
+                    xml.push('\n');
+                    xml.push_str(r"      </ofd:Actions>");
+                    xml.push('\n');
+                    xml.push_str(r"    </ofd:OutlineElem>");
+                    xml.push('\n');
+                }
+                xml.push_str(r"  </ofd:Outlines>");
                 xml.push('\n');
             }
         }
@@ -313,8 +400,8 @@ impl OfdWriter {
                 ImageFormat::Bmp => "BMP",
                 ImageFormat::Tiff => "TIFF",
             };
-            // The BaseLoc is relative to the Doc_0 directory.
-            let relative = res_name.strip_prefix("Doc_0/").unwrap_or(res_name);
+            // The BaseLoc is relative to the doc directory.
+            let relative = strip_doc_dir_prefix(res_name, &self.options.metadata.doc_dir);
             xml.push_str(&format!(
                 r#"    <ofd:MultiMedia ID="{}" Type="{}"><ofd:MediaFile>{}</ofd:MediaFile></ofd:MultiMedia>"#,
                 100 + i,
@@ -379,7 +466,7 @@ impl OfdWriter {
                     ImageFormat::Bmp => "BMP",
                     ImageFormat::Tiff => "TIFF",
                 };
-                let relative = res_name.strip_prefix("Doc_0/").unwrap_or(res_name);
+                let relative = strip_doc_dir_prefix(res_name, &self.options.metadata.doc_dir);
                 xml.push_str(&format!(
                     r#"    <ofd:MultiMedia ID="{}" Type="{}"><ofd:MediaFile>{}</ofd:MediaFile></ofd:MultiMedia>"#,
                     100 + i,

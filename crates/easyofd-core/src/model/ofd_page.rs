@@ -14,6 +14,11 @@ pub struct OfdPage {
     pub height: f64,
     /// 此页面上的内容块。
     pub content: Vec<ContentObject>,
+    /// 原始页面路径（相对文档目录，如 `"Pages/Page_Insert_55_2/Content.xml"`）。
+    ///
+    /// 读取 OFD 文件时保留，写入器优先使用该路径而非自动命名
+    /// （`Pages/Page_N/Content.xml`），从而在 roundtrip 时保持页面路径一致。
+    pub base_path: Option<String>,
 }
 
 impl OfdPage {
@@ -24,7 +29,15 @@ impl OfdPage {
             width,
             height,
             content: Vec::new(),
+            base_path: None,
         }
+    }
+
+    /// 设置原始页面路径（roundtrip 保留页面路径时使用）。
+    #[must_use]
+    pub fn with_base_path(mut self, path: impl Into<String>) -> Self {
+        self.base_path = Some(path.into());
+        self
     }
 
     /// 向此页面添加文本对象。
