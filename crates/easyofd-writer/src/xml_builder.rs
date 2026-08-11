@@ -233,13 +233,28 @@ impl OfdWriter {
             xml.push('\n');
         }
 
-        // Font declarations
-        xml.push_str(r"    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>");
-        xml.push('\n');
+        // Font declarations (element emitted only when the source had one;
+        // ofdrw omits the PublicRes element for font-less documents).
+        if self.options.metadata.public_res_element_present {
+            xml.push_str(r"    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>");
+            xml.push('\n');
+        }
 
-        // Document resources
-        if !image_resources.is_empty() {
-            xml.push_str(r"    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>");
+        // Document resources: keep the original reference from a roundtrip
+        // read (e.g. "DocumentRes_0.xml"); default to "DocumentRes.xml" and
+        // only emit the element when there are image resources.
+        let doc_res_ref = self
+            .options
+            .metadata
+            .document_res
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("DocumentRes.xml");
+        if !image_resources.is_empty() || self.options.metadata.document_res.is_some() {
+            xml.push_str(&format!(
+                "    <ofd:DocumentRes>{}</ofd:DocumentRes>",
+                xml_escape(doc_res_ref)
+            ));
             xml.push('\n');
         }
 
@@ -372,6 +387,33 @@ impl OfdWriter {
                 "  <ofd:CustomTags>{}</ofd:CustomTags>",
                 xml_escape(custom_tags_path)
             ));
+            xml.push('\n');
+        }
+
+        // Permissions (GB/T 33190 document permissions).
+        if let Some(ref perms) = self.options.metadata.permissions {
+            xml.push_str(r"  <ofd:Permissions>");
+            xml.push('\n');
+            let mut emit = |tag: &str, value: Option<bool>, as_attribute: bool| {
+                if let Some(v) = value {
+                    if as_attribute {
+                        xml.push_str(&format!(r#"    <ofd:{tag} Printable="{v}"/>"#));
+                    } else {
+                        xml.push_str(&format!("    <ofd:{tag}>{v}</ofd:{tag}>"));
+                    }
+                    xml.push('\n');
+                }
+            };
+            emit("Edit", perms.edit, false);
+            emit("Annot", perms.annot, false);
+            emit("Export", perms.export, false);
+            emit("Signature", perms.signature, false);
+            emit("Watermark", perms.watermark, false);
+            emit("PrintScreen", perms.print_screen, false);
+            emit("Print", perms.print, true);
+            emit("CopyText", perms.copy_text, false);
+            emit("ContentRegist", perms.content_regist, false);
+            xml.push_str(r"  </ofd:Permissions>");
             xml.push('\n');
         }
 

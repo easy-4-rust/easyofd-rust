@@ -6,6 +6,7 @@ use chrono::NaiveDateTime;
 
 use crate::model::bookmarks::Bookmarks;
 use crate::model::custom_datas::CustomDatas;
+use crate::model::permissions::Permissions;
 use crate::model::template_page::TemplatePage;
 
 /// OFD 文档元数据（OFD.xml 层级）。
@@ -68,6 +69,16 @@ pub struct OfdMetadata {
     /// Document XML 文件名（位于 `doc_dir` 下，通常为 "Document.xml"，
     /// 非标准文件可能是 "Document_0.xml"）。
     pub document_file: String,
+    /// DocumentRes 引用（CommonData 中 `<ofd:DocumentRes>` 的文本，如
+    /// "DocumentRes.xml" 或非标准的 "DocumentRes_0.xml"）。
+    pub document_res: Option<String>,
+    /// 源文档是否包含 PublicRes.xml（ofdrw 在无字体资源时不写出该文件，
+    /// 但 Document.xml 中的引用仍保留）。
+    pub public_res_present: bool,
+    /// Document.xml 的 CommonData 是否声明了 ofd:PublicRes 引用。
+    pub public_res_element_present: bool,
+    /// 文档权限（ofd:Permissions），如存在。
+    pub permissions: Option<Permissions>,
 }
 
 impl Default for OfdMetadata {
@@ -100,6 +111,10 @@ impl Default for OfdMetadata {
             page_area_present: true,
             doc_dir: "Doc_0".to_string(),
             document_file: "Document.xml".to_string(),
+            document_res: None,
+            public_res_present: true,
+            public_res_element_present: true,
+            permissions: None,
         }
     }
 }

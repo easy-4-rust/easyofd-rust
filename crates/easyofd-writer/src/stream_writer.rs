@@ -93,6 +93,7 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
     pub fn finish(mut self) -> OfdResult<W> {
         let doc_dir = self.options.metadata.doc_dir.clone();
         let document_file = self.options.metadata.document_file.clone();
+        let public_res_present = self.options.metadata.public_res_present;
         let mut helper = OfdWriter::with_options(self.options.clone());
         let resources = self.resource_view();
         helper.pages = std::mem::take(&mut self.page_descriptors);
@@ -109,18 +110,22 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
             &format!("{doc_dir}/{document_file}"),
             &document_xml,
         )?;
-        write_xml(
-            zip,
-            file_options,
-            &format!("{doc_dir}/DocumentRes.xml"),
-            &document_res_xml,
-        )?;
-        write_xml(
-            zip,
-            file_options,
-            &format!("{doc_dir}/PublicRes.xml"),
-            &public_res_xml,
-        )?;
+        if !resources.is_empty() {
+            write_xml(
+                zip,
+                file_options,
+                &format!("{doc_dir}/DocumentRes.xml"),
+                &document_res_xml,
+            )?;
+        }
+        if public_res_present {
+            write_xml(
+                zip,
+                file_options,
+                &format!("{doc_dir}/PublicRes.xml"),
+                &public_res_xml,
+            )?;
+        }
         self.zip
             .take()
             .expect("stream writer ZIP exists until finish")

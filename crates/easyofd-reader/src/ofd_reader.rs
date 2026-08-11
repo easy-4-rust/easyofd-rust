@@ -200,6 +200,7 @@ fn visit_archive<R: Read + Seek>(
 
     Ok(OfdMetadata {
         doc_id: ofd_entry.doc_id,
+        title: ofd_entry.title,
         author: ofd_entry.author,
         creator: ofd_entry.creator,
         creator_version: ofd_entry.creator_version,
@@ -222,8 +223,15 @@ fn visit_archive<R: Read + Seek>(
         attachments_path: document_entry.attachments_path,
         custom_tags_path: document_entry.custom_tags_path,
         page_area_present: document_entry.page_area_present,
-        doc_dir: ofd_entry.doc_dir,
+        doc_dir: ofd_entry.doc_dir.clone(),
         document_file: ofd_entry.document_file,
+        document_res: document_entry.document_res,
+        permissions: document_entry.permissions,
+        public_res_present: {
+            let target = format!("{doc_dir}/PublicRes.xml");
+            archive.by_name(&target).is_ok()
+        },
+        public_res_element_present: document_entry.public_res_element_present,
         ..OfdMetadata::default()
     })
 }
@@ -261,12 +269,18 @@ fn writer_regenerates(name: &str, doc_dir: &str, document_file: &str) -> bool {
 
 /// 解析 OFD 文档日期字符串为 `NaiveDateTime`。
 ///
-/// 支持 ISO 格式（`"2024-05-31"`、`"2024-05-31T00:00:00"`）以及 WPS 生成
-/// 文件中出现的 PDF 风格日期（`"D:20220708103442+02'34'"`，取前 14 位
-/// `YYYYMMDDHHMMSS`，忽略时区偏移）。
+/// 支持多种输入：RFC3339 带时区（`"2021-05-28T12:50:45+08:00"`）、
+/// ISO（`"2024-05-31T00:00:00"`、`"2020-12-08 18:17:21"`）、裸日期
+/// （`"2024-05-31"`、无前导零的 `"2023-7-12"`），以及 WPS 生成文件中
+/// 出现的 PDF 风格日期（`"D:20220708103442+02'34'"`）。
 fn parse_ofd_date(s: &str) -> Option<chrono::NaiveDateTime> {
-    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
-        return Some(dt);
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Some(dt.naive_utc());
+    }
+    for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"] {
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, fmt) {
+            return Some(dt);
+        }
     }
     if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
         return d.and_hms_opt(0, 0, 0);

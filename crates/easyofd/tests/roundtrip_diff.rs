@@ -49,6 +49,10 @@ fn list_zip_entries(zip_bytes: &[u8]) -> Vec<String> {
         .collect()
 }
 
+/// Count XML elements, normalizing the `ofd:` namespace prefix so that
+/// structural comparison is namespace-agnostic.  A WPS-generated source may
+/// write `<PhysicalBox>` without the prefix while the writer emits
+/// `<ofd:PhysicalBox>`; the prefix spelling is not a structural deviation.
 fn count_xml_elements(xml: &str) -> HashMap<String, usize> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -57,7 +61,8 @@ fn count_xml_elements(xml: &str) -> HashMap<String, usize> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e) | Event::Empty(e)) => {
-                let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let raw = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let name = raw.strip_prefix("ofd:").unwrap_or(&raw).to_string();
                 *counts.entry(name).or_insert(0) += 1;
             }
             Ok(Event::Eof) | Err(_) => break,
@@ -166,37 +171,57 @@ fn analyze_fixture(name: &str) -> DiffReport {
     }
 }
 
-const FIXTURES: &[&str] = &[
-    "simple_1.ofd",
-    "simple_2.ofd",
-    "multi_page_image.ofd",
-    "signed.ofd",
-    "with_table.ofd",
-    // Previously unreadable samples: leading-slash DocRoot, non-standard
-    // Document file name, case-mismatched resource directories.
-    "ofdrw_containsJPEG.ofd",
-    "ofdrw_n.ofd",
-    "ofdrw_path_unstd.ofd",
-    "ofdrw_testImageNotFound.ofd",
-    "ofdrw_testImageOverridePage.ofd",
-    "ofdrw_testPathClip.ofd",
-];
+/// Discover every `.ofd` fixture in `tests/fixtures/real_ofd/`, sorted.
+/// This covers all ofdrw samples (previously only an explicit subset).
+fn discover_fixtures() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(fixture_dir())
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|e| {
+                    let path = e.path();
+                    if path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("ofd"))
+                    {
+                        path.file_name().map(|f| f.to_string_lossy().into_owned())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
 
 #[test]
 fn roundtrip_diff_report() {
     let mut total_zip = 0;
     let mut total_xml = 0;
+    let mut ok_count = 0;
+    let mut diff_count = 0;
+    let mut skipped = 0;
 
-    for name in FIXTURES {
-        let path = fixture_path(name);
+    for name in discover_fixtures() {
+        let path = fixture_path(&name);
         if !path.exists() {
             println!("[SKIP] {name}: not found");
+            skipped += 1;
             continue;
         }
-        let report = analyze_fixture(name);
+        // A roundtrip may panic on exotic inputs; count them separately
+        // instead of failing the whole report.
+        let Ok(report) = std::panic::catch_unwind(|| analyze_fixture(&name)) else {
+            println!("[PANIC] {name}: roundtrip panicked");
+            diff_count += 1;
+            continue;
+        };
         let total = report.zip_diffs.len() + report.xml_diffs.len();
         if total == 0 {
             println!("[OK] {name}: no deviations");
+            ok_count += 1;
             continue;
         }
         println!(
@@ -213,11 +238,12 @@ fn roundtrip_diff_report() {
         }
         total_zip += report.zip_diffs.len();
         total_xml += report.xml_diffs.len();
+        diff_count += 1;
     }
 
     println!("\n================================================================");
     println!(
-        "Total: {total_zip} ZIP diffs + {total_xml} XML diffs = {}",
+        "Total: {total_zip} ZIP diffs + {total_xml} XML diffs = {} across {ok_count} clean, {diff_count} with deviations, {skipped} skipped",
         total_zip + total_xml
     );
 }

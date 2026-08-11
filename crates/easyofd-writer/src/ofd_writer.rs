@@ -172,11 +172,14 @@ impl OfdWriter {
             zip.write_all(doc_res_xml.as_bytes()).map_err(io_err)?;
         }
 
-        // PublicRes 在 Document.xml 中引用，即使没有自定义字体也始终写入。
-        zip.start_file(format!("{doc_dir}/PublicRes.xml"), *options)
-            .map_err(zip_err)?;
-        zip.write_all(self.build_public_res_xml(&image_resources).as_bytes())
-            .map_err(io_err)?;
+        // PublicRes.xml: ofdrw only writes the file when font resources were
+        // explicitly added; a roundtrip source without it is preserved as-is.
+        if self.options.metadata.public_res_present {
+            zip.start_file(format!("{doc_dir}/PublicRes.xml"), *options)
+                .map_err(zip_err)?;
+            zip.write_all(self.build_public_res_xml(&image_resources).as_bytes())
+                .map_err(io_err)?;
+        }
 
         // 4. 写入各页面
         let mut page_image_start = 0;

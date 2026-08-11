@@ -9,6 +9,7 @@ use easyofd_core::model::bookmark::Bookmark;
 use easyofd_core::model::bookmarks::Bookmarks;
 use easyofd_core::model::custom_data::CustomData;
 use easyofd_core::model::custom_datas::CustomDatas;
+use easyofd_core::model::permissions::Permissions;
 use easyofd_core::model::template_page::TemplatePage;
 use easyofd_core::{
     ContentObject, ImageFormat, ImageObject, OfdError, OfdPage, OfdResult, PathObject, TextObject,
@@ -25,6 +26,8 @@ pub(crate) struct OfdEntry {
     pub(crate) document_file: String,
     /// Document identifier (ofd:DocID), if present.
     pub(crate) doc_id: Option<String>,
+    /// Document title (ofd:Title), if present.
+    pub(crate) title: Option<String>,
     /// Document author (ofd:Author), if present.
     pub(crate) author: Option<String>,
     /// Creator application name (ofd:Creator), if present.
@@ -56,6 +59,7 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     let mut buf = Vec::new();
     let mut doc_root = String::new();
     let mut doc_id = None;
+    let mut title = None;
     let mut author = None;
     let mut creator = None;
     let mut creator_version = None;
@@ -79,6 +83,7 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
                 // Self-closing metadata elements (e.g. <ofd:DocID/>) carry an
                 // empty value; record them so a roundtrip keeps the element.
                 b"ofd:DocID" => doc_id = Some(String::new()),
+                b"ofd:Title" => title = Some(String::new()),
                 b"ofd:Author" => author = Some(String::new()),
                 b"ofd:Creator" => creator = Some(String::new()),
                 b"ofd:CreatorVersion" => creator_version = Some(String::new()),
@@ -112,6 +117,10 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
                 }
                 b"ofd:DocID" => {
                     current_text_tag = Some(b"ofd:DocID".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:Title" => {
+                    current_text_tag = Some(b"ofd:Title".to_vec());
                     current_text.clear();
                 }
                 b"ofd:Author" => {
@@ -195,6 +204,10 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
                         doc_id = Some(current_text.trim().to_string());
                         current_text_tag = None;
                     }
+                    b"ofd:Title" => {
+                        title = Some(current_text.trim().to_string());
+                        current_text_tag = None;
+                    }
                     b"ofd:Author" => {
                         author = Some(current_text.trim().to_string());
                         current_text_tag = None;
@@ -276,6 +289,7 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         doc_dir,
         document_file,
         doc_id,
+        title,
         author,
         creator,
         creator_version,
@@ -321,6 +335,26 @@ pub(crate) struct DocumentEntry {
     /// DocumentRes reference from CommonData (ofd:DocumentRes text, e.g.
     /// "DocumentRes.xml" or the non-standard "DocumentRes_0.xml").
     pub(crate) document_res: Option<String>,
+    /// Document permissions (ofd:Permissions), if present.
+    pub(crate) permissions: Option<Permissions>,
+    /// Whether CommonData declared an ofd:PublicRes reference.
+    pub(crate) public_res_element_present: bool,
+}
+
+/// 设置权限字段（ofd:Permissions 子元素）。
+fn set_permission(perms: &mut Permissions, key: &[u8], value: bool) {
+    match key {
+        b"Edit" => perms.edit = Some(value),
+        b"Annot" => perms.annot = Some(value),
+        b"Export" => perms.export = Some(value),
+        b"Signature" => perms.signature = Some(value),
+        b"Watermark" => perms.watermark = Some(value),
+        b"PrintScreen" => perms.print_screen = Some(value),
+        b"Print" => perms.print = Some(value),
+        b"CopyText" => perms.copy_text = Some(value),
+        b"ContentRegist" => perms.content_regist = Some(value),
+        _ => {}
+    }
 }
 
 /// Parse Document.xml → page BaseLoc paths, the bookmark collection
@@ -359,6 +393,13 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     let mut custom_tags_path = None;
     let mut page_area_present = false;
     let mut document_res: Option<String> = None;
+    // Permissions state: current permission element name + collected text.
+    let mut permissions: Option<Permissions> = None;
+    let mut in_permissions = false;
+    let mut permission_key: Option<Vec<u8>> = None;
+    let mut permission_text = String::new();
+    let mut permission_print_attr: Option<String> = None;
+    let mut public_res_element_present = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -418,6 +459,13 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
             Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:PageArea" => {
                 page_area_present = true;
             }
+            // PublicRes reference presence (ofdrw may keep the element while
+            // omitting the PublicRes.xml file for font-less documents).
+            Ok(Event::Empty(ref e) | Event::Start(ref e))
+                if e.name().as_ref() == b"ofd:PublicRes" =>
+            {
+                public_res_element_present = true;
+            }
             // Container references (Annotations/Attachments/CustomTags) and the
             // DocumentRes reference hold a single relative path as text.
             Ok(Event::Start(ref e))
@@ -446,27 +494,151 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                         .unwrap_or_default(),
                 );
             }
-            Ok(Event::End(ref end)) if box_text_tag.is_some() => match end.name().as_ref() {
-                b"ofd:ApplicationBox" => application_box = Some(box_text.trim().to_string()),
-                b"ofd:ContentBox" => content_box = Some(box_text.trim().to_string()),
-                b"ofd:ClipBox" => clip_box = Some(box_text.trim().to_string()),
-                b"ofd:BleedBox" => bleed_box = Some(box_text.trim().to_string()),
-                b"ofd:TrimBox" => trim_box = Some(box_text.trim().to_string()),
-                _ => {}
-            },
-            Ok(Event::End(ref end)) if container_path_tag.is_some() => match end.name().as_ref() {
-                b"ofd:Annotations" => {
-                    annotations_path = Some(container_path_text.trim().to_string())
+            // Permissions (GB/T 33190 document permissions):
+            // <ofd:Permissions><ofd:Edit>true</ofd:Edit>...<ofd:Print
+            // Printable="true"/>...</ofd:Permissions>
+            Ok(Event::Empty(ref e) | Event::Start(ref e))
+                if e.name().as_ref() == b"ofd:Permissions" =>
+            {
+                in_permissions = true;
+                permissions.get_or_insert_with(Permissions::new);
+            }
+            // Self-closing permission elements (e.g. <ofd:Print
+            // Printable="true"/>) have no End event; finalize immediately.
+            Ok(Event::Empty(ref e))
+                if in_permissions
+                    && matches!(
+                        e.name().as_ref(),
+                        b"ofd:Edit"
+                            | b"ofd:Annot"
+                            | b"ofd:Export"
+                            | b"ofd:Signature"
+                            | b"ofd:Watermark"
+                            | b"ofd:PrintScreen"
+                            | b"ofd:Print"
+                            | b"ofd:CopyText"
+                            | b"ofd:ContentRegist"
+                    ) =>
+            {
+                let qname = e.name();
+                let raw: &[u8] = qname.as_ref();
+                let key = raw.strip_prefix(b"ofd:").unwrap_or(raw);
+                let value = if key == b"Print" {
+                    e.attributes()
+                        .flatten()
+                        .find(|a| a.key.as_ref() == b"Printable")
+                        .and_then(|a| {
+                            a.decoded_and_normalized_value(
+                                quick_xml::XmlVersion::Explicit1_0,
+                                reader.decoder(),
+                            )
+                            .ok()
+                        })
+                        .and_then(|v| v.parse::<bool>().ok())
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+                if let Some(perms) = permissions.as_mut() {
+                    set_permission(perms, key, value);
                 }
-                b"ofd:Attachments" => {
-                    attachments_path = Some(container_path_text.trim().to_string())
+            }
+            Ok(Event::Start(ref e))
+                if in_permissions
+                    && matches!(
+                        e.name().as_ref(),
+                        b"ofd:Edit"
+                            | b"ofd:Annot"
+                            | b"ofd:Export"
+                            | b"ofd:Signature"
+                            | b"ofd:Watermark"
+                            | b"ofd:PrintScreen"
+                            | b"ofd:Print"
+                            | b"ofd:CopyText"
+                            | b"ofd:ContentRegist"
+                    ) =>
+            {
+                // Store the local name (without the "ofd:" prefix) as the key;
+                // the value arrives via a Text event and is finalized on End.
+                let qname = e.name();
+                let raw: &[u8] = qname.as_ref();
+                let key = raw.strip_prefix(b"ofd:").unwrap_or(raw);
+                permission_key = Some(key.to_vec());
+                permission_text.clear();
+                permission_print_attr = None;
+                if raw == b"ofd:Print" {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"Printable" {
+                            permission_print_attr = Some(
+                                attr.decoded_and_normalized_value(
+                                    quick_xml::XmlVersion::Explicit1_0,
+                                    reader.decoder(),
+                                )
+                                .unwrap_or_default()
+                                .to_string(),
+                            );
+                        }
+                    }
                 }
-                b"ofd:CustomTags" => {
-                    custom_tags_path = Some(container_path_text.trim().to_string())
+            }
+            Ok(Event::Text(ref e)) if in_permissions && permission_key.is_some() => {
+                permission_text.push_str(
+                    &e.xml10_content()
+                        .map(|c| c.into_owned())
+                        .unwrap_or_default(),
+                );
+            }
+            Ok(Event::End(ref end)) if in_permissions && permission_key.is_some() => {
+                let key = permission_key.take().unwrap_or_default();
+                let value = if key == b"Print" {
+                    permission_print_attr
+                        .as_deref()
+                        .and_then(|v| v.parse::<bool>().ok())
+                        .unwrap_or(false)
+                } else {
+                    permission_text.trim().parse::<bool>().unwrap_or(false)
+                };
+                if let Some(perms) = permissions.as_mut() {
+                    set_permission(perms, &key, value);
                 }
-                b"ofd:DocumentRes" => document_res = Some(container_path_text.trim().to_string()),
-                _ => {}
-            },
+                permission_text.clear();
+            }
+            Ok(Event::End(ref end)) if end.name().as_ref() == b"ofd:Permissions" => {
+                in_permissions = false;
+            }
+            Ok(Event::End(ref end)) if box_text_tag.is_some() => {
+                match end.name().as_ref() {
+                    b"ofd:ApplicationBox" => application_box = Some(box_text.trim().to_string()),
+                    b"ofd:ContentBox" => content_box = Some(box_text.trim().to_string()),
+                    b"ofd:ClipBox" => clip_box = Some(box_text.trim().to_string()),
+                    b"ofd:BleedBox" => bleed_box = Some(box_text.trim().to_string()),
+                    b"ofd:TrimBox" => trim_box = Some(box_text.trim().to_string()),
+                    _ => {}
+                }
+                // Critical: release the tag so subsequent End events (e.g.
+                // "</ofd:OutlineElem>") are not swallowed by this guard.
+                box_text_tag = None;
+            }
+            Ok(Event::End(ref end)) if container_path_tag.is_some() => {
+                match end.name().as_ref() {
+                    b"ofd:Annotations" => {
+                        annotations_path = Some(container_path_text.trim().to_string())
+                    }
+                    b"ofd:Attachments" => {
+                        attachments_path = Some(container_path_text.trim().to_string())
+                    }
+                    b"ofd:CustomTags" => {
+                        custom_tags_path = Some(container_path_text.trim().to_string())
+                    }
+                    b"ofd:DocumentRes" => {
+                        document_res = Some(container_path_text.trim().to_string())
+                    }
+                    _ => {}
+                }
+                // Critical: release the tag so subsequent End events (e.g.
+                // "</ofd:OutlineElem>") are not swallowed by this guard.
+                container_path_tag = None;
+            }
             // Bookmarks: ofdrw writes <ofd:Bookmarks><Bookmark Name="...">
             // <Dest Type="XYZ" PageID="..."/></Bookmark></ofd:Bookmarks>
             // (Bookmark/Dest are emitted without the ofd: prefix by ofdrw;
@@ -552,17 +724,6 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                 b"ofd:Outlines" => {
                     in_outlines = false;
                 }
-                b"ofd:ApplicationBox"
-                | b"ofd:ContentBox"
-                | b"ofd:ClipBox"
-                | b"ofd:BleedBox"
-                | b"ofd:TrimBox" => {
-                    box_text_tag = None;
-                }
-                b"ofd:Annotations" | b"ofd:Attachments" | b"ofd:CustomTags"
-                | b"ofd:DocumentRes" => {
-                    container_path_tag = None;
-                }
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -586,6 +747,8 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
         custom_tags_path,
         page_area_present,
         document_res,
+        permissions,
+        public_res_element_present,
     })
 }
 

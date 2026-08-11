@@ -16,6 +16,7 @@ mod ofd_metadata;
 mod ofd_page;
 pub mod page_size;
 mod path_object;
+pub mod permissions;
 pub mod template_page;
 mod text_object;
 
@@ -32,6 +33,7 @@ pub use ofd_id::OfdId;
 pub use ofd_metadata::OfdMetadata;
 pub use ofd_page::OfdPage;
 pub use path_object::PathObject;
+pub use permissions::Permissions;
 pub use template_page::TemplatePage;
 pub use text_object::TextObject;
 
