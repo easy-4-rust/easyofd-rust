@@ -1,0 +1,18 @@
+<!--
+  Expected Document.xml for with_table.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Document with table content. No explicit PageArea (defaults to A4 per spec).
+  ofdrw may omit PageArea when the document uses default A4 dimensions.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>150</ofd:MaxUnitID>
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml" />
+  </ofd:Pages>
+</ofd:Document>

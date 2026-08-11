@@ -95,4 +95,130 @@ mod tests {
     fn image_format_rule_passes_empty() {
         assert!(ImageFormatRule.check(&[]).passed);
     }
+
+    // ── 合规：所有允许格式 ─────────────────────────────────────────────
+
+    #[test]
+    fn image_format_rule_passes_with_bmp() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="BMP"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    #[test]
+    fn image_format_rule_passes_with_jpeg() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="JPEG"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    #[test]
+    fn image_format_rule_passes_with_jbig2() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="JBIG2"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    #[test]
+    fn image_format_rule_passes_with_jpeg2000() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="JPEG2000"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    #[test]
+    fn image_format_rule_passes_with_tiff() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="TIFF"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    // ── 违规：GIF 不允许 ───────────────────────────────────────────────
+
+    #[test]
+    fn image_format_rule_fails_with_gif() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="GIF"/></ofd:Res>"#.to_vec(),
+        )];
+        let result = ImageFormatRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains("GIF"));
+    }
+
+    // ── 违规：WEBP 不允许 ──────────────────────────────────────────────
+
+    #[test]
+    fn image_format_rule_fails_with_webp() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="WEBP"/></ofd:Res>"#.to_vec(),
+        )];
+        let result = ImageFormatRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains("WEBP"));
+    }
+
+    // ── 边界：非 XML 文件应跳过 ────────────────────────────────────────
+
+    #[test]
+    fn image_format_rule_ignores_non_xml() {
+        let entries = vec![("image.gif".into(), b"GIF89a".to_vec())];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    // ── 边界：XML 无 Format 属性 ───────────────────────────────────────
+
+    #[test]
+    fn image_format_rule_passes_without_format() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br"<ofd:Res><ofd:MultiMedia/></ofd:Res>".to_vec(),
+        )];
+        assert!(ImageFormatRule.check(&entries).passed);
+    }
+
+    // ── check_violations：违规场景 ─────────────────────────────────────
+
+    #[test]
+    fn image_format_violations_with_gif() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="GIF"/></ofd:Res>"#.to_vec(),
+        )];
+        let violations = ImageFormatRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "IMAGE_FORMAT");
+        assert_eq!(violations[0].severity(), Severity::Error);
+        assert_eq!(violations[0].actual_value(), Some("GIF"));
+    }
+
+    // ── check_violations：合规场景 ─────────────────────────────────────
+
+    #[test]
+    fn image_format_violations_empty_on_pass() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="PNG"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(ImageFormatRule.check_violations(&entries).is_empty());
+    }
+
+    // ── check_violations：非 XML 跳过 ─────────────────────────────────
+
+    #[test]
+    fn image_format_violations_ignores_non_xml() {
+        let entries = vec![("image.gif".into(), b"Format=\"GIF\"".to_vec())];
+        assert!(ImageFormatRule.check_violations(&entries).is_empty());
+    }
 }

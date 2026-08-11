@@ -8,6 +8,7 @@ use super::{
     ExtendSignatureContainer, SM2_SM3_OID_ARCS, SM2_SM3_OID_STR, SigType, generalized_time_now,
     sm2_sign_with_sm3,
 };
+use crate::errors::SignError;
 use crate::internal_helpers::compute_sm3;
 use crate::timestamp_hook::TimeStampHook;
 
@@ -61,11 +62,11 @@ impl ExtendSignatureContainer for SesV5Container {
     /// 对待签名数据进行电子签章。
     ///
     /// 对应 Java: `org.ofdrw.sign.signContainer.SESV5Container#sign`
-    fn sign(&self, in_data: &[u8], property_info: &str) -> Vec<u8> {
+    fn sign(&self, in_data: &[u8], property_info: &str) -> Result<Vec<u8>, SignError> {
         let data_hash = compute_sm3(in_data);
 
-        let seal =
-            easyofd_gm::ses::v5::SESeal::decode_der(&self.seal_der).expect("V5 印章 DER 解码失败");
+        let seal = easyofd_gm::ses::v5::SESeal::decode_der(&self.seal_der)
+            .map_err(|e| SignError::Decode(format!("V5 印章 DER 解码失败: {e}")))?;
 
         let tbs = easyofd_gm::ses::v5::TBSSign {
             version: 5,
@@ -76,7 +77,7 @@ impl ExtendSignatureContainer for SesV5Container {
         };
         let tbs_der = tbs.encode_der();
 
-        let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der);
+        let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der)?;
 
         // 对应 Java: `if (timeStampHook != null) { ... signature.setTimeStamp(...) }`
         let time_stamp = self.time_stamp_hook.as_ref().and_then(|hook| {
@@ -92,7 +93,7 @@ impl ExtendSignatureContainer for SesV5Container {
             time_stamp,
         };
 
-        ses_sig.encode_der()
+        Ok(ses_sig.encode_der())
     }
 
     fn seal(&self) -> Option<Vec<u8>> {
@@ -150,7 +151,7 @@ mod tests {
             build_test_seal_der(),
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         );
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         assert!(!result.is_empty());
     }
 
@@ -162,7 +163,7 @@ mod tests {
             build_test_seal_der(),
             cert_der.clone(),
         );
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).expect("V5 SES_Signature DER 解码失败");
         assert_eq!(ses_sig.to_sign.version, 5);
         assert_eq!(ses_sig.to_sign.property_info, "prop");
@@ -177,7 +178,7 @@ mod tests {
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         );
         let in_data = b"signature xml content";
-        let result = c.sign(in_data, "prop");
+        let result = c.sign(in_data, "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).unwrap();
         let expected_hash = compute_sm3(in_data);
         assert_eq!(ses_sig.to_sign.data_hash, expected_hash.to_vec());
@@ -191,7 +192,7 @@ mod tests {
             build_test_seal_der(),
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         );
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).unwrap();
         assert!(
             ses_sig.time_stamp.is_none(),
@@ -213,7 +214,7 @@ mod tests {
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         )
         .with_time_stamp_hook(hook);
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).unwrap();
         assert_eq!(
             ses_sig.time_stamp,
@@ -232,7 +233,7 @@ mod tests {
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         )
         .with_time_stamp_hook(hook);
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).unwrap();
         assert!(
             ses_sig.time_stamp.is_none(),

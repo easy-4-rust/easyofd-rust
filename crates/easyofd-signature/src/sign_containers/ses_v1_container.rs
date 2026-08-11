@@ -13,6 +13,7 @@ use super::{
     ExtendSignatureContainer, SM2_SM3_OID_ARCS, SM2_SM3_OID_STR, SigType, local_time_utf8_bytes,
     sm2_sign_with_sm3,
 };
+use crate::errors::SignError;
 use crate::internal_helpers::compute_sm3;
 
 /// SES V1 签名容器。
@@ -49,13 +50,13 @@ impl ExtendSignatureContainer for SesV1Container {
     /// 对待签名数据进行电子签章。
     ///
     /// 对应 Java: `org.ofdrw.sign.signContainer.SESV1Container#sign`
-    fn sign(&self, in_data: &[u8], property_info: &str) -> Vec<u8> {
+    fn sign(&self, in_data: &[u8], property_info: &str) -> Result<Vec<u8>, SignError> {
         // 1. SM3 摘要
         let data_hash = compute_sm3(in_data);
 
         // 2. 解码印章 DER
-        let seal =
-            easyofd_gm::ses::v1::SESeal::decode_der(&self.seal_der).expect("V1 印章 DER 解码失败");
+        let seal = easyofd_gm::ses::v1::SESeal::decode_der(&self.seal_der)
+            .map_err(|e| SignError::Decode(format!("V1 印章 DER 解码失败: {e}")))?;
 
         // 3. 构建 TBS_Sign（V1 含 cert 和 signatureAlgorithm）
         let tbs = easyofd_gm::ses::v1::TBSSign {
@@ -70,7 +71,7 @@ impl ExtendSignatureContainer for SesV1Container {
         let tbs_der = tbs.encode_der();
 
         // 4. SM3WithSM2 签名
-        let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der);
+        let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der)?;
 
         // 5. 构建 SES_Signature
         let ses_sig = easyofd_gm::ses::v1::SESSignature {
@@ -78,7 +79,7 @@ impl ExtendSignatureContainer for SesV1Container {
             sign_data: sig_val,
         };
 
-        ses_sig.encode_der()
+        Ok(ses_sig.encode_der())
     }
 
     fn seal(&self) -> Option<Vec<u8>> {
@@ -136,7 +137,7 @@ mod tests {
             build_test_seal_der(),
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         );
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         assert!(!result.is_empty());
     }
 
@@ -148,7 +149,7 @@ mod tests {
             build_test_seal_der(),
             cert_der.clone(),
         );
-        let result = c.sign(b"test data", "prop");
+        let result = c.sign(b"test data", "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).expect("V1 SES_Signature DER 解码失败");
         assert_eq!(ses_sig.to_sign.version, 1);
         assert_eq!(ses_sig.to_sign.cert, cert_der);
@@ -163,7 +164,7 @@ mod tests {
             vec![0x30, 0x03, 0x02, 0x01, 0x01],
         );
         let in_data = b"signature xml content";
-        let result = c.sign(in_data, "prop");
+        let result = c.sign(in_data, "prop").unwrap();
         let ses_sig = SESSignature::decode_der(&result).unwrap();
         let expected_hash = compute_sm3(in_data);
         assert_eq!(ses_sig.to_sign.data_hash, expected_hash.to_vec());

@@ -111,4 +111,122 @@ mod tests {
         )];
         assert!(!AttachmentRule.check(&entries).passed);
     }
+
+    // ── 合规：XML 格式附件 ─────────────────────────────────────────────
+
+    #[test]
+    fn attachment_rule_passes_with_xml_format() {
+        let entries = vec![(
+            "Doc_0/Attachments.xml".into(),
+            br#"<ofd:Attachments><ofd:Attachment Format="XML"/></ofd:Attachments>"#.to_vec(),
+        )];
+        assert!(AttachmentRule.check(&entries).passed);
+    }
+
+    // ── 违规：DOCX 格式 ───────────────────────────────────────────────
+
+    #[test]
+    fn attachment_rule_fails_with_docx() {
+        let entries = vec![(
+            "Doc_0/Attachments.xml".into(),
+            br#"<ofd:Attachments><ofd:Attachment Format="DOCX"/></ofd:Attachments>"#.to_vec(),
+        )];
+        let result = AttachmentRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains("DOCX"));
+    }
+
+    // ── 边界：附件 XML 无 Format 属性应通过 ───────────────────────────
+
+    #[test]
+    fn attachment_rule_passes_without_format_attr() {
+        let entries = vec![(
+            "Doc_0/Attachments.xml".into(),
+            br"<ofd:Attachments><ofd:Attachment/></ofd:Attachments>".to_vec(),
+        )];
+        assert!(AttachmentRule.check(&entries).passed);
+    }
+
+    // ── 边界：非 Attachment 文件含 Format 应跳过 ──────────────────────
+
+    #[test]
+    fn attachment_rule_ignores_non_attachment_xml() {
+        let entries = vec![(
+            "Doc_0/Res.xml".into(),
+            br#"<ofd:Res><ofd:MultiMedia Format="PDF"/></ofd:Res>"#.to_vec(),
+        )];
+        assert!(AttachmentRule.check(&entries).passed);
+    }
+
+    // ── 边界：非 XML 附件文件应跳过 ───────────────────────────────────
+
+    #[test]
+    fn attachment_rule_ignores_non_xml_attachment() {
+        let entries = vec![("Doc_0/Attachment.bin".into(), b"binary".to_vec())];
+        assert!(AttachmentRule.check(&entries).passed);
+    }
+
+    // ── 边界：空条目列表 ───────────────────────────────────────────────
+
+    #[test]
+    fn attachment_rule_passes_empty() {
+        assert!(AttachmentRule.check(&[]).passed);
+    }
+
+    // ── check_violations：违规场景 ─────────────────────────────────────
+
+    #[test]
+    fn attachment_violations_with_bad_format() {
+        let entries = vec![(
+            "Doc_0/Attachments.xml".into(),
+            br#"<ofd:Attachments><ofd:Attachment Format="PDF"/></ofd:Attachments>"#.to_vec(),
+        )];
+        let violations = AttachmentRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "ATTACHMENT");
+        assert_eq!(violations[0].severity(), Severity::Warn);
+        assert!(
+            violations[0]
+                .location()
+                .unwrap()
+                .contains("Attachments.xml")
+        );
+        assert_eq!(violations[0].actual_value(), Some("PDF"));
+        assert_eq!(violations[0].expected_value(), Some("TXT/XML"));
+    }
+
+    // ── check_violations：合规场景 ─────────────────────────────────────
+
+    #[test]
+    fn attachment_violations_empty_on_pass() {
+        let entries = vec![(
+            "Doc_0/Attachments.xml".into(),
+            br#"<ofd:Attachments><ofd:Attachment Format="TXT"/></ofd:Attachments>"#.to_vec(),
+        )];
+        assert!(AttachmentRule.check_violations(&entries).is_empty());
+    }
+
+    // ── check_violations：多个违规 ─────────────────────────────────────
+
+    #[test]
+    fn attachment_violations_multiple_formats() {
+        let entries = vec![(
+            "Doc_0/Attachments.xml".into(),
+            br#"<ofd:Attachments>
+                <ofd:Attachment Format="PDF"/>
+                <ofd:Attachment Format="DOCX"/>
+            </ofd:Attachments>"#
+                .to_vec(),
+        )];
+        let violations = AttachmentRule.check_violations(&entries);
+        assert_eq!(violations.len(), 2);
+    }
+
+    // ── check_violations：非 XML 跳过 ─────────────────────────────────
+
+    #[test]
+    fn attachment_violations_ignores_non_xml() {
+        let entries = vec![("Attachment.bin".into(), b"Format=\"PDF\"".to_vec())];
+        assert!(AttachmentRule.check_violations(&entries).is_empty());
+    }
 }

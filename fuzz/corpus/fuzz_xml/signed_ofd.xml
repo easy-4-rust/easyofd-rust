@@ -1,0 +1,19 @@
+<!--
+  Expected OFD.xml for signed.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Signed document uses Version="1.1" (per GB/T 38540-2020 for signatures).
+  The Signatures.xml reference is in Document.xml, not OFD.xml directly.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.1" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>d4e5f6789012345678abcdef01234567</ofd:DocID>
+      <ofd:CreationDate>2024-01-15</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFD>

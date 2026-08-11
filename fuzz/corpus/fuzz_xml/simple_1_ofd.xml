@@ -1,0 +1,29 @@
+<!--
+  Expected OFD.xml for simple_1.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Structure derived from:
+  - ofdrw OFD.java: root element with Version, DocType attributes
+  - ofdrw CT_DocInfo.java: DocID (UUID hex), CreationDate, Creator, CreatorVersion
+  - ofdrw DocBody.java: DocInfo + DocRoot elements
+
+  ofdrw behavior notes:
+  - Version="1.0" (default for most documents; OFD.java constant is "1.2" but
+    actual output depends on the writer version used)
+  - DocType="OFD" (OFD.java constant)
+  - DocID is a random UUID with dashes removed (CT_DocInfo.setDocID)
+  - Creator is typically "OFD R&W" or the application name
+  - CreatorVersion matches the ofdrw library version
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>a1b2c3d4e5f6789012345678abcdef01</ofd:DocID>
+      <ofd:CreationDate>2024-01-15</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFD>

@@ -1,0 +1,39 @@
+<!-- expected_signed_ofd_root.xml
+     Expected OFD.xml structure for signed.ofd
+     Produced by SuwellFormSDK 1.0.20.0603; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:OFD> with xmlns:ofd namespace
+     [GB/T 33190] Version attribute required (value: "1.1" for signed documents)
+     [GB/T 33190] DocType attribute required (value: "OFD")
+     [ofdrw]      DocBody contains DocInfo with CustomDatas for invoice metadata
+     [ofdrw]      DocRoot points to Doc_0/Document.xml
+     [ofdrw]      Signatures element references Doc_0/Signs/Signatures.xml
+-->
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" DocType="OFD" Version="1.1">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>1f5e84f2ef4041519304911e8e2c5298</ofd:DocID>
+      <!-- [ofdrw] Author field present in invoice OFDs -->
+      <ofd:Author>China Tax</ofd:Author>
+      <ofd:CreationDate>2020-10-04</ofd:CreationDate>
+      <!-- [ofdrw] CustomDatas for invoice-specific metadata -->
+      <ofd:CustomDatas>
+        <ofd:CustomData Name="template-version">1.0.20.0422</ofd:Custom1.1" for signed documents)
+     [GB/T 33190] DocType attribute required (value: "OFD")
+     [ofdrw]      DocBody contains DocInfo with CustomDatas for invoice metadata
+     [ofdrw]      DocRoot points to Doc_0/Document.xml
+     [ofdrw]      Signatures element references Doc_0/Signs/Signatures.xml
+-->
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" DocType="OFD" Version="1.1">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>1f5e84f2ef4041519304911e8e2c5298Data>
+        <ofd:CustomData Name="native-producer">SuwellFormSDK</ofd:CustomData>
+        <ofd:CustomData Name="producer-version">1.0.20.0603</ofd:CustomData>
+      </ofd:CustomDatas>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+    <!-- [ofdrw] Signatures element present when document is signed -->
+    <ofd:Signatures>Doc_0/Signs/Signatures.xml</ofd:Signatures>
+  </ofd:DocBody>
+</ofd:OFD>

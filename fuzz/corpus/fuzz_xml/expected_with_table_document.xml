@@ -1,0 +1,31 @@
+<!-- expected_with_table_document.xml
+     Expected Document.xml structure for with_table.ofd
+     Produced by swdomsdk 2.0.23.1108.1400; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Document> with xmlns:ofd namespace
+     [GB/T 33190] CommonData section required
+     [GB/T 33190] Pages section lists 1 page entry with BaseLoc
+     [ofdrw]      No explicit PageArea/PhysicalBox (defaults to A4)
+     [ofdrw]      TemplatePage reference in CommonData
+     [ofdrw]      PublicRes and DocumentRes both present
+     [ofdrw]      CustomTags and Annotations sections present
+-->
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>6957</ofd:MaxUnitID>
+    <!-- [ofdrw] PublicRes references the public resource file -->
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+    <!-- [ofdrw] TemplatePage references template content -->
+    <ofd:TemplatePage ID="1" BaseLoc="Tpls/Tpl_0/Content.xml"/>
+    <!-- [ofdrw] DocumentRes references document-specific resources -->
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <!-- [GB/T 33190] Pages section lists all page entries -->
+  <ofd:Pages>
+    <ofd:Page ID="61" BaseLoc="Pages/Page_0/Content.xml"/>
+  </ofd:Pages>
+  <!-- [ofdrw] CustomTags section references custom tag files -->
+  <ofd:CustomTags>Tags/CustomTags.xml</ofd:CustomTags>
+  <!-- [ofdrw] Annotations section references annotation files -->
+  <ofd:Annotations>Annots/Annotations.xml</ofd:Annotations>
+</ofd:Document>

@@ -12,6 +12,8 @@ mod ses_v5_container;
 
 use std::path::{Path, PathBuf};
 
+use crate::errors::SignError;
+
 pub use gbt35275_ds_container::Gbt35275DsContainer;
 pub use gbt35275_pkcs9_ds_container::Gbt35275Pkcs9DsContainer;
 pub use ses_v1_container::SesV1Container;
@@ -40,11 +42,14 @@ pub(crate) const SM2_DEFAULT_USER_ID: &str = "1234567812345678";
 /// 对应 Java: `Signature.getInstance("SM3WithSM2", new BouncyCastleProvider())`
 ///
 /// 使用 SM2 默认用户 ID ("1234567812345678") 对 `data` 进行 SM3WithSM2 签名。
-pub(crate) fn sm2_sign_with_sm3(secret_key: &sm2::SecretKey, data: &[u8]) -> Vec<u8> {
+pub(crate) fn sm2_sign_with_sm3(
+    secret_key: &sm2::SecretKey,
+    data: &[u8],
+) -> Result<Vec<u8>, SignError> {
     use sm2::dsa::signature::Signer;
-    let signing_key =
-        sm2::dsa::SigningKey::new(SM2_DEFAULT_USER_ID, secret_key).expect("SM2 密钥派生失败");
-    signing_key.sign(data).to_bytes().to_vec()
+    let signing_key = sm2::dsa::SigningKey::new(SM2_DEFAULT_USER_ID, secret_key)
+        .map_err(|e| SignError::Signing(format!("SM2 密钥派生失败: {e}")))?;
+    Ok(signing_key.sign(data).to_bytes().to_vec())
 }
 
 /// 当前 UTC 时间 GeneralizedTime 格式 "YYYYMMDDHHmmSSZ"。
@@ -107,7 +112,11 @@ pub trait ExtendSignatureContainer: Send + Sync {
     /// # 返回
     ///
     /// 签名结果字节（DER 编码或原始签名值）。
-    fn sign(&self, in_data: &[u8], property_info: &str) -> Vec<u8>;
+    ///
+    /// # 错误
+    ///
+    /// 印章 DER 解码失败、证书解析失败、SM2 签名失败等情况返回 [`SignError`]。
+    fn sign(&self, in_data: &[u8], property_info: &str) -> Result<Vec<u8>, SignError>;
 
     /// 获取电子印章二进制编码。
     ///
@@ -275,7 +284,7 @@ mod tests {
     fn sm2_sign_with_sm3_produces_signature() {
         use sm2::elliptic_curve::Generate;
         let sk = sm2::SecretKey::generate();
-        let sig = sm2_sign_with_sm3(&sk, b"test data");
+        let sig = sm2_sign_with_sm3(&sk, b"test data").expect("SM2 签名不应失败");
         assert!(!sig.is_empty());
         assert_eq!(sig.len(), 64);
     }

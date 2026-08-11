@@ -1,0 +1,23 @@
+<!--
+  Expected Document.xml for signed.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Signed document. The signature chain is:
+  OFD.xml -> Doc_0/Signs/Signatures.xml -> Doc_0/Signs/Sign_0/Signature.xml
+  Document.xml itself does not directly reference signatures; that's in
+  the Signs/ directory structure.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>200</ofd:MaxUnitID>
+    <ofd:PageArea>
+      <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+    </ofd:PageArea>
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml" />
+  </ofd:Pages>
+</ofd:Document>

@@ -1,0 +1,13 @@
+<!-- expected_simple_2_page_0.xml
+     Expected Page_0/Content.xml structure for simple_2.ofd
+     Produced by ofdrw 1.5.5; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Page> with xmlns:ofd namespace
+     [GB/T 33190] Content section contains Layer elements
+     [GB/T 33190] Layer contains TextOjebct/ImageObject/PathObject ch"4" Boundary="31.7 25.4 40.5 5" Font="3" Size="3.0">
+        <!-- [ofdrw] TextCode: X/Y positioning, DeltaX for character spacing -->
+        <ofd:TextCode X="0" Y="3" DeltaX="3 3 3 3 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5">你好呀，OFD Reader&amp;Writer！</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

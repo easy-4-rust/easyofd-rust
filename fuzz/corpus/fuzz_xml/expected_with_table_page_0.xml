@@ -1,0 +1,38 @@
+<!-- expected_with_table_page_0.xml
+     Expected Page_0/Content.xml structure for with_table.ofd
+     Produced by swdomsdk 2.0.23.1108.1400; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Page> with xmlns:ofd namespace
+     [GB/T 33190] Content section contains Layer elements
+     [GB/T 33190] Layer contains TextObject, ImageObject, PathObject children
+     [ofdrw]      Area element with PhysicalBox for page-specific dimensions
+     [ofdrw]      Template reference via TemplateID and ZOrder="Background"
+     [ofdrw]      ImageObject for QR code with CTM transform
+     [ofdrw]      PathObject for cancel mark (X in circle)
+     [ofdrw]      Multiple TextObjects for invoice fields including table rows
+-->
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <!-- [ofdrw] Area element overrides page dimensions -->
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+  </ofd:Area>
+  <!-- [ofdrw] Template reference with ZOrder for layering -->
+  <ofd:Template TemplateID="1" ZOrder="Background"/>
+  <ofd:Content>
+    <ofd:Layer ID="6948">
+      <!-- [ofdrw] ImageObject: QR code with CTM affine transform -->
+      <ofd:ImageObject ID="6921" CTM="20 0 0 20 0 0" Boundary="6.5 6 20 20" ResourceID="6920"/>
+      <!-- [ofdrw] TextObjects for invoice number, date, buyer/seller info -->
+      <ofd:TextObject ID="6922" Boundary="170 10.3 38 5" Font="6919" Size="3.175">
+        <ofd:TextCode X="0" Y="3.6414" DeltaX="g 19 1.5875">24112000000048542163</ofd:TextCode>
+      </ofd:TextObject>
+      <ofd:TextObject ID="6923" Boundary="170 16.4 38 5" Font="6919" Size="3.175">
+        <ofd:TextCode X="0" Y="3.6414" DeltaX="g 4 1.5875 3.175 g 2 1.5875 3.175 g 2 1.5875">2024年05月28日</ofd:TextCode>
+      </ofd:TextObject>
+      <!-- [ofdrw] PathObject: cancel mark (X in circle) -->
+      <ofd:PathObject ID="6933" Boundary="57.9471 97 5 5" LineWidth="0.225" Fill="true">
+        <ofd:AbbreviatedData>M 4.5315 2.493 B 4.5315 1.368 3.618 0.45 2.4885 0.45 B 1.3635 0.45 0.45 1.368 0.45 2.493 B 0.45 3.618 1.3635 4.536 2.4885 4.536 B 3.618 4.536 4.5315 3.618 4.5315 2.493 M 1.035 1.035 L 3.915 3.915 M 1.035 3.915 L 3.915 1.035</ofd:AbbreviatedData>
+      </ofd:PathObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

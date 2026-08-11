@@ -1,0 +1,19 @@
+<!--
+  Expected OFD.xml for with_table.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Document with table content. No explicit PageArea in Document.xml
+  (defaults to A4 per GB/T 33190-2016 section 7.5).
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>e5f6789012345678abcdef0123456789</ofd:DocID>
+      <ofd:CreationDate>2024-01-15</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFD>

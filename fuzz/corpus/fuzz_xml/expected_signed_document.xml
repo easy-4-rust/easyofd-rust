@@ -1,0 +1,37 @@
+<!-- expected_signed_document.xml
+     Expected Document.xml structure for signed.ofd
+     Produced by SuwellFormSDK 1.0.20.0603; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Document> with xmlns:ofd namespace
+     [GB/T 33190] CommonData section required
+     [GB/T 33190] PageArea/PhysicalBox defines page dimensions (invoice: 210x140mm)
+     [GB/T 33190] Pages section lists 1 page entry with BaseLoc
+     [ofdrw]      TemplatePage reference in CommonData
+     [ofdrw]      PublicRes and DocumentRes both present
+     [ofdrw]      Annotations, Attachments, CustomTags sections present
+-->
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>101</ofd:MaxUnitID>
+    <!-- [ofdrw] TemplatePage references template content -->
+    <ofd:TemplatePage ID="2" BaseLoc="Tpls/Tpl_0/Content.xml"/>
+    <ofd:PageArea>
+      <!-- [GB/T 33190] PhysicalBox: invoice format 210x140mm -->
+      <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+    </ofd:PageArea>
+    <!-- [ofdrw] DocumentRes references document-specific resources -->
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+    <!-- [ofdrw] PublicRes references the public resource file -->
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+  </ofd:CommonData>
+  <!-- [GB/T 33190] Pages section lists all page entries -->
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+  </ofd:Pages>
+  <!-- [ofdrw] Annotations section references annotation files -->
+  <ofd:Annotations>Annots/Annotations.xml</ofd:Annotations>
+  <!-- [ofdrw] Attachments section references attachment files -->
+  <ofd:Attachments>Attachs/Attachments.xml</ofd:Attachments>
+  <!-- [ofdrw] CustomTags section references custom tag files -->
+  <ofd:CustomTags>Tags/CustomTags.xml</ofd:CustomTags>
+</ofd:Document>

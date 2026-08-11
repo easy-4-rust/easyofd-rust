@@ -1,0 +1,39 @@
+<!-- expected_signed_page_0.xml
+     Expected Page_0/Content.xml structure for signed.ofd
+     Produced by SuwellFormSDK 1.0.20.0603; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Page> with xmlns:ofd namespace
+     [GB/T 33190] Content section contains Layer elements
+     [GB/T 33190] Layer contains TextObject, ImageObject, PathObject children
+     [ofdrw]      Template reference via TemplateID and ZOrder="Background"
+     [ofdrw]      ImageObject for QR code with CTM transform
+     [ofdrw]      PathObject for cancel mark (X in circle)
+     [ofdrw]      Multiple TextObjects for invoice fields
+     [ofdrw]      FillColor element inside TextObject for colored text
+-->
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <!-- [ofdrw] Template reference with ZOrder for layering -->
+  <ofd:Template TemplateID="2" ZOrder="Background"/>
+  <ofd:Content>
+    <ofd:Layer ID="60">
+      <!-- [ofdrw] TextObject with FillColor for colored title -->
+      <ofd:TextObject ID="62" Boundary="69 7 72 7.6749" Font="61" Size="6.7028">
+        <ofd:FillColor Value="156 82 35"/>
+        <ofd:TextCode X="0" Y="5.7577" DeltaX="g 10 6.5297">江苏增值税电子普通发票</ofd:TextCode>
+      </ofd:TextObject>
+      <!-- [ofdrw] ImageObject: QR code with CTM affine transform -->
+      <ofd:ImageObject ID="81" CTM="20 0 0 20 0 0" Boundary="8.5 3.5 20 2fd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>c3d4e5f6789012345678abcdef012345</ofd:DocID>
+      <ofd:CreationDate>2024-01-15</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Docu0" ResourceID="80"/>
+      <!-- [ofdrw] PathObject: cancel mark (X in circle) -->
+      <ofd:PathObject ID="82" CTM="0.45 0 0 0.45 0 0" Boundary="57.5 97.8 5 5" LineWidth="0.5">
+        <ofd:AbbreviatedData>M 10.07 5.54 B 10.07 3.04 8.04 1 5.53 1 B 3.03 1 1 3.04 1 5.54 B 1 8.04 3.03 10.08 5.53 10.08 B 8.04 10.08 10.07 8.04 10.07 5.54 M 2.3 2.3 L 8.7 8.7 M 2.3 8.7 L 8.7 2.3</ofd:AbbreviatedData>
+      </ofd:PathObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

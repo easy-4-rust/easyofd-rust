@@ -1,0 +1,40 @@
+<!--
+  Expected Page_0/Content.xml for with_table.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Document with table content. Tables are represented as a collection of
+  TextObject and PathObject elements (grid lines).
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+  </ofd:Area>
+  <ofd:Content>
+    <ofd:Layer Type="Body">
+      <ofd:TextObject ID="1" Boundary="10 10 190 20" Font="1" Size="14">
+        <ofd:TextCode X="10" Y="20">Table Document</ofd:TextCode>
+      </ofd:TextObject>
+      <!-- Table grid lines -->
+      <ofd:PathObject ID="2" Boundary="10 40 190 1">
+        <ofd:StrokeColor>
+          <ofd:Value>0 0 0</ofd:Value>
+        </ofd:StrokeColor>
+        <ofd:AbbreviatedData>M 10 40 L 200 40</ofd:AbbreviatedData>
+      </ofd:PathObject>
+      <ofd:PathObject ID="3" Boundary="10 60 190 1">
+        <ofd:StrokeColor>
+          <ofd:Value>0 0 0</ofd:Value>
+        </ofd:StrokeColor>
+        <ofd:AbbreviatedData>M 10 60 L 200 60</ofd:AbbreviatedData>
+      </ofd:PathObject>
+      <!-- Table cell content -->
+      <ofd:TextObject ID="4" Boundary="15 42 80 15" Font="1" Size="10">
+        <ofd:TextCode X=1"5" Y="55">Cell A1</ofd:TextCode>
+      </ofd:TextObject>
+      <ofd:TextObject ID="5" Boundary="105 42 80 15" Font="1" Size="10">
+        <ofd:TextCode X="105" Y="55">Cell B1</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

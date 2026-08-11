@@ -89,4 +89,106 @@ mod tests {
         )];
         assert!(PageBlockDepthRule.check(&entries).passed);
     }
+
+    // ── 违规：深度超过 3 ───────────────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_rule_fails_depth_4() {
+        let entries = vec![(
+            "Page_0.xml".into(),
+            b"<ofd:Page><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock/></ofd:PageBlock></ofd:PageBlock></ofd:PageBlock></ofd:Page>".to_vec(),
+        )];
+        let result = PageBlockDepthRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains('4'));
+        assert!(result.message.contains('3'));
+    }
+
+    // ── 违规：深度 5 ──────────────────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_rule_fails_depth_5() {
+        let entries = vec![(
+            "Page_0.xml".into(),
+            b"<ofd:Page><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock/></ofd:PageBlock></ofd:PageBlock></ofd:PageBlock></ofd:PageBlock></ofd:Page>".to_vec(),
+        )];
+        let result = PageBlockDepthRule.check(&entries);
+        assert!(!result.passed);
+    }
+
+    // ── 边界：非 Page_ 文件应跳过 ──────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_rule_ignores_non_page_file() {
+        let entries = vec![(
+            "Doc_0/Document.xml".into(),
+            b"<ofd:Document><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock/></ofd:PageBlock></ofd:PageBlock></ofd:PageBlock></ofd:Document>".to_vec(),
+        )];
+        assert!(PageBlockDepthRule.check(&entries).passed);
+    }
+
+    // ── 边界：非 XML 文件应跳过 ────────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_rule_ignores_non_xml() {
+        let entries = vec![("Page_0.bin".into(), b"PageBlock".to_vec())];
+        assert!(PageBlockDepthRule.check(&entries).passed);
+    }
+
+    // ── 边界：空条目列表 ───────────────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_rule_passes_empty() {
+        assert!(PageBlockDepthRule.check(&[]).passed);
+    }
+
+    // ── 边界：非命名空间前缀 PageBlock ─────────────────────────────────
+
+    #[test]
+    fn page_block_depth_rule_passes_with_plain_pageblock_within_limit() {
+        let entries = vec![(
+            "Page_0.xml".into(),
+            b"<Page><PageBlock><PageBlock><PageBlock/></PageBlock></PageBlock></Page>".to_vec(),
+        )];
+        assert!(PageBlockDepthRule.check(&entries).passed);
+    }
+
+    // ── check_violations：违规场景 ─────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_violations_with_depth_4() {
+        let entries = vec![(
+            "Page_0.xml".into(),
+            b"<ofd:Page><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock/></ofd:PageBlock></ofd:PageBlock></ofd:PageBlock></ofd:Page>".to_vec(),
+        )];
+        let violations = PageBlockDepthRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "PAGEBLOCK_DEPTH");
+        assert_eq!(violations[0].severity(), Severity::Error);
+        assert!(violations[0].location().unwrap().contains("Page_0.xml"));
+        assert_eq!(violations[0].actual_value(), Some("4"));
+        assert_eq!(violations[0].expected_value(), Some("3"));
+    }
+
+    // ── check_violations：合规场景 ─────────────────────────────────────
+
+    #[test]
+    fn page_block_depth_violations_empty_on_pass() {
+        let entries = vec![(
+            "Page_0.xml".into(),
+            b"<ofd:Page><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock/></ofd:PageBlock></ofd:PageBlock></ofd:Page>".to_vec(),
+        )];
+        assert!(PageBlockDepthRule.check_violations(&entries).is_empty());
+    }
+
+    // ── check_violations：非 Page_ 文件跳过 ────────────────────────────
+
+    #[test]
+    fn page_block_depth_violations_ignores_non_page() {
+        let entries = vec![(
+            "Document.xml".into(),
+            b"<ofd:PageBlock><ofd:PageBlock><ofd:PageBlock><ofd:PageBlock/></ofd:PageBlock></ofd:PageBlock></ofd:PageBlock>".to_vec(),
+        )];
+        assert!(PageBlockDepthRule.check_violations(&entries).is_empty());
+    }
 }

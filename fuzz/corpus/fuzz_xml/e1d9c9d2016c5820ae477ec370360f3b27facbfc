@@ -1,0 +1,19 @@
+<!--
+  Expected Page_0/Content.xml for simple_2.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Similar to simple_1 but with different text content.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+  </ofd:Area>
+  <ofd:Content>
+    <ofd:Layer Type="Body">
+      <ofd:TextObject ID="1" Boundary="10 10 190 20" Font="1" Size="12">
+        <ofd:TextCode X="10" Y="20">Simple Document 2</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Lay0r>
+  </ofd:Content>
+</ofd:Page>
