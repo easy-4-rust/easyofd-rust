@@ -69,7 +69,7 @@ sha2 = "0.10.9"
 der = "0.8.1"
 x509-cert = "0.3.0"
 pem = "4.0.0"
-lopdf = "0.35"
+lopdf = "0.44"
 printpdf = { version = "0.7", default-features = false, features = ["font_subsetting"] }
 # ═══ 转换渲染（AWTMaker/PDF 替换，纯 Rust）═══
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
