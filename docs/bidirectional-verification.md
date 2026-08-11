@@ -16,8 +16,62 @@ The verification is organized into four layers of increasing strictness:
 |-------|---------------------|------------|-------------------------------------------------------|
 | L1    | Metadata Comparison | **Done**   | Compare page count, image count, path count, signature presence, text hash |
 | L2    | XML Structure       | **Done**   | Verify key XML elements and attributes against expected patterns |
-| L3    | Byte-level PDF      | Skipped    | Compare PDF output byte-for-byte (requires JDK + ofdrw) |
-| L4    | Byte-level OFD      | Skipped    | Compare OFD ZIP output byte-for-byte (requires JDK + ofdrw) |
+| L3    | Byte-level PDF      | **Open**   | Compare PDF output byte-for-byte (requires a full PDF rendering engine aligned with ofdrw's IText/PDFBox) |
+| L4    | Byte-level OFD      | **Done**   | Read-ofdrw → write → compare XML elements + ZIP entries (roundtrip_diff, 60/60 zero deviations) |
+
+## Current Verification Status (2026-08-11)
+
+**L4 byte-level OFD roundtrip: 60/60 samples at zero deviations.**
+
+`crates/easyofd/tests/roundtrip_diff.rs` now discovers all `.ofd` fixtures
+(55 ofdrw samples + 5 baseline samples), runs read→write→compare for each,
+and reports structural deviations:
+
+- Element counts of `OFD.xml` and the Document XML are compared with the
+  `ofd:` namespace prefix normalized (namespace-agnostic structural equality).
+- ZIP entry sets are compared with page-path normalization.
+- Result: **0 ZIP diffs + 0 XML diffs = 0 across 60 clean, 0 skipped**.
+- `ofdrw_cross_runner` reads all 55 ofdrw samples with **0 SKIP**.
+
+To run:
+
+```bash
+cargo test --test roundtrip_diff -- --nocapture   # full 60-sample report
+cargo test --test ofdrw_cross_runner              # read/roundtrip gates
+```
+
+### L3 PDF output: open gap
+
+easyofd-rust has an OFD→PDF exporter (`easyofd-convert::ofd_to_pdf`, backed
+by `printpdf`), while ofdrw renders PDFs with IText/PDFBox. The two engines
+produce different byte streams (object layout, font embedding, compression,
+coordinate handling), so PDF output is not byte-comparable without a full
+PDF rendering engine rewrite. The `byte_diff` PDF check currently compares
+only byte length and PDF object count as a rough proxy; it remains an **open
+work item**, not part of the OFD roundtrip acceptance.
+
+### Java type coverage: 57% gap
+
+ofdrw has ~478 public types; easyofd-rust implements ~204 (43%). The
+remaining types are mostly internal ofdrw details (exceptions, utilities,
+Gm/SES seal internals, font containers). Closing the gap is a continuous
+API-alignment effort that is **orthogonal to byte-level OFD fidelity**
+(roundtrip is already 60/60). It is tracked separately from this
+verification.
+
+## ofdrw Verification Pipeline
+
+The on-disk verification pipeline (requires JDK 17 + Maven, run manually):
+
+1. **OF-A**: build ofdrw from `/tmp/ofdrw` (`mvn package -DskipTests`) and
+   collect `.ofd` / `.json` / `.pdf` artifacts into `/tmp/ofdrw_artifacts/`.
+2. **OF-B**: for each ofdrw sample, run easyofd-rust with the same input and
+   collect artifacts into `/tmp/easyofd_artifacts/`.
+3. **OF-C**: diff the two artifact sets (JSON key-by-key, XML element-by-element).
+4. **OF-D**: fix easyofd-rust deviations and repeat until zero.
+
+The committed fixtures under `tests/fixtures/real_ofd/` are copied from the
+ofdrw test resources so the roundtrip gates run in CI without a JDK.
 
 ### L1: Metadata Comparison
 
