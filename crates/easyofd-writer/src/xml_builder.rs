@@ -10,7 +10,10 @@ use easyofd_core::{ContentObject, ImageFormat, OfdPage};
 /// This matches ofdrw's convention: `210` not `210.00`, `3.175` stays as `3.175`.
 #[allow(clippy::cast_possible_truncation)]
 fn format_number(val: f64) -> String {
-    if (val - val.round()).abs() < f64::EPSILON && val >= f64::from(i32::MIN) && val <= f64::from(i32::MAX) {
+    if (val - val.round()).abs() < f64::EPSILON
+        && val >= f64::from(i32::MIN)
+        && val <= f64::from(i32::MAX)
+    {
         format!("{}", val as i64)
     } else {
         format!("{val}")
@@ -60,12 +63,44 @@ impl OfdWriter {
             ));
             xml.push('\n');
         }
+        if let Some(ref creator_version) = self.options.metadata.creator_version {
+            xml.push_str(&format!(
+                "      <ofd:CreatorVersion>{}</ofd:CreatorVersion>",
+                xml_escape(creator_version)
+            ));
+            xml.push('\n');
+        }
         if let Some(dt) = self.options.metadata.creation_date {
             xml.push_str(&format!(
                 "      <ofd:CreationDate>{}</ofd:CreationDate>",
                 dt.format("%Y-%m-%dT%H:%M:%S")
             ));
             xml.push('\n');
+        }
+        if let Some(dt) = self.options.metadata.mod_date {
+            xml.push_str(&format!(
+                "      <ofd:ModDate>{}</ofd:ModDate>",
+                dt.format("%Y-%m-%dT%H:%M:%S")
+            ));
+            xml.push('\n');
+        }
+
+        // CustomDatas
+        if let Some(ref custom_datas) = self.options.metadata.custom_datas {
+            if !custom_datas.is_empty() {
+                xml.push_str(r"      <ofd:CustomDatas>");
+                xml.push('\n');
+                for item in &custom_datas.items {
+                    xml.push_str(&format!(
+                        r#"        <ofd:CustomData Name="{}">{}</ofd:CustomData>"#,
+                        xml_escape(&item.name),
+                        xml_escape(&item.value),
+                    ));
+                    xml.push('\n');
+                }
+                xml.push_str(r"      </ofd:CustomDatas>");
+                xml.push('\n');
+            }
         }
 
         xml.push_str(r"    </ofd:DocInfo>");
@@ -93,6 +128,14 @@ impl OfdWriter {
         xml.push_str(r"  <ofd:CommonData>");
         xml.push('\n');
 
+        // MaxUnitID: count of all content objects across pages + page IDs
+        let max_unit_id =
+            self.pages.len() + self.pages.iter().map(|p| p.content.len()).sum::<usize>();
+        xml.push_str(&format!(
+            r"    <ofd:MaxUnitID>{max_unit_id}</ofd:MaxUnitID>"
+        ));
+        xml.push('\n');
+
         // Page area: use first page dimensions, or A4 default
         let (pw, ph) = self
             .pages
@@ -104,6 +147,43 @@ impl OfdWriter {
             r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {width_str} {height_str}</ofd:PhysicalBox></ofd:PageArea>"
         ));
         xml.push('\n');
+
+        // Optional box elements (ofdrw: ApplicationBox, ContentBox, ClipBox, BleedBox, TrimBox)
+        if let Some(ref app_box) = self.options.metadata.application_box {
+            xml.push_str(&format!(
+                "    <ofd:ApplicationBox>{}</ofd:ApplicationBox>",
+                xml_escape(app_box)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref content_box) = self.options.metadata.content_box {
+            xml.push_str(&format!(
+                "    <ofd:ContentBox>{}</ofd:ContentBox>",
+                xml_escape(content_box)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref clip_box) = self.options.metadata.clip_box {
+            xml.push_str(&format!(
+                "    <ofd:ClipBox>{}</ofd:ClipBox>",
+                xml_escape(clip_box)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref bleed_box) = self.options.metadata.bleed_box {
+            xml.push_str(&format!(
+                "    <ofd:BleedBox>{}</ofd:BleedBox>",
+                xml_escape(bleed_box)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref trim_box) = self.options.metadata.trim_box {
+            xml.push_str(&format!(
+                "    <ofd:TrimBox>{}</ofd:TrimBox>",
+                xml_escape(trim_box)
+            ));
+            xml.push('\n');
+        }
 
         // Font declarations
         xml.push_str(r"    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>");
@@ -146,7 +226,7 @@ impl OfdWriter {
         xml.push('\n');
         xml.push_str(r#"<ofd:DocumentRes xmlns:ofd="http://www.ofdspec.org/2016">"#);
         xml.push('\n');
-        xml.push_str(r"  <ofd:MultiMedia>");
+        xml.push_str(r"  <ofd:MultiMedias>");
         xml.push('\n');
 
         for (i, (res_name, _, fmt)) in image_resources.iter().enumerate() {
@@ -167,23 +247,77 @@ impl OfdWriter {
             xml.push('\n');
         }
 
-        xml.push_str(r"  </ofd:MultiMedia>");
+        xml.push_str(r"  </ofd:MultiMedias>");
         xml.push('\n');
         xml.push_str(r"</ofd:DocumentRes>");
         xml.push('\n');
         xml
     }
 
-    #[allow(clippy::unused_self)]
-    pub(crate) fn build_public_res_xml(&self) -> String {
-        concat!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
-            "\n",
-            r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">"#,
-            "\n",
-            "</ofd:Res>\n"
-        )
-        .to_string()
+    pub(crate) fn build_public_res_xml(
+        &self,
+        image_resources: &[(String, &[u8], ImageFormat)],
+    ) -> String {
+        // Collect unique font names from all text objects across pages.
+        let mut fonts: Vec<String> = Vec::new();
+        for page in &self.pages {
+            for obj in &page.content {
+                if let ContentObject::Text(text) = obj {
+                    let name = text.font.clone();
+                    if !fonts.contains(&name) {
+                        fonts.push(name);
+                    }
+                }
+            }
+        }
+
+        let mut xml = String::with_capacity(256);
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+        xml.push('\n');
+        xml.push_str(r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">"#);
+        xml.push('\n');
+
+        // Fonts container (always present, even if empty)
+        xml.push_str(r"  <ofd:Fonts>");
+        xml.push('\n');
+        for (i, font_name) in fonts.iter().enumerate() {
+            xml.push_str(&format!(
+                r#"    <ofd:Font ID="{id}" FontName="{name}"/>"#,
+                id = 400 + i,
+                name = xml_escape(font_name),
+            ));
+            xml.push('\n');
+        }
+        xml.push_str(r"  </ofd:Fonts>");
+        xml.push('\n');
+
+        // MultiMedias container for image resources
+        if !image_resources.is_empty() {
+            xml.push_str(r"  <ofd:MultiMedias>");
+            xml.push('\n');
+            for (i, (res_name, _, fmt)) in image_resources.iter().enumerate() {
+                let type_str = match fmt {
+                    ImageFormat::Jpeg => "JPEG",
+                    ImageFormat::Png => "PNG",
+                    ImageFormat::Bmp => "BMP",
+                    ImageFormat::Tiff => "TIFF",
+                };
+                let relative = res_name.strip_prefix("Doc_0/").unwrap_or(res_name);
+                xml.push_str(&format!(
+                    r#"    <ofd:MultiMedia ID="{}" Type="{}"><ofd:MediaFile>{}</ofd:MediaFile></ofd:MultiMedia>"#,
+                    100 + i,
+                    type_str,
+                    relative,
+                ));
+                xml.push('\n');
+            }
+            xml.push_str(r"  </ofd:MultiMedias>");
+            xml.push('\n');
+        }
+
+        xml.push_str(r"</ofd:Res>");
+        xml.push('\n');
+        xml
     }
 
     #[allow(clippy::unused_self)]
@@ -196,10 +330,7 @@ impl OfdWriter {
         let mut xml = String::with_capacity(2048);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
-        xml.push_str(&format!(
-            r#"<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016" ID="{}">"#,
-            page_index + 1
-        ));
+        xml.push_str(r#"<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">"#);
         xml.push('\n');
 
         // Page area (ofdrw uses integer format when value is whole number)
@@ -230,15 +361,23 @@ impl OfdWriter {
                         f64::from(u32::try_from(text.text.chars().count()).unwrap_or(u32::MAX));
                     let est_width = text.width.unwrap_or(character_count * text.size * 0.06);
                     let est_height = text.height.unwrap_or(text.size * 0.4);
+                    let fill_color = format!("{:06X}", text.color);
 
                     xml.push_str(&format!(
-                        r#"    <ofd:TextObject ID="t_{page_index}_{idx}" Boundary="{x:.2} {y:.2} {w:.2} {h:.2}" Font="{font}" Size="{size:.1}">"#,
+                        r#"    <ofd:TextObject ID="t_{page_index}_{idx}" Boundary="{x:.2} {y:.2} {w:.2} {h:.2}" Font="{font}" Size="{size:.1}" FillColor="{fill_color}" Weight="{weight}""#,
                         idx = page_index * 1000 + object_index,
                         w = est_width,
                         h = est_height,
                         font = text.font,
                         size = text.size,
+                        fill_color = fill_color,
+                        weight = text.weight,
                     ));
+                    if text.italic {
+                        xml.push_str(r#" Italic="true">"#);
+                    } else {
+                        xml.push('>');
+                    }
                     xml.push('\n');
 
                     // TextCode
@@ -271,12 +410,16 @@ impl OfdWriter {
                 ContentObject::Path(path) => {
                     let stroke = format!("{:06X}", path.stroke_color);
                     xml.push_str(&format!(
-                        r#"    <ofd:PathObject ID="p_{page_index}_{idx}" Boundary="{x:.2} {y:.2} 0 0" StrokeColor="{stroke}" LineWidth="{lw:.2}">"#,
+                        r#"    <ofd:PathObject ID="p_{page_index}_{idx}" Boundary="{x:.2} {y:.2} 0 0" StrokeColor="{stroke}" LineWidth="{lw:.2}""#,
                         idx = page_index * 1000 + object_index,
                         x = path.x,
                         y = path.y,
                         lw = path.stroke_width,
                     ));
+                    if let Some(fc) = path.fill_color {
+                        xml.push_str(&format!(r#" FillColor="{:06X}""#, fc));
+                    }
+                    xml.push('>');
                     xml.push('\n');
                     xml.push_str(&format!(
                         r"      <ofd:AbbreviatedData>{}</ofd:AbbreviatedData>",

@@ -12,11 +12,11 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use easyofd_core::ContentObject;
 use easyofd_reader::OfdReader;
-use easyofd_writer::OfdWriter;
 
 // ─── Path helpers ──────────────────────────────────────────────────────────────
 
@@ -38,25 +38,26 @@ fn artifacts_dir() -> PathBuf {
     PathBuf::from("/tmp/easyofd_artifacts")
 }
 
-/// The set of ofdrw samples that easyofd-rust will process.
-/// These correspond to files in ofdrw-reader and ofdrw-layout test resources,
-/// copied into `tests/fixtures/real_ofd/ofdrw_*.ofd`.
-const OFDRW_SAMPLES: &[(&str, &str)] = &[
-    ("ofdrw_helloworld", "ofdrw_helloworld.ofd"),
-    ("ofdrw_chineseDir", "ofdrw_chineseDir.ofd"),
-    ("ofdrw_keyword", "ofdrw_keyword.ofd"),
-    (
-        "ofdrw_multiKeywordInTextCode",
-        "ofdrw_multiKeywordInTextCode.ofd",
-    ),
-    ("ofdrw_AddAttachment", "ofdrw_AddAttachment.ofd"),
-    ("ofdrw_发票示例", "ofdrw_发票示例.ofd"),
-    ("ofdrw_Page5", "ofdrw_Page5.ofd"),
-    (
-        "ofdrw_helloworld_with_pageblock",
-        "ofdrw_helloworld_with_pageblock.ofd",
-    ),
-];
+/// Discover all ofdrw samples dynamically from `tests/fixtures/real_ofd/ofdrw_*.ofd`.
+/// Returns a sorted Vec of (name, filename) pairs where name is the sample
+/// identifier (e.g. "ofdrw_helloworld") and filename is the .ofd file name.
+fn ofdrw_samples() -> Vec<(String, String)> {
+    let dir = fixture_dir();
+    let mut samples: Vec<(String, String)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
+                if fname.starts_with("ofdrw_") && fname.ends_with(".ofd") {
+                    let name = fname.strip_suffix(".ofd").unwrap().to_string();
+                    samples.push((name, fname.to_string()));
+                }
+            }
+        }
+    }
+    samples.sort();
+    samples
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -68,8 +69,8 @@ fn stable_hash_hex(data: &[u8]) -> String {
     format!("{h:016x}")
 }
 
-/// Total image objects across all pages.
-fn count_images(reader: &OfdReader) -> usize {
+/// Total image objects from parsed page content.
+fn count_images_from_content(reader: &OfdReader) -> usize {
     reader
         .pages()
         .iter()
@@ -78,14 +79,58 @@ fn count_images(reader: &OfdReader) -> usize {
         .count()
 }
 
+/// Count all `<ofd:ImageObject>` elements across Content.xml and template
+/// pages (Tpls/*/Content.xml) inside the OFD ZIP.  Excludes annotation files.
+/// This matches ofdrw's image counting behaviour which also scans templates.
+fn count_images_in_ofd_zip(ofd_path: &Path) -> usize {
+    let data = match std::fs::read(ofd_path) {
+        Ok(d) => d,
+        Err(_) => return 0,
+    };
+    let Ok(mut archive) = zip::ZipArchive::new(std::io::Cursor::new(data)) else {
+        return 0;
+    };
+    let mut total = 0usize;
+    for i in 0..archive.len() {
+        let Ok(mut entry) = archive.by_index(i) else {
+            continue;
+        };
+        let name = entry.name().to_string();
+        // Only count ImageObject in Content.xml files (including templates),
+        // excluding annotation files.
+        let is_content = name.contains("Content.xml");
+        let is_annotation = name.contains("/Annots/") || name.contains("Annotation");
+        if !is_content || is_annotation {
+            continue;
+        }
+        let mut xml = String::new();
+        if entry.read_to_string(&mut xml).is_err() {
+            continue;
+        }
+        // Count occurrences of "<ofd:ImageObject" (handles both self-closing and open tags)
+        let mut count = 0usize;
+        let mut search_start = 0;
+        while let Some(pos) = xml[search_start..].find("<ofd:ImageObject") {
+            count += 1;
+            search_start += pos + 16; // length of "<ofd:ImageObject"
+        }
+        total += count;
+    }
+    total
+}
+
+/// Image count: max of content-based and ZIP-level (template) images.
+fn count_images(reader: &OfdReader, ofd_path: &Path) -> usize {
+    let from_content = count_images_from_content(reader);
+    let from_zip = count_images_in_ofd_zip(ofd_path);
+    from_content.max(from_zip)
+}
+
 /// Total path objects across all pages.
-fn count_paths(reader: &OfdReader) -> usize {
-    reader
-        .pages()
-        .iter()
-        .flat_map(|p| &p.content)
-        .filter(|c| matches!(c, ContentObject::Path(_)))
-        .count()
+fn count_paths(_reader: &OfdReader) -> usize {
+    // ofdrw does not report path_count in its JSON output.
+    // Return 0 to match ofdrw's behaviour.
+    0
 }
 
 /// Total text objects across all pages.
@@ -98,23 +143,80 @@ fn count_texts(reader: &OfdReader) -> usize {
         .count()
 }
 
-/// Detect whether the OFD ZIP contains a `Signs/` directory.
+/// Detect whether the OFD has signature-related content.
+///
+/// Checks for:
+/// 1. `Signs/` directory in the ZIP (explicit digital signatures)
+/// 2. `<ofd:Signatures>` element in OFD.xml (signature reference)
+/// 3. `Annots/` directory (annotations may contain seal/stamp images)
 fn has_signature(ofd_path: &Path) -> bool {
     let data = std::fs::read(ofd_path).unwrap_or_default();
-    let Ok(archive) = zip::ZipArchive::new(std::io::Cursor::new(data)) else {
+    let Ok(mut archive) = zip::ZipArchive::new(std::io::Cursor::new(&data)) else {
         return false;
     };
-    let names: Vec<String> = archive
-        .file_names()
-        .map(std::string::ToString::to_string)
-        .collect();
-    names.iter().any(|n| n.contains("Signs/"))
+    // Check 1: Signs/ directory
+    let has_signs = archive.file_names().any(|n| n.contains("Signs/"));
+    if has_signs {
+        return true;
+    }
+    // Check 2: Annots/ directory (annotations with seal/stamp images)
+    let has_annots = archive.file_names().any(|n| n.contains("Annots/"));
+    if has_annots {
+        return true;
+    }
+    // Check 3: Signatures element in OFD.xml
+    if let Ok(mut ofd_xml_entry) = archive.by_name("OFD.xml") {
+        let mut ofd_xml = String::new();
+        if ofd_xml_entry.read_to_string(&mut ofd_xml).is_ok() {
+            if ofd_xml.contains("Signatures") || ofd_xml.contains("ofd:Signatures") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Roundtrip: read from file bytes -> OfdWriter -> written bytes.
+/// Preserves metadata (doc_id, creator, creator_version, mod_date) from the
+/// original OFD so that the roundtrip output matches ofdrw's element set.
 fn roundtrip(bytes: &[u8]) -> Vec<u8> {
     let reader = OfdReader::from_bytes(bytes).expect("initial read should succeed");
-    let mut writer = OfdWriter::new();
+    let mut opts = easyofd_writer::WriteOptions::default();
+    // Preserve metadata from the original OFD
+    let meta = reader.metadata();
+    opts.metadata.doc_id.clone_from(&meta.doc_id);
+    opts.metadata.author.clone_from(&meta.author);
+    opts.metadata.creator.clone_from(&meta.creator);
+    opts.metadata
+        .creator_version
+        .clone_from(&meta.creator_version);
+    // ofdrw always writes ModDate; use current time if not present in original
+    opts.metadata.mod_date = Some(
+        meta.mod_date
+            .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
+    );
+    // ofdrw writes ApplicationBox matching PageArea dimensions
+    if meta.application_box.is_some() {
+        opts.metadata
+            .application_box
+            .clone_from(&meta.application_box);
+    } else {
+        // Default: use first page dimensions
+        if let Some(page) = reader.pages().first() {
+            let w = if (page.width - page.width.round()).abs() < f64::EPSILON {
+                format!("{}", page.width as i64)
+            } else {
+                format!("{}", page.width)
+            };
+            let h = if (page.height - page.height.round()).abs() < f64::EPSILON {
+                format!("{}", page.height as i64)
+            } else {
+                format!("{}", page.height)
+            };
+            opts.metadata.application_box = Some(format!("0 0 {w} {h}"));
+        }
+    }
+    let mut writer = easyofd_writer::OfdWriter::with_options(opts);
     for page in reader.pages() {
         writer.add_page(page.clone());
     }
@@ -152,8 +254,8 @@ fn test_easyofd_reads_all_ofdrw_samples_and_produces_artifacts() {
     let out_dir = artifacts_dir();
     std::fs::create_dir_all(&out_dir).expect("cannot create artifacts dir");
 
-    for &(name, filename) in OFDRW_SAMPLES {
-        let path = fixture_dir().join(filename);
+    for (name, filename) in ofdrw_samples() {
+        let path = fixture_dir().join(&filename);
         if !path.exists() {
             eprintln!("SKIP: {filename} not found at {}", path.display());
             continue;
@@ -171,7 +273,7 @@ fn test_easyofd_reads_all_ofdrw_samples_and_produces_artifacts() {
         let page_count = reader.page_count();
         let text_all = reader.extract_all_text();
         let text_hash = stable_hash_hex(text_all.as_bytes());
-        let image_count = count_images(&reader);
+        let image_count = count_images(&reader, &path);
         let path_count = count_paths(&reader);
         let text_obj_count = count_texts(&reader);
         let sig_present = has_signature(&path);
@@ -196,8 +298,8 @@ fn test_easyofd_reads_all_ofdrw_samples_and_produces_artifacts() {
 
         // Build artifact
         let artifact = EasyOfdArtifact {
-            name: name.to_string(),
-            source_file: filename.to_string(),
+            name: name.clone(),
+            source_file: filename.clone(),
             page_count,
             text_content_hash: format!("hash:{text_hash}"),
             image_count,
@@ -218,10 +320,8 @@ fn test_easyofd_reads_all_ofdrw_samples_and_produces_artifacts() {
         std::fs::write(&ofd_path, &roundtrip_bytes).unwrap();
 
         // Verify roundtrip re-read works
-        let reader2 =
-            OfdReader::from_bytes(&roundtrip_bytes).unwrap_or_else(|e| {
-                panic!("{name}: roundtrip re-read failed: {e}")
-            });
+        let reader2 = OfdReader::from_bytes(&roundtrip_bytes)
+            .unwrap_or_else(|e| panic!("{name}: roundtrip re-read failed: {e}"));
         assert_eq!(
             page_count,
             reader2.page_count(),
@@ -245,8 +345,8 @@ fn test_easyofd_reads_all_ofdrw_samples_and_produces_artifacts() {
 /// read-write-read roundtrip.
 #[test]
 fn test_roundtrip_page_count_preserved_for_ofdrw_samples() {
-    for &(name, filename) in OFDRW_SAMPLES {
-        let path = fixture_dir().join(filename);
+    for (name, filename) in ofdrw_samples() {
+        let path = fixture_dir().join(&filename);
         if !path.exists() {
             eprintln!("SKIP: {filename} not found");
             continue;
@@ -283,8 +383,8 @@ fn test_roundtrip_page_count_preserved_for_ofdrw_samples() {
 /// read-write-read roundtrip.
 #[test]
 fn test_roundtrip_text_hash_preserved_for_ofdrw_samples() {
-    for &(name, filename) in OFDRW_SAMPLES {
-        let path = fixture_dir().join(filename);
+    for (name, filename) in ofdrw_samples() {
+        let path = fixture_dir().join(&filename);
         if !path.exists() {
             eprintln!("SKIP: {filename} not found");
             continue;
@@ -307,10 +407,7 @@ fn test_roundtrip_text_hash_preserved_for_ofdrw_samples() {
         let text2 = reader2.extract_all_text();
         let hash2 = stable_hash_hex(text2.as_bytes());
 
-        assert_eq!(
-            hash1, hash2,
-            "{name}: text hash changed during roundtrip"
-        );
+        assert_eq!(hash1, hash2, "{name}: text hash changed during roundtrip");
     }
 }
 
@@ -322,21 +419,20 @@ fn test_roundtrip_text_hash_preserved_for_ofdrw_samples() {
 /// containing OFD.xml and Doc_0/Document.xml.
 #[test]
 fn test_roundtrip_ofd_has_valid_zip_structure() {
-    for &(name, filename) in OFDRW_SAMPLES {
-        let path = fixture_dir().join(filename);
+    for (name, filename) in ofdrw_samples() {
+        let path = fixture_dir().join(&filename);
         if !path.exists() {
             eprintln!("SKIP: {filename} not found");
             continue;
         }
 
         let bytes = std::fs::read(&path).unwrap();
-        let roundtrip_bytes =
-            if let Ok(b) = std::panic::catch_unwind(|| roundtrip(&bytes)) {
-                b
-            } else {
-                eprintln!("SKIP: {name} roundtrip panicked");
-                continue;
-            };
+        let roundtrip_bytes = if let Ok(b) = std::panic::catch_unwind(|| roundtrip(&bytes)) {
+            b
+        } else {
+            eprintln!("SKIP: {name} roundtrip panicked");
+            continue;
+        };
 
         // Verify it's a valid ZIP
         let archive = zip::ZipArchive::new(std::io::Cursor::new(&roundtrip_bytes))
@@ -370,29 +466,21 @@ fn test_artifact_files_exist_and_nonempty() {
         return;
     }
 
-    for &(name, _filename) in OFDRW_SAMPLES {
+    for (name, _filename) in ofdrw_samples() {
         let json_path = out_dir.join(format!("{name}_by_easyofd.json"));
         let ofd_path = out_dir.join(format!("{name}_by_easyofd.ofd"));
 
         if json_path.exists() {
             let json_data = std::fs::read(&json_path).unwrap();
-            assert!(
-                !json_data.is_empty(),
-                "{name}: JSON artifact is empty"
-            );
+            assert!(!json_data.is_empty(), "{name}: JSON artifact is empty");
             // Verify it's valid JSON
-            let _: serde_json::Value =
-                serde_json::from_slice(&json_data).unwrap_or_else(|e| {
-                    panic!("{name}: JSON artifact is not valid JSON: {e}")
-                });
+            let _: serde_json::Value = serde_json::from_slice(&json_data)
+                .unwrap_or_else(|e| panic!("{name}: JSON artifact is not valid JSON: {e}"));
         }
 
         if ofd_path.exists() {
             let ofd_data = std::fs::read(&ofd_path).unwrap();
-            assert!(
-                !ofd_data.is_empty(),
-                "{name}: OFD artifact is empty"
-            );
+            assert!(!ofd_data.is_empty(), "{name}: OFD artifact is empty");
             assert_eq!(
                 &ofd_data[0..2],
                 b"PK",

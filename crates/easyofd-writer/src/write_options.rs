@@ -14,12 +14,8 @@ impl Default for WriteOptions {
     fn default() -> Self {
         Self {
             metadata: OfdMetadata {
-                version: "1.0".to_string(),
-                doc_id: None,
-                title: None,
-                author: None,
-                creator: None,
                 creation_date: Some(Utc::now().naive_utc()),
+                ..OfdMetadata::default()
             },
         }
     }

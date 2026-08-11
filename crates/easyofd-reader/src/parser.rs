@@ -5,6 +5,10 @@
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read, Seek};
 
+use easyofd_core::model::bookmark::Bookmark;
+use easyofd_core::model::bookmarks::Bookmarks;
+use easyofd_core::model::custom_data::CustomData;
+use easyofd_core::model::custom_datas::CustomDatas;
 use easyofd_core::{
     ContentObject, ImageFormat, ImageObject, OfdError, OfdPage, OfdResult, PathObject, TextObject,
 };
@@ -17,6 +21,22 @@ pub(crate) struct OfdEntry {
     pub(crate) doc_root: String,
     /// Document identifier (ofd:DocID), if present.
     pub(crate) doc_id: Option<String>,
+    /// Document author (ofd:Author), if present.
+    pub(crate) author: Option<String>,
+    /// Creator application name (ofd:Creator), if present.
+    pub(crate) creator: Option<String>,
+    /// Creator application version (ofd:CreatorVersion), if present.
+    pub(crate) creator_version: Option<String>,
+    /// Last modification date (ofd:ModDate), if present.
+    pub(crate) mod_date: Option<String>,
+    /// Creation date (ofd:CreationDate), if present.
+    pub(crate) creation_date: Option<String>,
+    /// Maximum unit identifier (ofd:MaxUnitID).
+    pub(crate) max_unit_id: u32,
+    /// Custom data collection (ofd:CustomDatas).
+    pub(crate) custom_datas: Option<CustomDatas>,
+    /// Bookmarks (ofd:Bookmarks).
+    pub(crate) bookmarks: Option<Bookmarks>,
 }
 
 pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
@@ -28,35 +48,188 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     let mut buf = Vec::new();
     let mut doc_root = String::new();
     let mut doc_id = None;
-    let mut in_doc_root = false;
-    let mut in_doc_id = false;
+    let mut author = None;
+    let mut creator = None;
+    let mut creator_version = None;
+    let mut mod_date = None;
+    let mut creation_date = None;
+    let mut max_unit_id = 0_u32;
+    let mut custom_datas: Option<CustomDatas> = None;
+    let mut bookmarks: Option<Bookmarks> = None;
+    let mut current_text_tag: Option<Vec<u8>> = None;
+    let mut current_text = String::new();
+    // Nested element tracking for CustomDatas and Bookmarks
+    let mut in_custom_datas = false;
+    let mut in_custom_data = false;
+    let mut current_custom_data_name: Option<String> = None;
+    let mut in_bookmarks = false;
+    let mut in_bookmark = false;
+    let mut current_bookmark_name: Option<String> = None;
+    let mut current_bookmark_goto: Option<String> = None;
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
-                in_doc_root = true;
-            }
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:DocID" => {
-                in_doc_id = true;
-            }
-            Ok(Event::Text(ref e)) if in_doc_root => {
-                doc_root = e
+            Ok(Event::Start(ref e)) => match e.name().as_ref() {
+                b"ofd:DocRoot" => {
+                    current_text_tag = Some(b"ofd:DocRoot".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:DocID" => {
+                    current_text_tag = Some(b"ofd:DocID".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:Author" => {
+                    current_text_tag = Some(b"ofd:Author".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:Creator" => {
+                    current_text_tag = Some(b"ofd:Creator".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:CreatorVersion" => {
+                    current_text_tag = Some(b"ofd:CreatorVersion".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:ModDate" => {
+                    current_text_tag = Some(b"ofd:ModDate".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:CreationDate" => {
+                    current_text_tag = Some(b"ofd:CreationDate".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:MaxUnitID" => {
+                    current_text_tag = Some(b"ofd:MaxUnitID".to_vec());
+                    current_text.clear();
+                }
+                b"ofd:CustomDatas" => {
+                    in_custom_datas = true;
+                }
+                b"ofd:CustomData" if in_custom_datas => {
+                    in_custom_data = true;
+                    current_custom_data_name = None;
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"Name" {
+                            current_custom_data_name = Some(
+                                attr.decoded_and_normalized_value(
+                                    quick_xml::XmlVersion::Explicit1_0,
+                                    reader.decoder(),
+                                )
+                                .unwrap_or_default()
+                                .to_string(),
+                            );
+                        }
+                    }
+                    current_text.clear();
+                }
+                b"ofd:Bookmarks" => {
+                    in_bookmarks = true;
+                }
+                b"ofd:Bookmark" if in_bookmarks => {
+                    in_bookmark = true;
+                    current_bookmark_name = None;
+                    current_bookmark_goto = None;
+                    for attr in e.attributes().flatten() {
+                        let val = attr
+                            .decoded_and_normalized_value(
+                                quick_xml::XmlVersion::Explicit1_0,
+                                reader.decoder(),
+                            )
+                            .unwrap_or_default()
+                            .to_string();
+                        match attr.key.as_ref() {
+                            b"Name" => current_bookmark_name = Some(val),
+                            b"GoTo" => current_bookmark_goto = Some(val),
+                            _ => {}
+                        }
+                    }
+                    current_text.clear();
+                }
+                _ => {}
+            },
+            Ok(Event::Text(ref e)) => {
+                let text = e
                     .xml10_content()
                     .map(|c| c.into_owned())
                     .unwrap_or_default();
+                if current_text_tag.is_some() {
+                    current_text = text;
+                } else if in_custom_data {
+                    current_text.push_str(&text);
+                }
             }
-            Ok(Event::Text(ref e)) if in_doc_id => {
-                doc_id = Some(
-                    e.xml10_content()
-                        .map(|c| c.into_owned())
-                        .unwrap_or_default(),
-                );
-            }
-            Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
-                in_doc_root = false;
-            }
-            Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocID" => {
-                in_doc_id = false;
+            Ok(Event::End(ref end)) => {
+                let tag_name = end.name();
+                match tag_name.as_ref() {
+                    b"ofd:DocRoot" => {
+                        doc_root.clone_from(&current_text);
+                        current_text_tag = None;
+                    }
+                    b"ofd:DocID" => {
+                        doc_id = Some(current_text.clone());
+                        current_text_tag = None;
+                    }
+                    b"ofd:Author" => {
+                        author = Some(current_text.clone());
+                        current_text_tag = None;
+                    }
+                    b"ofd:Creator" => {
+                        creator = Some(current_text.clone());
+                        current_text_tag = None;
+                    }
+                    b"ofd:CreatorVersion" => {
+                        creator_version = Some(current_text.clone());
+                        current_text_tag = None;
+                    }
+                    b"ofd:ModDate" => {
+                        mod_date = Some(current_text.clone());
+                        current_text_tag = None;
+                    }
+                    b"ofd:CreationDate" => {
+                        creation_date = Some(current_text.clone());
+                        current_text_tag = None;
+                    }
+                    b"ofd:MaxUnitID" => {
+                        max_unit_id = current_text.trim().parse().unwrap_or(0);
+                        current_text_tag = None;
+                    }
+                    b"ofd:CustomData" if in_custom_data => {
+                        if let Some(name) = current_custom_data_name.take() {
+                            let datas = custom_datas.get_or_insert_with(CustomDatas::new);
+                            datas.push(CustomData::new(name, current_text.trim()));
+                        }
+                        in_custom_data = false;
+                        current_text.clear();
+                    }
+                    b"ofd:CustomDatas" => {
+                        in_custom_datas = false;
+                    }
+                    b"ofd:Bookmark" if in_bookmark => {
+                        let name = current_bookmark_name
+                            .take()
+                            .unwrap_or_else(|| current_text.trim().to_string());
+                        if !name.is_empty() {
+                            let mut bm = Bookmark::new(name);
+                            if let Some(target) = current_bookmark_goto.take() {
+                                bm = bm.with_goto(target);
+                            }
+                            let bms = bookmarks.get_or_insert_with(Bookmarks::new);
+                            bms.push(bm);
+                        }
+                        in_bookmark = false;
+                        current_text.clear();
+                    }
+                    b"ofd:Bookmarks" => {
+                        in_bookmarks = false;
+                    }
+                    _ => {
+                        // Generic text tag end handling
+                        if current_text_tag.is_some() {
+                            current_text_tag = None;
+                            current_text.clear();
+                        }
+                    }
+                }
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(OfdError::Xml(format!("OFD.xml: {e}"))),
@@ -75,7 +248,18 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         .unwrap_or(&doc_root)
         .to_string();
 
-    Ok(OfdEntry { doc_root, doc_id })
+    Ok(OfdEntry {
+        doc_root,
+        doc_id,
+        author,
+        creator,
+        creator_version,
+        mod_date,
+        creation_date,
+        max_unit_id,
+        custom_datas,
+        bookmarks,
+    })
 }
 
 /// Parse Document.xml → return list of page BaseLoc paths (e.g. "Pages/Page_0.xml").
@@ -125,6 +309,10 @@ pub(crate) struct ResourceEntry {
     /// Final resolved path relative to the document directory (e.g.
     /// `"Res/qrcode.png"`).  This already incorporates `base_loc`.
     pub(crate) location: String,
+    /// Original path as stored in the XML (e.g. `"qrcode.png"`),
+    /// before `BaseLoc` is prepended.
+    #[allow(dead_code)]
+    pub(crate) original_path: String,
     pub(crate) format: ImageFormat,
 }
 
@@ -203,12 +391,20 @@ pub(crate) fn parse_document_resources<R: Read + Seek>(
                     // ResourceEntry is already relative to the
                     // document directory.
                     let base = base_loc_stack.last().map_or("", String::as_str);
+                    let original_path = raw_path.clone();
                     let location = if base.is_empty() {
                         raw_path
                     } else {
                         format!("{}/{}", base.trim_end_matches('/'), raw_path)
                     };
-                    resources.insert(id, ResourceEntry { location, format });
+                    resources.insert(
+                        id,
+                        ResourceEntry {
+                            location,
+                            original_path,
+                            format,
+                        },
+                    );
                 }
             }
             Ok(Event::End(ref event)) if event.name().as_ref() == b"ofd:MediaFile" => {

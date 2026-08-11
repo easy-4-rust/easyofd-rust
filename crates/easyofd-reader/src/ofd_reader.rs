@@ -136,8 +136,35 @@ fn visit_archive<R: Read + Seek>(
         let page = parse_page_entry(&mut archive, &page_path, doc_root, &resources)?;
         visitor(page_number, page)?;
     }
+    // Parse date strings into NaiveDateTime if present
+    let mod_date = ofd_entry.mod_date.as_deref().and_then(|s| {
+        // Try ISO format: "2024-05-31" or "2024-05-31T00:00:00"
+        chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| {
+                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                    .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+            })
+            .ok()
+    });
+    let creation_date = ofd_entry.creation_date.as_deref().and_then(|s| {
+        chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| {
+                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                    .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+            })
+            .ok()
+    });
+
     Ok(OfdMetadata {
         doc_id: ofd_entry.doc_id,
+        author: ofd_entry.author,
+        creator: ofd_entry.creator,
+        creator_version: ofd_entry.creator_version,
+        mod_date,
+        creation_date,
+        max_unit_id: ofd_entry.max_unit_id,
+        bookmarks: ofd_entry.bookmarks,
+        custom_datas: ofd_entry.custom_datas,
         ..OfdMetadata::default()
     })
 }
