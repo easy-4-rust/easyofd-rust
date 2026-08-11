@@ -11,6 +11,7 @@
 //! - [`streaming_layout`] — 流式布局分析器（StreamingLayoutAnalyzer）。
 //! - [`vpage_parser`] — 虚拟页面 → OFD XML 转换引擎（VPageParseEngine）。
 
+mod border;
 mod div;
 mod layout_analyzer;
 mod layout_block;
@@ -24,6 +25,7 @@ mod streaming_layout;
 mod vpage_parser;
 mod xycut;
 
+pub use border::Border;
 pub use div::{Div, DivContent, TextStyle};
 pub use layout_analyzer::LayoutAnalyzer;
 pub use layout_block::LayoutBlock;
