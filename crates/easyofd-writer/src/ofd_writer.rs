@@ -33,6 +33,11 @@ impl OfdWriter {
         }
     }
 
+    /// 设置文档元数据（从 OfdReader 提取时使用）。
+    pub fn set_metadata(&mut self, metadata: easyofd_core::OfdMetadata) {
+        self.options.metadata = metadata;
+    }
+
     /// 向文档添加一个页面。
     pub fn add_page(&mut self, page: OfdPage) {
         self.pages.push(page);

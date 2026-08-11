@@ -7,6 +7,8 @@ use chrono::NaiveDateTime;
 pub struct OfdMetadata {
     /// 文档版本（默认: "1.0"）。
     pub version: String,
+    /// 文档标识符（ofdrw: DocID）。
+    pub doc_id: Option<String>,
     /// 文档标题。
     pub title: Option<String>,
     /// 文档作者。
@@ -21,6 +23,7 @@ impl Default for OfdMetadata {
     fn default() -> Self {
         Self {
             version: "1.0".to_string(),
+            doc_id: None,
             title: None,
             author: None,
             creator: None,

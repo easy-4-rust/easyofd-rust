@@ -32,6 +32,13 @@ impl OfdWriter {
         xml.push_str(r"    <ofd:DocInfo>");
         xml.push('\n');
 
+        if let Some(ref doc_id) = self.options.metadata.doc_id {
+            xml.push_str(&format!(
+                "      <ofd:DocID>{}</ofd:DocID>",
+                xml_escape(doc_id)
+            ));
+            xml.push('\n');
+        }
         if let Some(ref title) = self.options.metadata.title {
             xml.push_str(&format!(
                 "      <ofd:Title>{}</ofd:Title>",

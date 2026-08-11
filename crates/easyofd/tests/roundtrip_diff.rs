@@ -71,6 +71,7 @@ fn count_xml_elements(xml: &str) -> HashMap<String, usize> {
 fn roundtrip(bytes: &[u8]) -> Vec<u8> {
     let reader = OfdReader::from_bytes(bytes).expect("initial read should succeed");
     let mut writer = OfdWriter::new();
+    writer.set_metadata(reader.metadata().clone());
     for page in reader.pages() {
         writer.add_page(page.clone());
     }

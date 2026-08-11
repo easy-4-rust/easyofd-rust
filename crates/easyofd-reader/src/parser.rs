@@ -11,29 +11,52 @@ use easyofd_core::{
 use quick_xml::Reader as XmlReader;
 use quick_xml::events::Event;
 
+/// Parsed result from OFD.xml.
+pub(crate) struct OfdEntry {
+    /// Document directory path (e.g. "Doc_0").
+    pub(crate) doc_root: String,
+    /// Document identifier (ofd:DocID), if present.
+    pub(crate) doc_id: Option<String>,
+}
+
 pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
-) -> OfdResult<String> {
+) -> OfdResult<OfdEntry> {
     let xml = read_zip_entry(archive, "OFD.xml")?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut doc_root = String::new();
-    let mut in_target = false;
+    let mut doc_id = None;
+    let mut in_doc_root = false;
+    let mut in_doc_id = false;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
-                in_target = true;
+                in_doc_root = true;
             }
-            Ok(Event::Text(ref e)) if in_target => {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:DocID" => {
+                in_doc_id = true;
+            }
+            Ok(Event::Text(ref e)) if in_doc_root => {
                 doc_root = e
                     .xml10_content()
                     .map(|c| c.into_owned())
                     .unwrap_or_default();
             }
+            Ok(Event::Text(ref e)) if in_doc_id => {
+                doc_id = Some(
+                    e.xml10_content()
+                        .map(|c| c.into_owned())
+                        .unwrap_or_default(),
+                );
+            }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
-                in_target = false;
+                in_doc_root = false;
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocID" => {
+                in_doc_id = false;
             }
             Ok(Event::Eof) => break,
             Err(e) => return Err(OfdError::Xml(format!("OFD.xml: {e}"))),
@@ -47,10 +70,12 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     }
 
     // Strip "/Document.xml" suffix to get the doc directory
-    Ok(doc_root
+    let doc_root = doc_root
         .strip_suffix("/Document.xml")
         .unwrap_or(&doc_root)
-        .to_string())
+        .to_string();
+
+    Ok(OfdEntry { doc_root, doc_id })
 }
 
 /// Parse Document.xml → return list of page BaseLoc paths (e.g. "Pages/Page_0.xml").

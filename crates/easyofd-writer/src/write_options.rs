@@ -15,6 +15,7 @@ impl Default for WriteOptions {
         Self {
             metadata: OfdMetadata {
                 version: "1.0".to_string(),
+                doc_id: None,
                 title: None,
                 author: None,
                 creator: None,
