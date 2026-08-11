@@ -15,6 +15,7 @@ pub mod basic_type;
 pub mod composite_obj;
 pub mod custom_tags;
 pub mod doc;
+pub mod doc_vpreferences;
 pub mod error;
 pub mod extensions;
 pub mod graph;
