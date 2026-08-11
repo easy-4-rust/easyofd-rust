@@ -78,7 +78,7 @@ tiny-skia = "0.12.0"
 # ═══ PKCS#12 解密（PBES2/PBKDF2，纯 Rust）═══
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
-cipher = "0.4"
+cipher = "0.5"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
