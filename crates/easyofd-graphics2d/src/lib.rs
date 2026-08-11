@@ -20,8 +20,18 @@
 //! assert_eq!(page.content.len(), 2);
 //! ```
 
+/// Canvas 2D API 辅助工厂。
+pub mod awt_maker;
+/// 2D 绘图画布。
 pub mod canvas;
+/// 裁剪区域工厂。
+pub mod clip_factory;
+/// Canvas 绘图命令到 OFD 页面的转换器。
 pub mod converter;
+/// 绘制参数缓存。
+pub mod draw_param_cache;
+/// 图片到 OFD ImageObject 转换器。
+pub mod image_maker;
 
 /// 返回模块标识，用于运行时识别。
 #[must_use]

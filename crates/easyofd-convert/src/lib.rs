@@ -25,11 +25,17 @@
 //! - `easyofd-writer`: OFD 写入
 
 mod cjk_font;
+mod convert_helper;
 mod convert_options;
+pub mod exporter;
 mod image_convert_format;
+pub mod importer;
 
+pub use convert_helper::ConvertHelper;
 pub use convert_options::ConvertOptions;
+pub use exporter::{Exporter, ImageExporter, PdfExporter, SvgExporter, TextExporter};
 pub use image_convert_format::ImageConvertFormat;
+pub use importer::{Importer, PdfImporter};
 
 use std::path::Path;
 

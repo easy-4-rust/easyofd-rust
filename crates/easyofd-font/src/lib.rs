@@ -20,6 +20,12 @@ pub mod font_descriptor;
 pub mod font_registry;
 /// 文本度量，估算文本的宽高。
 pub mod text_metrics;
+/// TrueType 字体集合（TTC）解析器。
+pub mod true_type_collection;
+/// TrueType 字体解析器。
+pub mod true_type_font;
+/// TTF 字节流读取器。
+pub mod ttf_data_stream;
 
 /// 返回模块标识，用于运行时识别。
 #[must_use]

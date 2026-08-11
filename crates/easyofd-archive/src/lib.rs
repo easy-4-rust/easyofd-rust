@@ -34,6 +34,11 @@ use std::io::{Cursor, Read};
 use easyofd_core::{OfdError, OfdResult};
 
 pub use integrity::{CheckMethod, IntegrityEntry, IntegrityReport, verify_integrity};
+pub use rules::font_rule::FontRule;
+pub use rules::image_rule::ImageRule;
+pub use rules::path_rule::PathRule;
+pub use rules::signature_rule::SignatureRule;
+pub use rules::text_rule::TextRule;
 pub use rules::{
     ComplianceRule, DocRootRule, DocTypeRule, NoExternalResourceRule, PagesExistRule, RuleResult,
     VersionRule,

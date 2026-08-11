@@ -11,6 +11,19 @@ use std::io::Cursor;
 use quick_xml::Reader as XmlReader;
 use quick_xml::events::Event;
 
+// ─── 扩展规则模块 ────────────────────────────────────────────────────────────
+
+/// 字体合规规则。
+pub mod font_rule;
+/// 图片合规规则。
+pub mod image_rule;
+/// 路径合规规则。
+pub mod path_rule;
+/// 签名合规规则。
+pub mod signature_rule;
+/// 文本合规规则。
+pub mod text_rule;
+
 // ─── 公共类型 ────────────────────────────────────────────────────────────────
 
 /// 合规规则接口。
