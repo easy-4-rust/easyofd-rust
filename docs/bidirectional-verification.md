@@ -23,6 +23,12 @@ The verification is organized into four layers of increasing strictness:
 
 **L4 byte-level OFD roundtrip: 60/60 samples at zero deviations.**
 
+**Type coverage: 484/487 unique (99.4%)** — `crates/easyofd-convert/src/itext_exclusions.rs`
+documents the 3 missing types (ItextFontUtil, ItextTrueTypeFont, Keep) as
+iText 7 Java library dependencies with no direct Rust equivalent. All other
+public types are implemented either as full Rust types or `pub type`/`pub use`
+aliases of existing equivalents.
+
 `crates/easyofd/tests/roundtrip_diff.rs` now discovers all `.ofd` fixtures
 (55 ofdrw samples + 5 baseline samples), runs read→write→compare for each,
 and reports structural deviations:
