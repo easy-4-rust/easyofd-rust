@@ -14,6 +14,8 @@
 //! - 字体子集化（subsetting）以减小 OFD 体积
 //! - 嵌入字体到 OFD 资源目录
 
+/// 逻辑字体（对应 Java: org.ofdrw.font.Font）。
+pub mod font;
 /// 字体描述符，记录字体基本属性。
 pub mod font_descriptor;
 /// 标准字体名称（对应 Java: org.ofdrw.font.FontName）。
