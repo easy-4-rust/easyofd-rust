@@ -343,401 +343,161 @@ pub(crate) struct DocumentEntry {
     pub(crate) public_res_element_present: bool,
 }
 
-/// 设置权限字段（ofd:Permissions 子元素）。
-fn set_permission(perms: &mut Permissions, key: &[u8], value: bool) {
-    match key {
-        b"Edit" => perms.edit = Some(value),
-        b"Annot" => perms.annot = Some(value),
-        b"Export" => perms.export = Some(value),
-        b"Signature" => perms.signature = Some(value),
-        b"Watermark" => perms.watermark = Some(value),
-        b"PrintScreen" => perms.print_screen = Some(value),
-        b"Print" => perms.print = Some(value),
-        b"CopyText" => perms.copy_text = Some(value),
-        b"ContentRegist" => perms.content_regist = Some(value),
-        _ => {}
-    }
-}
-
 /// Parse Document.xml → page BaseLoc paths, the bookmark collection
 /// (ofd:Bookmarks, located in Document.xml per GB/T 33190-2016 §7.3),
 /// and the box elements in CommonData (ofd:ApplicationBox etc.).
+///
+/// Uses the [`easyofd_core::XmlNode`] tree (via `parse_xml_to_nodes`) instead
+/// of a flat quick-xml event stream, so that the parsing is structurally
+/// aligned with the rest of the XmlElement framework.
 pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     doc_dir: &str,
     document_file: &str,
 ) -> OfdResult<DocumentEntry> {
     let path = doc_path(doc_dir, document_file);
-    let xml = read_zip_entry(archive, &path)?;
-    let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
-    reader.config_mut().trim_text(false);
-    let mut buf = Vec::new();
-    let mut pages = Vec::new();
-    let mut bookmarks: Option<Bookmarks> = None;
-    let mut outlines: Option<Bookmarks> = None;
-    let mut in_bookmarks = false;
-    let mut in_outlines = false;
-    let mut in_bookmark = false;
-    let mut current_bookmark_name: Option<String> = None;
-    let mut current_bookmark_goto: Option<String> = None;
-    let mut box_text_tag: Option<Vec<u8>> = None;
-    let mut box_text = String::new();
-    let mut application_box = None;
-    let mut content_box = None;
-    let mut clip_box = None;
-    let mut bleed_box = None;
-    let mut trim_box = None;
-    let mut template_pages: Vec<TemplatePage> = Vec::new();
-    let mut container_path_tag: Option<Vec<u8>> = None;
-    let mut container_path_text = String::new();
-    let mut annotations_path = None;
-    let mut attachments_path = None;
-    let mut custom_tags_path = None;
-    let mut page_area_present = false;
-    let mut document_res: Option<String> = None;
-    let mut document_res_element_present = false;
-    // Permissions state: current permission element name + collected text.
-    let mut permissions: Option<Permissions> = None;
-    let mut in_permissions = false;
-    let mut permission_key: Option<Vec<u8>> = None;
-    let mut permission_text = String::new();
-    let mut permission_print_attr: Option<String> = None;
-    let mut public_res_element_present = false;
+    let xml_bytes = read_zip_entry(archive, &path)?;
+    let xml_str = std::str::from_utf8(&xml_bytes)
+        .map_err(|e| OfdError::Xml(format!("Document.xml: invalid UTF-8: {e}")))?;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e) | Event::Start(ref e)) if e.name().as_ref() == b"ofd:Page" => {
-                for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"BaseLoc" {
-                        let val = attr
-                            .decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            )
-                            .unwrap_or_default();
-                        pages.push(val.to_string());
-                    }
-                }
-            }
-            // TemplatePage is an empty element with ID + BaseLoc attributes
-            // (ofdrw writes it inside CommonData, after DocumentRes).
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if e.name().as_ref() == b"ofd:TemplatePage" =>
-            {
-                let mut id = String::new();
-                let mut base_loc = String::new();
-                for attr in e.attributes().flatten() {
-                    let val = attr
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        )
-                        .unwrap_or_default()
-                        .to_string();
-                    match attr.key.as_ref() {
-                        b"ID" => id = val,
-                        b"BaseLoc" => base_loc = val,
-                        _ => {}
-                    }
-                }
-                if !base_loc.is_empty() {
-                    template_pages.push(TemplatePage::new(id, base_loc));
-                }
-            }
-            // CommonData box elements are simple text containers.
-            Ok(Event::Start(ref e))
-                if matches!(
-                    e.name().as_ref(),
-                    b"ofd:ApplicationBox"
-                        | b"ofd:ContentBox"
-                        | b"ofd:ClipBox"
-                        | b"ofd:BleedBox"
-                        | b"ofd:TrimBox"
-                ) =>
-            {
-                box_text_tag = Some(e.name().as_ref().to_vec());
-                box_text.clear();
-            }
-            // PageArea presence flag (PhysicalBox lives inside it).
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:PageArea" => {
-                page_area_present = true;
-            }
-            // PublicRes reference presence (ofdrw may keep the element while
-            // omitting the PublicRes.xml file for font-less documents).
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if e.name().as_ref() == b"ofd:PublicRes" =>
-            {
-                public_res_element_present = true;
-            }
-            // Container references (Annotations/Attachments/CustomTags) and the
-            // DocumentRes reference hold a single relative path as text.
-            Ok(Event::Start(ref e))
-                if matches!(
-                    e.name().as_ref(),
-                    b"ofd:Annotations"
-                        | b"ofd:Attachments"
-                        | b"ofd:CustomTags"
-                        | b"ofd:DocumentRes"
-                ) =>
-            {
-                if e.name().as_ref() == b"ofd:DocumentRes" {
-                    document_res_element_present = true;
-                }
-                container_path_tag = Some(e.name().as_ref().to_vec());
-                container_path_text.clear();
-            }
-            Ok(Event::Text(ref e)) if box_text_tag.is_some() => {
-                box_text.push_str(
-                    &e.xml10_content()
-                        .map(|c| c.into_owned())
-                        .unwrap_or_default(),
-                );
-            }
-            Ok(Event::Text(ref e)) if container_path_tag.is_some() => {
-                container_path_text.push_str(
-                    &e.xml10_content()
-                        .map(|c| c.into_owned())
-                        .unwrap_or_default(),
-                );
-            }
-            // Permissions (GB/T 33190 document permissions):
-            // <ofd:Permissions><ofd:Edit>true</ofd:Edit>...<ofd:Print
-            // Printable="true"/>...</ofd:Permissions>
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if e.name().as_ref() == b"ofd:Permissions" =>
-            {
-                in_permissions = true;
-                permissions.get_or_insert_with(Permissions::new);
-            }
-            // Self-closing permission elements (e.g. <ofd:Print
-            // Printable="true"/>) have no End event; finalize immediately.
-            Ok(Event::Empty(ref e))
-                if in_permissions
-                    && matches!(
-                        e.name().as_ref(),
-                        b"ofd:Edit"
-                            | b"ofd:Annot"
-                            | b"ofd:Export"
-                            | b"ofd:Signature"
-                            | b"ofd:Watermark"
-                            | b"ofd:PrintScreen"
-                            | b"ofd:Print"
-                            | b"ofd:CopyText"
-                            | b"ofd:ContentRegist"
-                    ) =>
-            {
-                let qname = e.name();
-                let raw: &[u8] = qname.as_ref();
-                let key = raw.strip_prefix(b"ofd:").unwrap_or(raw);
-                let value = if key == b"Print" {
-                    e.attributes()
-                        .flatten()
-                        .find(|a| a.key.as_ref() == b"Printable")
-                        .and_then(|a| {
-                            a.decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            )
-                            .ok()
-                        })
-                        .and_then(|v| v.parse::<bool>().ok())
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-                if let Some(perms) = permissions.as_mut() {
-                    set_permission(perms, key, value);
-                }
-            }
-            Ok(Event::Start(ref e))
-                if in_permissions
-                    && matches!(
-                        e.name().as_ref(),
-                        b"ofd:Edit"
-                            | b"ofd:Annot"
-                            | b"ofd:Export"
-                            | b"ofd:Signature"
-                            | b"ofd:Watermark"
-                            | b"ofd:PrintScreen"
-                            | b"ofd:Print"
-                            | b"ofd:CopyText"
-                            | b"ofd:ContentRegist"
-                    ) =>
-            {
-                // Store the local name (without the "ofd:" prefix) as the key;
-                // the value arrives via a Text event and is finalized on End.
-                let qname = e.name();
-                let raw: &[u8] = qname.as_ref();
-                let key = raw.strip_prefix(b"ofd:").unwrap_or(raw);
-                permission_key = Some(key.to_vec());
-                permission_text.clear();
-                permission_print_attr = None;
-                if raw == b"ofd:Print" {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"Printable" {
-                            permission_print_attr = Some(
-                                attr.decoded_and_normalized_value(
-                                    quick_xml::XmlVersion::Explicit1_0,
-                                    reader.decoder(),
-                                )
-                                .unwrap_or_default()
-                                .to_string(),
-                            );
+    let root = easyofd_core::parse_xml_to_nodes(xml_str)
+        .map_err(|e| OfdError::Xml(format!("Document.xml: {e}")))?;
+
+    // ── Pages ──
+    let pages: Vec<String> = root
+        .child("Pages")
+        .map(|pn| {
+            pn.children_named("Page")
+                .filter_map(|pe| pe.get_attr("BaseLoc").map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // ── Bookmarks ──
+    let bookmarks = root.child("Bookmarks").map(|bn| {
+        let mut bms = Bookmarks::new();
+        for child in &bn.children {
+            if child.name == "Bookmark" {
+                let name = child.get_attr("Name").or_else(|| child.get_attr("Title"));
+                let goto = child
+                    .get_attr("GoTo")
+                    .or_else(|| child.child("Dest").and_then(|d| d.get_attr("PageID")));
+                if let Some(n) = name {
+                    if !n.is_empty() {
+                        let mut bm = Bookmark::new(n);
+                        if let Some(g) = goto {
+                            bm = bm.with_goto(g);
                         }
+                        bms.push(bm);
                     }
                 }
             }
-            Ok(Event::Text(ref e)) if in_permissions && permission_key.is_some() => {
-                permission_text.push_str(
-                    &e.xml10_content()
-                        .map(|c| c.into_owned())
-                        .unwrap_or_default(),
-                );
-            }
-            Ok(Event::End(ref end)) if in_permissions && permission_key.is_some() => {
-                let key = permission_key.take().unwrap_or_default();
-                let value = if key == b"Print" {
-                    permission_print_attr
-                        .as_deref()
-                        .and_then(|v| v.parse::<bool>().ok())
-                        .unwrap_or(false)
-                } else {
-                    permission_text.trim().parse::<bool>().unwrap_or(false)
-                };
-                if let Some(perms) = permissions.as_mut() {
-                    set_permission(perms, &key, value);
-                }
-                permission_text.clear();
-            }
-            Ok(Event::End(ref end)) if end.name().as_ref() == b"ofd:Permissions" => {
-                in_permissions = false;
-            }
-            Ok(Event::End(ref end)) if box_text_tag.is_some() => {
-                match end.name().as_ref() {
-                    b"ofd:ApplicationBox" => application_box = Some(box_text.trim().to_string()),
-                    b"ofd:ContentBox" => content_box = Some(box_text.trim().to_string()),
-                    b"ofd:ClipBox" => clip_box = Some(box_text.trim().to_string()),
-                    b"ofd:BleedBox" => bleed_box = Some(box_text.trim().to_string()),
-                    b"ofd:TrimBox" => trim_box = Some(box_text.trim().to_string()),
-                    _ => {}
-                }
-                // Critical: release the tag so subsequent End events (e.g.
-                // "</ofd:OutlineElem>") are not swallowed by this guard.
-                box_text_tag = None;
-            }
-            Ok(Event::End(ref end)) if container_path_tag.is_some() => {
-                match end.name().as_ref() {
-                    b"ofd:Annotations" => {
-                        annotations_path = Some(container_path_text.trim().to_string())
-                    }
-                    b"ofd:Attachments" => {
-                        attachments_path = Some(container_path_text.trim().to_string())
-                    }
-                    b"ofd:CustomTags" => {
-                        custom_tags_path = Some(container_path_text.trim().to_string())
-                    }
-                    b"ofd:DocumentRes" => {
-                        document_res = Some(container_path_text.trim().to_string())
-                    }
-                    _ => {}
-                }
-                // Critical: release the tag so subsequent End events (e.g.
-                // "</ofd:OutlineElem>") are not swallowed by this guard.
-                container_path_tag = None;
-            }
-            // Bookmarks: ofdrw writes <ofd:Bookmarks><Bookmark Name="...">
-            // <Dest Type="XYZ" PageID="..."/></Bookmark></ofd:Bookmarks>
-            // (Bookmark/Dest are emitted without the ofd: prefix by ofdrw;
-            //  also accept the prefixed form for spec-compliant files).
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:Bookmarks" => {
-                in_bookmarks = true;
-            }
-            // Outlines: GB/T 33190-2016 §7.3 bookmark outline, written as
-            // <ofd:Outlines><ofd:OutlineElem Title="..." Expanded="true">
-            // <ofd:Actions><ofd:Action Event="CLICK"><ofd:Goto>
-            // <ofd:Dest Type="XYZ" PageID="..."/>...</ofd:Goto>...
-            // We reuse the bookmark state machine and only record the
-            // Title + destination PageID per outline entry.
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if e.name().as_ref() == b"ofd:Outlines" =>
-            {
-                in_outlines = true;
-                // Self-closing <ofd:Outlines/> has no End event; make the
-                // (empty) collection visible immediately.
-                outlines.get_or_insert_with(Bookmarks::new);
-            }
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if (in_bookmarks
-                    && (e.name().as_ref() == b"Bookmark"
-                        || e.name().as_ref() == b"ofd:Bookmark"))
-                    || (in_outlines && e.name().as_ref() == b"ofd:OutlineElem") =>
-            {
-                in_bookmark = true;
-                current_bookmark_name = None;
-                current_bookmark_goto = None;
-                for attr in e.attributes().flatten() {
-                    let val = attr
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        )
-                        .unwrap_or_default()
-                        .to_string();
-                    match attr.key.as_ref() {
-                        b"Name" | b"Title" => current_bookmark_name = Some(val),
-                        b"GoTo" => current_bookmark_goto = Some(val),
-                        _ => {}
-                    }
-                }
-            }
-            // Dest child element carries the jump target in its PageID
-            // attribute (ofdrw writes Type/PageID/Right/Bottom).
-            Ok(Event::Empty(ref e) | Event::Start(ref e))
-                if in_bookmark
-                    && (e.name().as_ref() == b"Dest" || e.name().as_ref() == b"ofd:Dest") =>
-            {
-                for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"PageID" {
-                        let val = attr
-                            .decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            )
-                            .unwrap_or_default();
-                        current_bookmark_goto = Some(val.to_string());
-                    }
-                }
-            }
-            Ok(Event::End(ref end)) => match end.name().as_ref() {
-                b"Bookmark" | b"ofd:Bookmark" | b"ofd:OutlineElem" if in_bookmark => {
-                    let name = current_bookmark_name.take().unwrap_or_default();
-                    if !name.is_empty() {
-                        let mut bm = Bookmark::new(name);
-                        if let Some(target) = current_bookmark_goto.take() {
-                            bm = bm.with_goto(target);
-                        }
-                        if in_outlines {
-                            outlines.get_or_insert_with(Bookmarks::new).push(bm);
-                        } else {
-                            bookmarks.get_or_insert_with(Bookmarks::new).push(bm);
-                        }
-                    }
-                    in_bookmark = false;
-                }
-                b"ofd:Bookmarks" => {
-                    in_bookmarks = false;
-                }
-                b"ofd:Outlines" => {
-                    in_outlines = false;
-                }
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(OfdError::Xml(format!("Document.xml: {e}"))),
-            _ => {}
         }
-        buf.clear();
-    }
+        bms
+    });
+
+    // ── Outlines ──
+    let outlines = root.child("Outlines").map(|on| {
+        let mut ols = Bookmarks::new();
+        for child in &on.children {
+            if child.name == "OutlineElem" {
+                let title = child.get_attr("Title");
+                // Navigate: Actions -> Action -> Goto -> Dest -> PageID
+                let goto = child.get_attr("GoTo").or_else(|| {
+                    child
+                        .child("Actions")
+                        .and_then(|a| a.child("Action"))
+                        .and_then(|a| a.child("Goto"))
+                        .and_then(|g| g.child("Dest"))
+                        .and_then(|d| d.get_attr("PageID"))
+                });
+                if let Some(t) = title {
+                    if !t.is_empty() {
+                        let mut bm = Bookmark::new(t);
+                        if let Some(g) = goto {
+                            bm = bm.with_goto(g);
+                        }
+                        ols.push(bm);
+                    }
+                }
+            }
+        }
+        ols
+    });
+
+    // ── Boxes (search deep in tree to match flat event-stream behaviour) ──
+    let application_box = find_text_deep(&root, "ApplicationBox");
+    let content_box = find_text_deep(&root, "ContentBox");
+    let clip_box = find_text_deep(&root, "ClipBox");
+    let bleed_box = find_text_deep(&root, "BleedBox");
+    let trim_box = find_text_deep(&root, "TrimBox");
+
+    // ── Template pages (inside CommonData) ──
+    let template_pages: Vec<TemplatePage> = find_all_nodes_deep(&root, "TemplatePage")
+        .iter()
+        .filter_map(|node| {
+            let id = node.get_attr("ID").unwrap_or_default().to_string();
+            let base_loc = node.get_attr("BaseLoc")?;
+            if base_loc.is_empty() {
+                None
+            } else {
+                Some(TemplatePage::new(id, base_loc))
+            }
+        })
+        .collect();
+
+    // ── Container paths ──
+    let annotations_path = find_text_deep(&root, "Annotations");
+    let attachments_path = find_text_deep(&root, "Attachments");
+    let custom_tags_path = find_text_deep(&root, "CustomTags");
+
+    // ── PageArea presence ──
+    let page_area_present = find_node_deep(&root, "PageArea").is_some();
+
+    // ── DocumentRes ──
+    let document_res_node = find_node_deep(&root, "DocumentRes");
+    let document_res_element_present = document_res_node.is_some();
+    let document_res = document_res_node
+        .and_then(|n| n.text.clone())
+        .map(|s| s.trim().to_string());
+
+    // ── PublicRes presence ──
+    let public_res_element_present = find_node_deep(&root, "PublicRes").is_some();
+
+    // ── Permissions ──
+    let permissions = root.child("Permissions").map(|pn| {
+        let mut perms = Permissions::new();
+        for child in &pn.children {
+            let key = child.name.as_str();
+            let value = match key {
+                "Print" => child
+                    .get_attr("Printable")
+                    .and_then(|v| v.parse::<bool>().ok())
+                    .unwrap_or(false),
+                _ => child
+                    .text
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim()
+                    .parse::<bool>()
+                    .unwrap_or(false),
+            };
+            match key {
+                "Edit" => perms.edit = Some(value),
+                "Annot" => perms.annot = Some(value),
+                "Export" => perms.export = Some(value),
+                "Signature" => perms.signature = Some(value),
+                "Watermark" => perms.watermark = Some(value),
+                "PrintScreen" => perms.print_screen = Some(value),
+                "Print" => perms.print = Some(value),
+                "CopyText" => perms.copy_text = Some(value),
+                "ContentRegist" => perms.content_regist = Some(value),
+                _ => {}
+            }
+        }
+        perms
+    });
+
     Ok(DocumentEntry {
         pages,
         bookmarks,
@@ -1307,6 +1067,54 @@ pub(crate) fn resolve_resource_path(doc_dir: &str, location: &str) -> OfdResult<
     };
     easyofd_package::validate_entry_name(&path)?;
     Ok(path)
+}
+
+// ─── XmlNode tree helpers for Document.xml parsing ───────────────────────────
+
+/// Find a node by name anywhere in the tree (depth-first, first match).
+fn find_node_deep<'a>(
+    node: &'a easyofd_core::XmlNode,
+    name: &str,
+) -> Option<&'a easyofd_core::XmlNode> {
+    if node.name == name {
+        return Some(node);
+    }
+    for child in &node.children {
+        if let Some(found) = find_node_deep(child, name) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Find a node by name and return its text content (trimmed).
+fn find_text_deep(node: &easyofd_core::XmlNode, name: &str) -> Option<String> {
+    find_node_deep(node, name)
+        .and_then(|n| n.text.clone())
+        .map(|s| s.trim().to_string())
+}
+
+/// Find all nodes with a given name (depth-first).
+fn find_all_nodes_deep<'a>(
+    node: &'a easyofd_core::XmlNode,
+    name: &str,
+) -> Vec<&'a easyofd_core::XmlNode> {
+    let mut result = Vec::new();
+    collect_nodes_deep(node, name, &mut result);
+    result
+}
+
+fn collect_nodes_deep<'a>(
+    node: &'a easyofd_core::XmlNode,
+    name: &str,
+    result: &mut Vec<&'a easyofd_core::XmlNode>,
+) {
+    if node.name == name {
+        result.push(node);
+    }
+    for child in &node.children {
+        collect_nodes_deep(child, name, result);
+    }
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
