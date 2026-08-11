@@ -58,9 +58,29 @@ pub fn parse_xml_to_nodes(xml: &str) -> Result<XmlNode, String> {
                     .xml10_content()
                     .map(|c| c.into_owned())
                     .unwrap_or_default();
-                if !text.trim().is_empty() {
+                // Append (not assign): quick-xml may split a text node into
+                // multiple Text events around entity references.  We keep ALL
+                // text including whitespace-only fragments so that the tree
+                // matches the flat event-stream behaviour (callers trim at the
+                // call site via `find_text_deep` / `find_optional_text_deep`).
+                if let Some(top) = stack.last_mut() {
+                    match &mut top.text {
+                        Some(existing) => existing.push_str(&text),
+                        None => top.text = Some(text),
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                let name = e
+                    .xml10_content()
+                    .map(|c| c.into_owned())
+                    .unwrap_or_default();
+                if let Some(ch) = resolve_xml_entity_ref(&name) {
                     if let Some(top) = stack.last_mut() {
-                        top.text = Some(text);
+                        match &mut top.text {
+                            Some(existing) => existing.push(ch),
+                            None => top.text = Some(ch.to_string()),
+                        }
                     }
                 }
             }
@@ -86,6 +106,23 @@ fn local_name(name: &[u8]) -> String {
         Some((_, local)) => local.to_string(),
         None => s.into_owned(),
     }
+}
+
+/// Resolve an XML entity reference name (e.g. "amp", "apos", "#x41") to a char.
+///
+/// Handles the 5 predefined XML entities and numeric character references.
+fn resolve_xml_entity_ref(name: &str) -> Option<char> {
+    if let Some(entity) = quick_xml::escape::resolve_xml_entity(name) {
+        return entity.chars().next();
+    }
+    let number = if let Some(hex) = name.strip_prefix("#x") {
+        u32::from_str_radix(hex, 16).ok()
+    } else if let Some(decimal) = name.strip_prefix('#') {
+        decimal.parse().ok()
+    } else {
+        None
+    }?;
+    char::from_u32(number)
 }
 
 /// 将节点挂到栈顶父节点或作为根。

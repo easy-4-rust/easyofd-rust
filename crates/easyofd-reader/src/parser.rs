@@ -50,230 +50,22 @@ pub(crate) struct OfdEntry {
     pub(crate) keywords: Option<String>,
 }
 
+/// Parse OFD.xml using the [`easyofd_core::XmlNode`] tree (via
+/// `parse_xml_to_nodes`) instead of a flat quick-xml event stream.
 pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
 ) -> OfdResult<OfdEntry> {
-    let xml = read_zip_entry(archive, "OFD.xml")?;
-    let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
-    reader.config_mut().trim_text(false);
-    let mut buf = Vec::new();
-    let mut doc_root = String::new();
-    let mut doc_id = None;
-    let mut title = None;
-    let mut author = None;
-    let mut creator = None;
-    let mut creator_version = None;
-    let mut mod_date = None;
-    let mut creation_date = None;
-    let mut max_unit_id = 0_u32;
-    let mut custom_datas: Option<CustomDatas> = None;
-    let mut signatures_path: Option<String> = None;
-    let mut doc_usage: Option<String> = None;
-    let mut keywords: Option<String> = None;
-    let mut current_text_tag: Option<Vec<u8>> = None;
-    let mut current_text = String::new();
-    // Nested element tracking for CustomDatas
-    let mut in_custom_datas = false;
-    let mut in_custom_data = false;
-    let mut current_custom_data_name: Option<String> = None;
+    let xml_bytes = read_zip_entry(archive, "OFD.xml")?;
+    let xml_str = std::str::from_utf8(&xml_bytes)
+        .map_err(|e| OfdError::Xml(format!("OFD.xml: invalid UTF-8: {e}")))?;
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e)) => match e.name().as_ref() {
-                // Self-closing metadata elements (e.g. <ofd:DocID/>) carry an
-                // empty value; record them so a roundtrip keeps the element.
-                b"ofd:DocID" => doc_id = Some(String::new()),
-                b"ofd:Title" => title = Some(String::new()),
-                b"ofd:Author" => author = Some(String::new()),
-                b"ofd:Creator" => creator = Some(String::new()),
-                b"ofd:CreatorVersion" => creator_version = Some(String::new()),
-                b"ofd:ModDate" => mod_date = Some(String::new()),
-                b"ofd:CreationDate" => creation_date = Some(String::new()),
-                b"ofd:Signatures" => signatures_path = Some(String::new()),
-                b"ofd:DocUsage" => doc_usage = Some(String::new()),
-                b"ofd:Keywords" => keywords = Some(String::new()),
-                b"ofd:CustomData" if in_custom_datas => {
-                    let mut name = String::new();
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"Name" {
-                            name = attr
-                                .decoded_and_normalized_value(
-                                    quick_xml::XmlVersion::Explicit1_0,
-                                    reader.decoder(),
-                                )
-                                .unwrap_or_default()
-                                .to_string();
-                        }
-                    }
-                    let datas = custom_datas.get_or_insert_with(CustomDatas::new);
-                    datas.push(CustomData::new(name, ""));
-                }
-                _ => {}
-            },
-            Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                b"ofd:DocRoot" => {
-                    current_text_tag = Some(b"ofd:DocRoot".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:DocID" => {
-                    current_text_tag = Some(b"ofd:DocID".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:Title" => {
-                    current_text_tag = Some(b"ofd:Title".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:Author" => {
-                    current_text_tag = Some(b"ofd:Author".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:Creator" => {
-                    current_text_tag = Some(b"ofd:Creator".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:CreatorVersion" => {
-                    current_text_tag = Some(b"ofd:CreatorVersion".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:ModDate" => {
-                    current_text_tag = Some(b"ofd:ModDate".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:CreationDate" => {
-                    current_text_tag = Some(b"ofd:CreationDate".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:MaxUnitID" => {
-                    current_text_tag = Some(b"ofd:MaxUnitID".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:Signatures" => {
-                    current_text_tag = Some(b"ofd:Signatures".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:DocUsage" => {
-                    current_text_tag = Some(b"ofd:DocUsage".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:Keywords" => {
-                    current_text_tag = Some(b"ofd:Keywords".to_vec());
-                    current_text.clear();
-                }
-                b"ofd:CustomDatas" => {
-                    in_custom_datas = true;
-                }
-                b"ofd:CustomData" if in_custom_datas => {
-                    in_custom_data = true;
-                    current_custom_data_name = None;
-                    for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"Name" {
-                            current_custom_data_name = Some(
-                                attr.decoded_and_normalized_value(
-                                    quick_xml::XmlVersion::Explicit1_0,
-                                    reader.decoder(),
-                                )
-                                .unwrap_or_default()
-                                .to_string(),
-                            );
-                        }
-                    }
-                    current_text.clear();
-                }
-                _ => {}
-            },
-            Ok(Event::Text(ref e)) => {
-                let text = e
-                    .xml10_content()
-                    .map(|c| c.into_owned())
-                    .unwrap_or_default();
-                // Append, not assign: quick_xml may split a text node into
-                // multiple Text events around entities (e.g. "&apos;" splits
-                // "D:2022...+02'34'" into "D:2022...+02" + "34").
-                if current_text_tag.is_some() || in_custom_data {
-                    current_text.push_str(&text);
-                }
-            }
-            Ok(Event::End(ref end)) => {
-                let tag_name = end.name();
-                match tag_name.as_ref() {
-                    b"ofd:DocRoot" => {
-                        doc_root = current_text.trim().to_string();
-                        current_text_tag = None;
-                    }
-                    b"ofd:DocID" => {
-                        doc_id = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:Title" => {
-                        title = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:Author" => {
-                        author = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:Creator" => {
-                        creator = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:CreatorVersion" => {
-                        creator_version = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:ModDate" => {
-                        mod_date = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:CreationDate" => {
-                        creation_date = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:MaxUnitID" => {
-                        max_unit_id = current_text.trim().parse().unwrap_or(0);
-                        current_text_tag = None;
-                    }
-                    b"ofd:Signatures" => {
-                        signatures_path = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:DocUsage" => {
-                        doc_usage = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:Keywords" => {
-                        keywords = Some(current_text.trim().to_string());
-                        current_text_tag = None;
-                    }
-                    b"ofd:CustomData" if in_custom_data => {
-                        if let Some(name) = current_custom_data_name.take() {
-                            let datas = custom_datas.get_or_insert_with(CustomDatas::new);
-                            datas.push(CustomData::new(name, current_text.trim()));
-                        }
-                        in_custom_data = false;
-                        current_text.clear();
-                    }
-                    b"ofd:CustomDatas" => {
-                        in_custom_datas = false;
-                    }
-                    _ => {
-                        // Generic text tag end handling
-                        if current_text_tag.is_some() {
-                            current_text_tag = None;
-                            current_text.clear();
-                        }
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(OfdError::Xml(format!("OFD.xml: {e}"))),
-            _ => {}
-        }
-        buf.clear();
-    }
+    let root = easyofd_core::parse_xml_to_nodes(xml_str)
+        .map_err(|e| OfdError::Xml(format!("OFD.xml: {e}")))?;
 
-    if doc_root.is_empty() {
-        return Err(OfdError::InvalidDocument("missing DocRoot".into()));
-    }
+    // ── DocRoot (required) ──
+    let doc_root = find_text_deep(&root, "DocRoot")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| OfdError::InvalidDocument("missing DocRoot".into()))?;
 
     // DocRoot points at the Document XML file directly (e.g.
     // "Doc_0/Document.xml" or "Doc_0/Document_0.xml").  Normalize a leading
@@ -284,6 +76,36 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         Some(idx) => (doc_root[..idx].to_string(), doc_root[idx + 1..].to_string()),
         None => (String::new(), doc_root),
     };
+
+    // ── Optional metadata (present-but-empty → Some(""), absent → None) ──
+    let doc_id = find_optional_text_deep(&root, "DocID");
+    let title = find_optional_text_deep(&root, "Title");
+    let author = find_optional_text_deep(&root, "Author");
+    let creator = find_optional_text_deep(&root, "Creator");
+    let creator_version = find_optional_text_deep(&root, "CreatorVersion");
+    let mod_date = find_optional_text_deep(&root, "ModDate");
+    let creation_date = find_optional_text_deep(&root, "CreationDate");
+    let signatures_path = find_optional_text_deep(&root, "Signatures");
+    let doc_usage = find_optional_text_deep(&root, "DocUsage");
+    let keywords = find_optional_text_deep(&root, "Keywords");
+
+    // ── MaxUnitID ──
+    let max_unit_id: u32 = find_text_deep(&root, "MaxUnitID")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+
+    // ── CustomDatas ──
+    let custom_datas = find_node_deep(&root, "CustomDatas").and_then(|cds_node| {
+        let mut datas = CustomDatas::new();
+        for child in &cds_node.children {
+            if child.name == "CustomData" {
+                let name = child.get_attr("Name").unwrap_or_default().to_string();
+                let value = child.text.clone().unwrap_or_default().trim().to_string();
+                datas.push(CustomData::new(name, &value));
+            }
+        }
+        if datas.is_empty() { None } else { Some(datas) }
+    });
 
     Ok(OfdEntry {
         doc_dir,
@@ -661,147 +483,34 @@ pub(crate) fn parse_image_format(value: &str) -> ImageFormat {
 }
 
 /// Parse Page_N.xml → return `OfdPage` with dimensions and content objects.
+///
+/// Uses the [`easyofd_core::XmlNode`] tree (via `parse_xml_to_nodes`) instead
+/// of a flat quick-xml event stream, so that the parsing is structurally
+/// aligned with the rest of the XmlElement framework.
+///
+/// Entity references inside TextCode / AbbreviatedData are resolved by the
+/// tree parser, and text from multiple TextCode children within a single
+/// TextObject is concatenated.
 pub(crate) fn parse_page_entry<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     page_path: &str,
     doc_dir: &str,
     resources: &HashMap<String, ResourceEntry>,
 ) -> OfdResult<OfdPage> {
-    let xml = read_zip_entry(archive, page_path)?;
-    let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
-    reader.config_mut().trim_text(false);
-    let mut buf = Vec::new();
+    let xml_bytes = read_zip_entry(archive, page_path)?;
+    let xml_str = std::str::from_utf8(&xml_bytes)
+        .map_err(|e| OfdError::Xml(format!("{page_path}: invalid UTF-8: {e}")))?;
 
-    let mut width = 210.0_f64;
-    let mut height = 297.0_f64;
-    let mut content = Vec::new();
+    let root = easyofd_core::parse_xml_to_nodes(xml_str)
+        .map_err(|e| OfdError::Xml(format!("{page_path}: {e}")))?;
 
-    let mut current_text: Option<TextObjectBuilder> = None;
-    let mut current_path: Option<PathObjectBuilder> = None;
-    let mut in_text_code = false;
-    let mut in_path_data = false;
-    let mut in_physical_box = false;
+    // ── PhysicalBox → page dimensions ──
+    let (width, height) = find_node_deep(&root, "PhysicalBox")
+        .and_then(|n| n.text.clone())
+        .map_or((210.0, 297.0), |s| parse_physical_box_dims(&s));
 
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e) | Event::Empty(ref e)) => match e.name().as_ref() {
-                b"ofd:PhysicalBox" => in_physical_box = true,
-                b"ofd:TextObject" => {
-                    current_text = Some(parse_text_object_attrs(e, reader.decoder())?)
-                }
-                b"ofd:TextCode" => in_text_code = true,
-                b"ofd:PathObject" => {
-                    current_path = Some(parse_path_object_attrs(e, reader.decoder())?)
-                }
-                b"ofd:AbbreviatedData" => in_path_data = true,
-                b"ofd:ImageObject" => {
-                    let img = parse_image_object_attrs(e, reader.decoder())?;
-                    if let Some(resource) = resources.get(&img.resource_id) {
-                        let resource_path = resolve_resource_path(doc_dir, &resource.location)?;
-                        // Keep the actual archive entry name (case may differ,
-                        // e.g. "DOC_0/Res/Image_4.JPEG") so a roundtrip writes
-                        // the resource under the same name as the source.
-                        let actual_name =
-                            find_zip_entry_name(archive, &resource_path).unwrap_or(resource_path);
-                        let data = read_zip_entry(archive, &actual_name)?;
-                        content.push(ContentObject::Image(
-                            ImageObject::new(
-                                img.x,
-                                img.y,
-                                img.width,
-                                img.height,
-                                data,
-                                resource.format,
-                            )
-                            .with_res_name(actual_name),
-                        ));
-                    }
-                    // Resource missing (broken reference in non-standard
-                    // samples): drop the image object so the writer does not
-                    // emit an empty resource file.
-                }
-                _ => {}
-            },
-            Ok(Event::Text(ref e)) => {
-                let text = e
-                    .xml10_content()
-                    .map(|c| c.into_owned())
-                    .unwrap_or_default();
-                if in_physical_box {
-                    let parts: Vec<f64> = text
-                        .split_whitespace()
-                        .filter_map(|s| s.parse().ok())
-                        .collect();
-                    if parts.len() >= 4 {
-                        width = parts[2];
-                        height = parts[3];
-                    }
-                }
-                if in_text_code {
-                    if let Some(ref mut t) = current_text {
-                        t.text.push_str(&text);
-                    }
-                } else if in_path_data {
-                    if let Some(ref mut path) = current_path {
-                        path.path_data.push_str(&text);
-                    }
-                }
-            }
-            Ok(Event::GeneralRef(ref reference)) => {
-                let name = reference
-                    .xml10_content()
-                    .map(|value| value.into_owned())
-                    .unwrap_or_default();
-                let value = resolve_xml_reference(&name).ok_or_else(|| {
-                    OfdError::Xml(format!("{page_path}: unresolved entity &{name};"))
-                })?;
-                if in_text_code {
-                    if let Some(ref mut text) = current_text {
-                        text.text.push(value);
-                    }
-                } else if in_path_data {
-                    if let Some(ref mut path) = current_path {
-                        path.path_data.push(value);
-                    }
-                }
-            }
-            Ok(Event::End(ref e)) => match e.name().as_ref() {
-                b"ofd:PhysicalBox" => in_physical_box = false,
-                b"ofd:TextObject" => {
-                    if let Some(t) = current_text.take() {
-                        let mut obj = TextObject::new(t.x, t.y, t.text);
-                        if let Some(f) = t.font {
-                            obj = obj.font(f);
-                        }
-                        if let Some(s) = t.size {
-                            obj = obj.size(s);
-                        }
-                        obj.width = t.width;
-                        obj.height = t.height;
-                        content.push(ContentObject::Text(obj));
-                    }
-                }
-                b"ofd:TextCode" => in_text_code = false,
-                b"ofd:PathObject" => {
-                    if let Some(path) = current_path.take() {
-                        let mut object = PathObject::new(path.x, path.y, path.path_data)
-                            .stroke_color(path.stroke_color)
-                            .stroke_width(path.stroke_width);
-                        if let Some(fill_color) = path.fill_color {
-                            object = object.fill_color(fill_color);
-                        }
-                        content.push(ContentObject::Path(object));
-                    }
-                }
-                b"ofd:AbbreviatedData" => in_path_data = false,
-                _ => {}
-            },
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(OfdError::Xml(format!("{page_path}: {e}"))),
-            _ => {}
-        }
-        buf.clear();
-    }
+    // ── Content objects (document-order walk) ──
+    let content = collect_content_objects(&root, archive, doc_dir, resources)?;
 
     Ok(OfdPage {
         width,
@@ -811,22 +520,46 @@ pub(crate) fn parse_page_entry<R: Read + std::io::Seek>(
     })
 }
 
-// ─── Attribute Parsing Helpers ───────────────────────────────────────────────
-
-pub(crate) struct TextObjectBuilder {
-    x: f64,
-    y: f64,
-    text: String,
-    font: Option<String>,
-    size: Option<f64>,
-    width: Option<f64>,
-    height: Option<f64>,
+/// Walk the XmlNode tree depth-first in document order, collecting content
+/// objects (TextObject, PathObject, ImageObject).
+fn collect_content_objects<R: Read + std::io::Seek>(
+    node: &easyofd_core::XmlNode,
+    archive: &mut zip::ZipArchive<R>,
+    doc_dir: &str,
+    resources: &HashMap<String, ResourceEntry>,
+) -> OfdResult<Vec<ContentObject>> {
+    let mut result = Vec::new();
+    for child in &node.children {
+        match child.name.as_str() {
+            "TextObject" => {
+                let obj = build_text_object_from_node(child);
+                result.push(ContentObject::Text(obj));
+            }
+            "PathObject" => {
+                let obj = build_path_object_from_node(child);
+                result.push(ContentObject::Path(obj));
+            }
+            "ImageObject" => {
+                if let Some(img) = build_image_object_from_node(child, archive, doc_dir, resources)?
+                {
+                    result.push(ContentObject::Image(img));
+                }
+                // Resource missing (broken reference in non-standard
+                // samples): drop the image object so the writer does not
+                // emit an empty resource file.
+            }
+            _ => {
+                result.extend(collect_content_objects(child, archive, doc_dir, resources)?);
+            }
+        }
+    }
+    Ok(result)
 }
 
-pub(crate) fn parse_text_object_attrs(
-    e: &quick_xml::events::BytesStart,
-    decoder: quick_xml::encoding::Decoder,
-) -> OfdResult<TextObjectBuilder> {
+/// Build a [`TextObject`] from an [`XmlNode`], extracting Boundary/Font/Size
+/// attributes and concatenating text from all TextCode children.
+#[allow(clippy::many_single_char_names)]
+fn build_text_object_from_node(node: &easyofd_core::XmlNode) -> TextObject {
     let mut x = 0.0_f64;
     let mut y = 0.0_f64;
     let mut font = None;
@@ -834,12 +567,10 @@ pub(crate) fn parse_text_object_attrs(
     let mut width = None;
     let mut height = None;
 
-    for attr in e.attributes().flatten() {
-        match attr.key.as_ref() {
-            b"Boundary" => {
-                let parts: Vec<f64> = attr
-                    .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-                    .unwrap_or_default()
+    for (key, value) in &node.attrs {
+        match key.as_str() {
+            "Boundary" => {
+                let parts: Vec<f64> = value
                     .split_whitespace()
                     .filter_map(|s| s.parse().ok())
                     .collect();
@@ -852,146 +583,141 @@ pub(crate) fn parse_text_object_attrs(
                     height = Some(parts[3]);
                 }
             }
-            b"Font" => {
-                font = Some(
-                    attr.decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-                        .unwrap_or_default()
-                        .to_string(),
-                );
-            }
-            b"Size" => {
-                size = attr
-                    .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-                    .unwrap_or_default()
-                    .parse()
-                    .ok();
-            }
+            "Font" => font = Some(value.clone()),
+            "Size" => size = value.parse().ok(),
             _ => {}
         }
     }
 
-    Ok(TextObjectBuilder {
-        x,
-        y,
-        text: String::new(),
-        font,
-        size,
-        width,
-        height,
-    })
+    // Concatenate text from all TextCode children (document order).
+    // Entity references are already resolved by `parse_xml_to_nodes`.
+    let text: String = node
+        .children
+        .iter()
+        .filter(|c| c.name == "TextCode")
+        .filter_map(|c| c.text.clone())
+        .collect();
+
+    let mut obj = TextObject::new(x, y, text);
+    if let Some(f) = font {
+        obj = obj.font(f);
+    }
+    if let Some(s) = size {
+        obj = obj.size(s);
+    }
+    obj.width = width;
+    obj.height = height;
+    obj
 }
 
-pub(crate) struct PathObjectBuilder {
-    x: f64,
-    y: f64,
-    stroke_color: u32,
-    stroke_width: f64,
-    fill_color: Option<u32>,
-    path_data: String,
-}
+/// Build a [`PathObject`] from an [`XmlNode`], extracting stroke/fill
+/// attributes and AbbreviatedData text.
+fn build_path_object_from_node(node: &easyofd_core::XmlNode) -> PathObject {
+    let mut x = 0.0_f64;
+    let mut y = 0.0_f64;
+    let mut stroke_color = 0u32;
+    let mut stroke_width = 0.35_f64;
+    let mut fill_color = None;
 
-pub(crate) fn parse_path_object_attrs(
-    event: &quick_xml::events::BytesStart,
-    decoder: quick_xml::encoding::Decoder,
-) -> OfdResult<PathObjectBuilder> {
-    let mut builder = PathObjectBuilder {
-        x: 0.0,
-        y: 0.0,
-        stroke_color: 0,
-        stroke_width: 0.35,
-        fill_color: None,
-        path_data: String::new(),
-    };
-    for attribute in event.attributes().flatten() {
-        let value = attribute
-            .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-            .unwrap_or_default();
-        match attribute.key.as_ref() {
-            b"Boundary" => {
+    for (key, value) in &node.attrs {
+        match key.as_str() {
+            "Boundary" => {
                 let parts: Vec<f64> = value
                     .split_whitespace()
-                    .filter_map(|part| part.parse().ok())
+                    .filter_map(|s| s.parse().ok())
                     .collect();
                 if parts.len() >= 2 {
-                    builder.x = parts[0];
-                    builder.y = parts[1];
+                    x = parts[0];
+                    y = parts[1];
                 }
             }
-            b"StrokeColor" => builder.stroke_color = parse_hex_color(&value).unwrap_or(0),
-            b"FillColor" => builder.fill_color = parse_hex_color(&value),
-            b"LineWidth" => builder.stroke_width = value.parse().unwrap_or(0.35),
+            "StrokeColor" => stroke_color = parse_hex_color(value).unwrap_or(0),
+            "FillColor" => fill_color = parse_hex_color(value),
+            "LineWidth" => stroke_width = value.parse().unwrap_or(0.35),
             _ => {}
         }
     }
-    Ok(builder)
-}
 
-pub(crate) fn parse_hex_color(value: &str) -> Option<u32> {
-    u32::from_str_radix(value.trim_start_matches('#'), 16).ok()
-}
+    let path_data = node
+        .children
+        .iter()
+        .find(|c| c.name == "AbbreviatedData")
+        .and_then(|c| c.text.clone())
+        .unwrap_or_default();
 
-pub(crate) fn resolve_xml_reference(value: &str) -> Option<char> {
-    if let Some(entity) = quick_xml::escape::resolve_xml_entity(value) {
-        return entity.chars().next();
+    let mut object = PathObject::new(x, y, path_data)
+        .stroke_color(stroke_color)
+        .stroke_width(stroke_width);
+    if let Some(fc) = fill_color {
+        object = object.fill_color(fc);
     }
-    let number = if let Some(hex) = value.strip_prefix("#x") {
-        u32::from_str_radix(hex, 16).ok()
-    } else if let Some(decimal) = value.strip_prefix('#') {
-        decimal.parse().ok()
-    } else {
-        None
-    }?;
-    char::from_u32(number)
+    object
 }
 
-pub(crate) struct ImageObjectBuilder {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    resource_id: String,
-}
-
+/// Build an [`ImageObject`] from an [`XmlNode`], looking up the resource
+/// by ResourceID and reading image data from the archive.
 #[allow(clippy::many_single_char_names)]
-pub(crate) fn parse_image_object_attrs(
-    e: &quick_xml::events::BytesStart,
-    decoder: quick_xml::encoding::Decoder,
-) -> OfdResult<ImageObjectBuilder> {
+fn build_image_object_from_node<R: Read + std::io::Seek>(
+    node: &easyofd_core::XmlNode,
+    archive: &mut zip::ZipArchive<R>,
+    doc_dir: &str,
+    resources: &HashMap<String, ResourceEntry>,
+) -> OfdResult<Option<ImageObject>> {
     let mut x = 0.0_f64;
     let mut y = 0.0_f64;
     let mut w = 0.0_f64;
     let mut h = 0.0_f64;
     let mut resource_id = String::new();
 
-    for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == b"Boundary" {
-            let parts: Vec<f64> = attr
-                .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-                .unwrap_or_default()
-                .split_whitespace()
-                .filter_map(|s| s.parse().ok())
-                .collect();
-            if parts.len() >= 4 {
-                x = parts[0];
-                y = parts[1];
-                w = parts[2];
-                h = parts[3];
+    for (key, value) in &node.attrs {
+        match key.as_str() {
+            "Boundary" => {
+                let parts: Vec<f64> = value
+                    .split_whitespace()
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                if parts.len() >= 4 {
+                    x = parts[0];
+                    y = parts[1];
+                    w = parts[2];
+                    h = parts[3];
+                }
             }
-        } else if attr.key.as_ref() == b"ResourceID" {
-            resource_id = attr
-                .decoded_and_normalized_value(quick_xml::XmlVersion::Explicit1_0, decoder)
-                .unwrap_or_default()
-                .to_string();
+            "ResourceID" => resource_id.clone_from(value),
+            _ => {}
         }
     }
 
-    Ok(ImageObjectBuilder {
-        x,
-        y,
-        width: w,
-        height: h,
-        resource_id,
-    })
+    if let Some(resource) = resources.get(&resource_id) {
+        let resource_path = resolve_resource_path(doc_dir, &resource.location)?;
+        // Keep the actual archive entry name (case may differ,
+        // e.g. "DOC_0/Res/Image_4.JPEG") so a roundtrip writes
+        // the resource under the same name as the source.
+        let actual_name = find_zip_entry_name(archive, &resource_path).unwrap_or(resource_path);
+        let data = read_zip_entry(archive, &actual_name)?;
+        Ok(Some(
+            ImageObject::new(x, y, w, h, data, resource.format).with_res_name(actual_name),
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Parse "x y w h" PhysicalBox text into `(width, height)`.
+fn parse_physical_box_dims(text: &str) -> (f64, f64) {
+    let parts: Vec<f64> = text
+        .split_whitespace()
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    if parts.len() >= 4 {
+        (parts[2], parts[3])
+    } else {
+        (210.0, 297.0)
+    }
+}
+
+fn parse_hex_color(value: &str) -> Option<u32> {
+    u32::from_str_radix(value.trim_start_matches('#'), 16).ok()
 }
 
 // ─── ZIP Helper ──────────────────────────────────────────────────────────────
@@ -1092,6 +818,16 @@ fn find_text_deep(node: &easyofd_core::XmlNode, name: &str) -> Option<String> {
     find_node_deep(node, name)
         .and_then(|n| n.text.clone())
         .map(|s| s.trim().to_string())
+}
+
+/// Find a node by name; if present return its text (trimmed, defaulting to ""
+/// for empty/self-closing elements); if absent return `None`.
+///
+/// This distinguishes "element present but empty" (`Some("")`) from "element
+/// not present" (`None`), matching the event-stream parser behaviour for
+/// self-closing metadata elements like `<ofd:DocID/>`.
+fn find_optional_text_deep(node: &easyofd_core::XmlNode, name: &str) -> Option<String> {
+    find_node_deep(node, name).map(|n| n.text.clone().unwrap_or_default().trim().to_string())
 }
 
 /// Find all nodes with a given name (depth-first).

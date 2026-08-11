@@ -162,27 +162,41 @@ impl OfdWriter {
         &self,
         image_resources: &[(String, &[u8], ImageFormat)],
     ) -> String {
-        let mut xml = String::with_capacity(1024);
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(r#"<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">"#);
-        xml.push('\n');
+        use easyofd_core::doc::pages::{PageEntry, Pages};
+        use easyofd_core::xml_element::{XmlElement, XmlNode};
+        use easyofd_core::{CT_TemplatePage, CTDest, DestType};
 
-        // Common Data
-        xml.push_str(r"  <ofd:CommonData>");
-        xml.push('\n');
+        // Helper: create a text child XmlNode with ofd: prefix.
+        fn ofd_text(name: &str, text: &str) -> XmlNode {
+            let mut node = XmlNode::element(format!("ofd:{name}"));
+            node.push_child(XmlNode::text_node(text));
+            node
+        }
 
-        // MaxUnitID: count of all content objects across pages + page IDs
+        // ── Build the entire Document as a single XmlNode tree ──
+        // Using XmlNode (core XmlElement infrastructure) with ofd: prefix
+        // to maintain structural consistency with ofdrw output.
+        // XmlElement types (Pages, PageEntry, CT_TemplatePage, CTDest) are
+        // used for data extraction where their to_xml() structure matches.
+
+        let mut doc =
+            XmlNode::element("ofd:Document").attr("xmlns:ofd", "http://www.ofdspec.org/2016");
+
+        // ── CommonData ──
+        // NOTE: CT_CommonData / CT_PageArea XmlElement types put PhysicalBox
+        // as an *attribute*, while the current output (and ofdrw) uses a
+        // *child element*. Using those types would change element counts in
+        // the roundtrip_diff test, so CommonData is built as a XmlNode tree.
+        let mut common_data = XmlNode::element("ofd:CommonData");
+
+        // MaxUnitID
         let max_unit_id =
             self.pages.len() + self.pages.iter().map(|p| p.content.len()).sum::<usize>();
-        xml.push_str(&format!(
-            r"    <ofd:MaxUnitID>{max_unit_id}</ofd:MaxUnitID>"
-        ));
-        xml.push('\n');
+        common_data.push_child(ofd_text("MaxUnitID", &max_unit_id.to_string()));
 
-        // Page area: use first page dimensions, or A4 default.  The element is
-        // omitted when the source document did not declare one (ofdrw skips
-        // PageArea when the page size is not explicitly configured).
+        // PageArea with PhysicalBox as a child element (matching ofdrw output).
+        // CT_PageArea XmlElement puts PhysicalBox as an attribute — different
+        // element count — so we build the XmlNode manually here.
         if self.options.metadata.page_area_present {
             let (pw, ph) = self
                 .pages
@@ -190,59 +204,37 @@ impl OfdWriter {
                 .map_or((210.0, 297.0), |p| (p.width, p.height));
             let width_str = format_number(pw);
             let height_str = format_number(ph);
-            xml.push_str(&format!(
-                r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {width_str} {height_str}</ofd:PhysicalBox></ofd:PageArea>"
+            let mut page_area = XmlNode::element("ofd:PageArea");
+            page_area.push_child(ofd_text(
+                "PhysicalBox",
+                &format!("0 0 {width_str} {height_str}"),
             ));
-            xml.push('\n');
+            common_data.push_child(page_area);
         }
 
-        // Optional box elements (ofdrw: ApplicationBox, ContentBox, ClipBox, BleedBox, TrimBox)
-        if let Some(ref app_box) = self.options.metadata.application_box {
-            xml.push_str(&format!(
-                "    <ofd:ApplicationBox>{}</ofd:ApplicationBox>",
-                xml_escape(app_box)
-            ));
-            xml.push('\n');
+        // Optional box elements (siblings of PageArea inside CommonData).
+        if let Some(ref v) = self.options.metadata.application_box {
+            common_data.push_child(ofd_text("ApplicationBox", v));
         }
-        if let Some(ref content_box) = self.options.metadata.content_box {
-            xml.push_str(&format!(
-                "    <ofd:ContentBox>{}</ofd:ContentBox>",
-                xml_escape(content_box)
-            ));
-            xml.push('\n');
+        if let Some(ref v) = self.options.metadata.content_box {
+            common_data.push_child(ofd_text("ContentBox", v));
         }
-        if let Some(ref clip_box) = self.options.metadata.clip_box {
-            xml.push_str(&format!(
-                "    <ofd:ClipBox>{}</ofd:ClipBox>",
-                xml_escape(clip_box)
-            ));
-            xml.push('\n');
+        if let Some(ref v) = self.options.metadata.clip_box {
+            common_data.push_child(ofd_text("ClipBox", v));
         }
-        if let Some(ref bleed_box) = self.options.metadata.bleed_box {
-            xml.push_str(&format!(
-                "    <ofd:BleedBox>{}</ofd:BleedBox>",
-                xml_escape(bleed_box)
-            ));
-            xml.push('\n');
+        if let Some(ref v) = self.options.metadata.bleed_box {
+            common_data.push_child(ofd_text("BleedBox", v));
         }
-        if let Some(ref trim_box) = self.options.metadata.trim_box {
-            xml.push_str(&format!(
-                "    <ofd:TrimBox>{}</ofd:TrimBox>",
-                xml_escape(trim_box)
-            ));
-            xml.push('\n');
+        if let Some(ref v) = self.options.metadata.trim_box {
+            common_data.push_child(ofd_text("TrimBox", v));
         }
 
-        // Font declarations (element emitted only when the source had one;
-        // ofdrw omits the PublicRes element for font-less documents).
+        // PublicRes (font declarations — only when source had one).
         if self.options.metadata.public_res_element_present {
-            xml.push_str(r"    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>");
-            xml.push('\n');
+            common_data.push_child(ofd_text("PublicRes", "PublicRes.xml"));
         }
 
-        // Document resources: keep the original reference from a roundtrip
-        // read (e.g. "DocumentRes_0.xml"); default to "DocumentRes.xml" and
-        // only emit the element when there are image resources.
+        // DocumentRes (image/media resources).
         let doc_res_ref = self
             .options
             .metadata
@@ -253,33 +245,27 @@ impl OfdWriter {
         if self.options.metadata.document_res_element_present
             && (!image_resources.is_empty() || self.options.metadata.document_res.is_some())
         {
-            xml.push_str(&format!(
-                "    <ofd:DocumentRes>{}</ofd:DocumentRes>",
-                xml_escape(doc_res_ref)
-            ));
-            xml.push('\n');
+            common_data.push_child(ofd_text("DocumentRes", doc_res_ref));
         }
 
-        // Template pages (ofdrw writes them in CommonData after DocumentRes).
+        // TemplatePage entries — use CT_TemplatePage XmlElement for attribute data.
         for tpl in &self.options.metadata.template_pages {
-            xml.push_str(&format!(
-                r#"    <ofd:TemplatePage ID="{}" BaseLoc="{}"/>"#,
-                xml_escape(&tpl.id),
-                xml_escape(&tpl.base_loc),
-            ));
-            xml.push('\n');
+            let tpl_id: u32 = tpl.id.parse().unwrap_or(0);
+            let ct_tpl = CT_TemplatePage::new(tpl_id).base_loc(&tpl.base_loc);
+            // Convert XmlElement attributes to ofd:-prefixed XmlNode.
+            let mut tpl_node = XmlNode::element("ofd:TemplatePage");
+            for (k, v) in ct_tpl.attributes() {
+                tpl_node.attrs.push((k, v));
+            }
+            common_data.push_child(tpl_node);
         }
 
-        xml.push_str(r"  </ofd:CommonData>");
-        xml.push('\n');
+        doc.push_child(common_data);
 
-        // Pages
-        xml.push_str(r"  <ofd:Pages>");
-        xml.push('\n');
+        // ── Pages — use Pages/PageEntry XmlElement types for data ──
+        let mut pages_tree = Pages::new();
         let doc_dir_prefix = format!("{}/", self.options.metadata.doc_dir);
         for (i, page) in self.pages.iter().enumerate() {
-            // Prefer the original BaseLoc from a roundtrip read (relative to
-            // the doc directory); fall back to writer-assigned names.
             let base_loc = page.base_path.as_deref().map_or_else(
                 || format!("Pages/Page_{i}/Content.xml"),
                 |p| {
@@ -289,137 +275,117 @@ impl OfdWriter {
                         .to_string()
                 },
             );
-            xml.push_str(&format!(
-                r#"    <ofd:Page ID="{id}" BaseLoc="{base_loc}"/>"#,
-                id = i + 1
-            ));
-            xml.push('\n');
+            pages_tree.add_page(PageEntry::new(u32::try_from(i + 1).unwrap_or(1), base_loc));
         }
-        xml.push_str(r"  </ofd:Pages>");
-        xml.push('\n');
+        // Convert Pages/PageEntry XmlElement attributes to ofd:-prefixed XmlNodes.
+        let mut pages_node = XmlNode::element("ofd:Pages");
+        for pe in &pages_tree.pages {
+            let mut entry_node = XmlNode::element("ofd:Page");
+            for (k, v) in pe.attributes() {
+                entry_node.attrs.push((k, v));
+            }
+            pages_node.push_child(entry_node);
+        }
+        doc.push_child(pages_node);
 
-        // Bookmarks (ofd:Bookmarks lives in Document.xml per GB/T 33190-2016 §7.3).
-        // Matches ofdrw output shape: <Bookmark Name="..."><Dest Type="XYZ"
-        // PageID="..."/></Bookmark> (Bookmark/Dest without the ofd: prefix).
+        // ── Bookmarks ──
+        // Bookmark/Dest elements are emitted without ofd: prefix (matching
+        // ofdrw output). CTDest XmlElement is used for Dest attribute data.
         if let Some(ref bookmarks) = self.options.metadata.bookmarks {
             if !bookmarks.is_empty() {
-                xml.push_str(r"  <ofd:Bookmarks>");
-                xml.push('\n');
+                let mut bm_node = XmlNode::element("ofd:Bookmarks");
                 for bm in &bookmarks.items {
-                    xml.push_str(&format!(
-                        r#"    <Bookmark Name="{}">"#,
-                        xml_escape(&bm.name)
-                    ));
-                    xml.push('\n');
+                    let mut item = XmlNode::element("Bookmark").attr("Name", &bm.name);
                     if let Some(ref target) = bm.goto_target {
-                        xml.push_str(&format!(
-                            r#"      <Dest Type="XYZ" PageID="{}"/>"#,
-                            xml_escape(target)
-                        ));
-                        xml.push('\n');
+                        let page_id: u32 = target.parse().unwrap_or(0);
+                        let dest = CTDest::new(page_id).dest_type(DestType::XYZ);
+                        let mut dest_node = XmlNode::element("Dest");
+                        for (k, v) in dest.attributes() {
+                            dest_node.attrs.push((k, v));
+                        }
+                        item.push_child(dest_node);
                     }
-                    xml.push_str(r"    </Bookmark>");
-                    xml.push('\n');
+                    bm_node.push_child(item);
                 }
-                xml.push_str(r"  </ofd:Bookmarks>");
-                xml.push('\n');
+                doc.push_child(bm_node);
             }
         }
 
-        // Outlines (GB/T 33190-2016 §7.3 bookmark outline): keep the element
-        // even when empty (ofdrw emits <ofd:Outlines/> in that case).
+        // ── Outlines ──
+        // CT_OutlineElem XmlElement doesn't match the Actions/Action/Goto/Dest
+        // nesting that ofdrw produces, so outlines are built as XmlNodes.
+        // CTDest XmlElement is used for Dest attribute data.
         if let Some(ref outlines) = self.options.metadata.outlines {
             if outlines.is_empty() {
-                xml.push_str(r"  <ofd:Outlines/>");
-                xml.push('\n');
+                doc.push_child(XmlNode::element("ofd:Outlines"));
             } else {
-                xml.push_str(r"  <ofd:Outlines>");
-                xml.push('\n');
+                let mut ol_node = XmlNode::element("ofd:Outlines");
                 for item in &outlines.items {
-                    xml.push_str(&format!(
-                        r#"    <ofd:OutlineElem Title="{}" Expanded="true">"#,
-                        xml_escape(&item.name)
-                    ));
-                    xml.push('\n');
-                    xml.push_str(r"      <ofd:Actions>");
-                    xml.push('\n');
-                    xml.push_str(r#"        <ofd:Action Event="CLICK">"#);
-                    xml.push('\n');
-                    xml.push_str(r"          <ofd:Goto>");
-                    xml.push('\n');
+                    let mut elem = XmlNode::element("ofd:OutlineElem")
+                        .attr("Title", &item.name)
+                        .attr("Expanded", "true");
+                    let mut actions = XmlNode::element("ofd:Actions");
+                    let mut action = XmlNode::element("ofd:Action").attr("Event", "CLICK");
+                    let mut goto = XmlNode::element("ofd:Goto");
                     if let Some(ref target) = item.goto_target {
-                        xml.push_str(&format!(
-                            r#"            <ofd:Dest Type="XYZ" PageID="{}"/>"#,
-                            xml_escape(target)
-                        ));
-                        xml.push('\n');
+                        let page_id: u32 = target.parse().unwrap_or(0);
+                        let dest = CTDest::new(page_id).dest_type(DestType::XYZ);
+                        let mut dest_node = XmlNode::element("ofd:Dest");
+                        for (k, v) in dest.attributes() {
+                            dest_node.attrs.push((k, v));
+                        }
+                        goto.push_child(dest_node);
                     }
-                    xml.push_str(r"          </ofd:Goto>");
-                    xml.push('\n');
-                    xml.push_str(r"        </ofd:Action>");
-                    xml.push('\n');
-                    xml.push_str(r"      </ofd:Actions>");
-                    xml.push('\n');
-                    xml.push_str(r"    </ofd:OutlineElem>");
-                    xml.push('\n');
+                    action.push_child(goto);
+                    actions.push_child(action);
+                    elem.push_child(actions);
+                    ol_node.push_child(elem);
                 }
-                xml.push_str(r"  </ofd:Outlines>");
-                xml.push('\n');
+                doc.push_child(ol_node);
             }
         }
 
-        // Container references (Annotations/Attachments/CustomTags), written
-        // after Pages, matching ofdrw's layout.
-        if let Some(ref annotations_path) = self.options.metadata.annotations_path {
-            xml.push_str(&format!(
-                "  <ofd:Annotations>{}</ofd:Annotations>",
-                xml_escape(annotations_path)
-            ));
-            xml.push('\n');
+        // ── Container references ──
+        if let Some(ref p) = self.options.metadata.annotations_path {
+            doc.push_child(ofd_text("Annotations", p));
         }
-        if let Some(ref attachments_path) = self.options.metadata.attachments_path {
-            xml.push_str(&format!(
-                "  <ofd:Attachments>{}</ofd:Attachments>",
-                xml_escape(attachments_path)
-            ));
-            xml.push('\n');
+        if let Some(ref p) = self.options.metadata.attachments_path {
+            doc.push_child(ofd_text("Attachments", p));
         }
-        if let Some(ref custom_tags_path) = self.options.metadata.custom_tags_path {
-            xml.push_str(&format!(
-                "  <ofd:CustomTags>{}</ofd:CustomTags>",
-                xml_escape(custom_tags_path)
-            ));
-            xml.push('\n');
+        if let Some(ref p) = self.options.metadata.custom_tags_path {
+            doc.push_child(ofd_text("CustomTags", p));
         }
 
-        // Permissions (GB/T 33190 document permissions).
+        // ── Permissions ──
         if let Some(ref perms) = self.options.metadata.permissions {
-            xml.push_str(r"  <ofd:Permissions>");
-            xml.push('\n');
-            let mut emit = |tag: &str, value: Option<bool>, as_attribute: bool| {
+            let mut perms_node = XmlNode::element("ofd:Permissions");
+            let add_bool = |node: &mut XmlNode, tag: &str, value: Option<bool>| {
                 if let Some(v) = value {
-                    if as_attribute {
-                        xml.push_str(&format!(r#"    <ofd:{tag} Printable="{v}"/>"#));
-                    } else {
-                        xml.push_str(&format!("    <ofd:{tag}>{v}</ofd:{tag}>"));
-                    }
-                    xml.push('\n');
+                    let mut child = XmlNode::element(format!("ofd:{tag}"));
+                    child.push_child(XmlNode::text_node(v.to_string()));
+                    node.push_child(child);
                 }
             };
-            emit("Edit", perms.edit, false);
-            emit("Annot", perms.annot, false);
-            emit("Export", perms.export, false);
-            emit("Signature", perms.signature, false);
-            emit("Watermark", perms.watermark, false);
-            emit("PrintScreen", perms.print_screen, false);
-            emit("Print", perms.print, true);
-            emit("CopyText", perms.copy_text, false);
-            emit("ContentRegist", perms.content_regist, false);
-            xml.push_str(r"  </ofd:Permissions>");
-            xml.push('\n');
+            add_bool(&mut perms_node, "Edit", perms.edit);
+            add_bool(&mut perms_node, "Annot", perms.annot);
+            add_bool(&mut perms_node, "Export", perms.export);
+            add_bool(&mut perms_node, "Signature", perms.signature);
+            add_bool(&mut perms_node, "Watermark", perms.watermark);
+            add_bool(&mut perms_node, "PrintScreen", perms.print_screen);
+            if let Some(v) = perms.print {
+                perms_node
+                    .push_child(XmlNode::element("ofd:Print").attr("Printable", v.to_string()));
+            }
+            add_bool(&mut perms_node, "CopyText", perms.copy_text);
+            add_bool(&mut perms_node, "ContentRegist", perms.content_regist);
+            doc.push_child(perms_node);
         }
 
-        xml.push_str(r"</ofd:Document>");
+        // ── Serialize the complete tree ──
+        let mut xml = String::with_capacity(2048);
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+        xml.push('\n');
+        xml.push_str(&doc.to_xml_string());
         xml.push('\n');
         xml
     }
