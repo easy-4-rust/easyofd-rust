@@ -58,8 +58,91 @@ mod tests {
     }
 
     #[test]
-    fn color_profile_rule_passes() {
+    fn color_profile_rule_passes_empty() {
         let entries = vec![];
         assert!(ColorProfileRule.check(&entries).passed);
+    }
+
+    // ── 合规：无 ColorSpace 元素 ───────────────────────────────────────
+
+    #[test]
+    fn color_profile_rule_passes_without_color_space() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br"<ofd:Res><ofd:MultiMedia/></ofd:Res>".to_vec(),
+        )];
+        assert!(ColorProfileRule.check(&entries).passed);
+    }
+
+    // ── 建议：有 ColorSpace 但无 Profile ──────────────────────────────
+
+    #[test]
+    fn color_profile_rule_info_without_profile() {
+        let entries = vec![(
+            "Res.xml".into(),
+            b"<ofd:Res><ofd:ColorSpace Type=\"RGB\"/></ofd:Res>".to_vec(),
+        )];
+        let result = ColorProfileRule.check(&entries);
+        assert!(result.passed);
+        assert!(result.message.contains("建议"));
+    }
+
+    // ── 合规：有 ColorSpace 且带 Profile 属性 ─────────────────────────
+
+    #[test]
+    fn color_profile_rule_passes_with_profile_attr() {
+        let entries = vec![(
+            "Res.xml".into(),
+            br#"<ofd:Res><ofd:ColorSpace Type="RGB" Profile="sRGB.icc"/></ofd:Res>"#.to_vec(),
+        )];
+        let result = ColorProfileRule.check(&entries);
+        assert!(result.passed);
+        assert!(result.message.contains("通过"));
+    }
+
+    // ── 合规：有 ICCProfile 子元素 ─────────────────────────────────────
+
+    #[test]
+    fn color_profile_rule_passes_with_icc_profile_element() {
+        let entries = vec![(
+            "Res.xml".into(),
+            b"<ofd:Res><ofd:ColorSpace Type=\"RGB\"><ofd:ICCProfile/></ofd:ColorSpace></ofd:Res>"
+                .to_vec(),
+        )];
+        let result = ColorProfileRule.check(&entries);
+        assert!(result.passed);
+        assert!(result.message.contains("通过"));
+    }
+
+    // ── 边界：非 XML 文件应跳过 ────────────────────────────────────────
+
+    #[test]
+    fn color_profile_rule_ignores_non_xml() {
+        let entries = vec![("image.png".into(), b"ColorSpace".to_vec())];
+        assert!(ColorProfileRule.check(&entries).passed);
+    }
+
+    // ── 边界：非 XML 文件中含 ColorSpace 也应跳过 ─────────────────────
+
+    #[test]
+    fn color_profile_rule_ignores_non_xml_even_with_keyword() {
+        let entries = vec![("data.txt".into(), b"<ofd:ColorSpace>".to_vec())];
+        assert!(ColorProfileRule.check(&entries).passed);
+    }
+
+    // ── check_violations 始终返回空（仅 INFO 级别） ────────────────────
+
+    #[test]
+    fn color_profile_violations_always_empty() {
+        let entries = vec![(
+            "Res.xml".into(),
+            b"<ofd:Res><ofd:ColorSpace Type=\"RGB\"/></ofd:Res>".to_vec(),
+        )];
+        assert!(ColorProfileRule.check_violations(&entries).is_empty());
+    }
+
+    #[test]
+    fn color_profile_violations_empty_on_empty_entries() {
+        assert!(ColorProfileRule.check_violations(&[]).is_empty());
     }
 }

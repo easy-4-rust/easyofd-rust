@@ -1,0 +1,32 @@
+<!-- expected_simple_2_document.xml
+     Expected Document.xml structure for simple_2.ofd
+     Produced by ofdrw 1.5.5; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Document> with xmlns:ofd namespace
+     [GB/T 33190] CommonData section required
+     [GB/T 33190] PageArea/PhysicalBox defines page dimensions (A4: 210x297mm)
+     [GB/T 33190] Pages section lists all page entries with BaseLoc
+     [ofdrw]      PublicRes references PublicRes.xml
+     [ofdrw]      MaxUnitID tracks the highest assigned element ID
+-->
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <!-- [GB/T 33190] CommonData contains shared document configuration -->
+  <ofd:CommonData>
+    <!-- [GB/T 33190] PageArea defines the default page dimensions -->
+    <ofd:PageArea>
+      <!-- [GB/T 33190] PhysicalBox: "x y width height" in mm -->
+      <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+      <!-- [ofdrw] ApplicationBox matches PhysicalBox for simple documents -->
+      <ofd:ApplicationBox>0 0 210 297</ofd:ApplicationBox>
+    </ofd:PageArea>
+    <!-- [ofdrw] PublicRes references the public resource file -->
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+    <!-- [ofdrw] MaxUnitID is the highest element ID used -->
+    <ofd:MaxUnitID>4</ofd:MaxUnitID>
+  </ofd:CommonData>
+  <!-- [GB/T 33190] Pages section lists all page entries -->
+  <ofd:Pages>
+    <!-- [GB/T 33190] Page element with ID and BaseLoc attributes -->
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+  </ofd:Pages>
+</ofd:Document>

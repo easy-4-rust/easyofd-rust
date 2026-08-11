@@ -6,6 +6,40 @@
 
 use std::fmt;
 
+// ── 签名操作错误 ──────────────────────────────────────────────────────────
+
+/// 签名操作错误。
+///
+/// 用于 [`ExtendSignatureContainer::sign`](crate::ExtendSignatureContainer::sign)
+/// 返回的错误，涵盖 DER 编解码、证书解析、SM2 签名等环节。
+///
+/// 对应 Java: 无直接对应——Java 侧使用 checked exception 逐层抛出，
+/// Rust 侧统一为此枚举。
+#[derive(Debug)]
+pub enum SignError {
+    /// DER 编解码失败（印章/签名值/CMS 结构）。
+    Decode(String),
+    /// X.509 证书解析失败。
+    CertificateParse(String),
+    /// SM2 签名运算失败（密钥派生等）。
+    Signing(String),
+    /// DER 编码输出失败。
+    Encode(String),
+}
+
+impl fmt::Display for SignError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Decode(msg) => write!(f, "签名 DER 解码失败: {msg}"),
+            Self::CertificateParse(msg) => write!(f, "证书解析失败: {msg}"),
+            Self::Signing(msg) => write!(f, "SM2 签名失败: {msg}"),
+            Self::Encode(msg) => write!(f, "签名 DER 编码失败: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for SignError {}
+
 /// 电子签名通用异常。
 ///
 /// 对应 Java: `org.ofdrw.sign.SignatureException`

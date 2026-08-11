@@ -1,0 +1,25 @@
+<!-- expected_multi_page_image_document.xml
+     Expected Document.xml structure for multi_page_image.ofd
+     Produced by HuhuangSDK v1.0.0518.2; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Document> with xmlns:ofd namespace
+     [GB/T 33190] CommonData section required
+     [GB/T 33190] PageArea/PhysicalBox defines page dimensions (invoice: 210x140mm)
+     [GB/T 33190] Pages section lists 5 page entries with BaseLoc
+     [ofdrw]      TemplatePage references in CommonData
+     [ofdrw]      PublicRes and DocumentRes both present
+     [ofdrw]      Annotations, Attachments, CustomTags sections present
+-->
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <!-- [ofdrw] MaxUnitID is the highest element ID used -->
+    <ofd:MaxUnitID>789</ofd:MaxUnitID>
+    <!-- [GB/T 33190] PageArea defines the default page dimensions -->
+    <ofd:PageArea>
+      <!-- [GB/T 33190] PhysicalBox: invoice format 210x140mm -->
+      <ofd:Physic>Annots/Annotations.xml</ofd:Annotations>
+  <!-- [ofdrw] Attachments section references attachment files -->
+  <ofd:Attachments>Attachs/Attachments.xml</ofd:Attachments>
+  <!-- [ofdrw] CustomTags section references custom tag files -->
+  <ofd:CustomTags>Tags/CustomTags.xml</ofd:CustomTags>
+</ofd:Document>

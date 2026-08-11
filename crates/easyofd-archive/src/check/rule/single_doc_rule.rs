@@ -115,4 +115,68 @@ mod tests {
         let entries = vec![];
         assert!(!SingleDocRule.check(&entries).passed);
     }
+
+    // ── 合规：无 DocBody（0 个）也应通过（单文档规则只检查 >1） ───────
+
+    #[test]
+    fn single_doc_rule_passes_with_zero_doc_body() {
+        let entries = vec![("OFD.xml".into(), br"<ofd:OFD/>".to_vec())];
+        assert!(SingleDocRule.check(&entries).passed);
+    }
+
+    // ── 违规：无命名空间前缀的 DocBody，3 个 ──────────────────────────
+
+    #[test]
+    fn single_doc_rule_fails_with_plain_docbody() {
+        let entries = vec![(
+            "OFD.xml".into(),
+            br"<OFD><DocBody><DocRoot>a</DocRoot></DocBody><DocBody><DocRoot>b</DocRoot></DocBody><DocBody><DocRoot>c</DocRoot></DocBody></OFD>".to_vec(),
+        )];
+        let result = SingleDocRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains('3'));
+    }
+
+    // ── check_violations：违规场景 ─────────────────────────────────────
+
+    #[test]
+    fn single_doc_violations_with_multiple() {
+        let entries = vec![(
+            "OFD.xml".into(),
+            br"<ofd:OFD>
+                <ofd:DocBody><ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot></ofd:DocBody>
+                <ofd:DocBody><ofd:DocRoot>Doc_1/Document.xml</ofd:DocRoot></ofd:DocBody>
+            </ofd:OFD>"
+                .to_vec(),
+        )];
+        let violations = SingleDocRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "SINGLE_DOC");
+        assert_eq!(violations[0].severity(), Severity::Error);
+        assert_eq!(violations[0].location(), Some("OFD.xml"));
+        assert!(violations[0].actual_value().unwrap().contains('2'));
+        assert_eq!(violations[0].expected_value(), Some("1"));
+    }
+
+    // ── check_violations：合规场景 ─────────────────────────────────────
+
+    #[test]
+    fn single_doc_violations_empty_on_pass() {
+        let entries = vec![(
+            "OFD.xml".into(),
+            br"<ofd:OFD><ofd:DocBody><ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot></ofd:DocBody></ofd:OFD>".to_vec(),
+        )];
+        assert!(SingleDocRule.check_violations(&entries).is_empty());
+    }
+
+    // ── check_violations：OFD.xml 不存在 ───────────────────────────────
+
+    #[test]
+    fn single_doc_violations_no_ofd_xml() {
+        let entries = vec![];
+        let violations = SingleDocRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "SINGLE_DOC");
+        assert!(violations[0].description().contains("不存在"));
+    }
 }

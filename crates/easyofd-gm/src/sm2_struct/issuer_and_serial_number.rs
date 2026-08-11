@@ -80,20 +80,35 @@ impl IssuerAndSerialNumber {
     /// 如果证书 DER 无法解析，则 panic。生产环境应确保证书有效。
     #[must_use]
     pub fn from_certificate_der(cert_der: &[u8]) -> Self {
+        Self::try_from_certificate_der(cert_der)
+            .expect("证书 DER 解析失败，请提供有效的 X.509 证书")
+    }
+
+    /// 从 X.509 证书 DER 中提取签发者和序列号（可失败版本）。
+    ///
+    /// 与 [`Self::from_certificate_der`] 功能相同，但返回 `Result` 而非 panic。
+    /// 生产环境处理不可信证书 DER 时应优先使用此方法。
+    ///
+    /// # 参数
+    /// - `cert_der`：DER 编码的 X.509 证书。
+    ///
+    /// # 错误
+    /// 证书 DER 无法解析或 issuer Name 编码失败时返回 [`DerError`]。
+    pub fn try_from_certificate_der(cert_der: &[u8]) -> DerResult<Self> {
         use der::Encode as _;
 
         let cert = x509_cert::Certificate::from_der(cert_der)
-            .expect("证书 DER 解析失败，请提供有效的 X.509 证书");
+            .map_err(|_| crate::ses::DerError("证书 DER 解析失败"))?;
 
         let issuer_der = cert
             .tbs_certificate()
             .issuer()
             .to_der()
-            .expect("issuer Name DER 编码失败");
+            .map_err(|_| crate::ses::DerError("issuer Name DER 编码失败"))?;
 
         let serial_bytes = cert.tbs_certificate().serial_number().as_bytes().to_vec();
 
-        Self::new(issuer_der, serial_bytes)
+        Ok(Self::new(issuer_der, serial_bytes))
     }
 
     /// 以兼容旧格式的 PrintableString 方式创建（测试/向后兼容）。

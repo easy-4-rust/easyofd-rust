@@ -8,6 +8,7 @@
 use super::{
     ExtendSignatureContainer, SM2_SM3_OID_STR, SigType, generalized_time_now, sm2_sign_with_sm3,
 };
+use crate::errors::SignError;
 use crate::internal_helpers::compute_sm3;
 use easyofd_gm::sm2_struct::ContentInfo;
 use easyofd_gm::sm2_struct::IssuerAndSerialNumber;
@@ -46,7 +47,7 @@ impl ExtendSignatureContainer for Gbt35275Pkcs9DsContainer {
     /// 对待签名数据签名。
     ///
     /// 对应 Java: `org.ofdrw.sign.signContainer.GBT35275PKCS9DSContainer#sign`
-    fn sign(&self, in_data: &[u8], _property_info: &str) -> Vec<u8> {
+    fn sign(&self, in_data: &[u8], _property_info: &str) -> Result<Vec<u8>, SignError> {
         // 1. SM3 摘要
         let plaintext = compute_sm3(in_data);
 
@@ -54,7 +55,7 @@ impl ExtendSignatureContainer for Gbt35275Pkcs9DsContainer {
         let auth_attrs = build_pkcs9_auth_attrs(&plaintext);
 
         // 3. SM3WithSM2 签名认证属性
-        let signature = sm2_sign_with_sm3(&self.secret_key, &auth_attrs);
+        let signature = sm2_sign_with_sm3(&self.secret_key, &auth_attrs)?;
 
         // 4. 构建内层 ContentInfo（data 类型）
         let mut content_bytes = Vec::new();
@@ -63,7 +64,8 @@ impl ExtendSignatureContainer for Gbt35275Pkcs9DsContainer {
 
         // 5. 从证书 DER 提取真实的颁发者和序列号，构建 SignerInfo（含认证属性）。
         //    对应 Java: `new IssuerAndSerialNumber(cert.getIssuerX500Principal(), cert.getSerialNumber())`
-        let issuer_serial = IssuerAndSerialNumber::from_certificate_der(&self.cert_der);
+        let issuer_serial = IssuerAndSerialNumber::try_from_certificate_der(&self.cert_der)
+            .map_err(|e| SignError::CertificateParse(e.to_string()))?;
         let signer = SignerInfo {
             version: 1,
             issuer_serial,
@@ -82,8 +84,11 @@ impl ExtendSignatureContainer for Gbt35275Pkcs9DsContainer {
             .build();
 
         // 7. 包装为外层 ContentInfo
-        let outer_ci = ContentInfo::from_signed_data(&signed_data).expect("ContentInfo 构建失败");
-        outer_ci.to_der().expect("ContentInfo DER 编码失败")
+        let outer_ci = ContentInfo::from_signed_data(&signed_data)
+            .map_err(|e| SignError::Encode(format!("ContentInfo 构建失败: {e}")))?;
+        outer_ci
+            .to_der()
+            .map_err(|e| SignError::Encode(format!("ContentInfo DER 编码失败: {e}")))
     }
 
     fn seal(&self) -> Option<Vec<u8>> {
@@ -163,7 +168,7 @@ mod tests {
     fn gbt35275_pkcs9_sign_returns_non_empty() {
         let (sk, cert_der) = generate_key_and_cert();
         let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der);
-        let result = c.sign(b"test data", "");
+        let result = c.sign(b"test data", "").unwrap();
         assert!(!result.is_empty());
     }
 
@@ -171,7 +176,7 @@ mod tests {
     fn gbt35275_pkcs9_sign_produces_valid_content_info() {
         let (sk, cert_der) = generate_key_and_cert();
         let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der);
-        let result = c.sign(b"test data", "");
+        let result = c.sign(b"test data", "").unwrap();
         let ci = ContentInfo::from_der(&result).expect("ContentInfo DER 解码失败");
         assert_eq!(
             ci.content_type,
@@ -185,7 +190,7 @@ mod tests {
         let expected_iasn = IssuerAndSerialNumber::from_certificate_der(&cert_der);
 
         let c = Gbt35275Pkcs9DsContainer::new(sk, cert_der.clone());
-        let result = c.sign(b"test data", "");
+        let result = c.sign(b"test data", "").unwrap();
 
         // 解码 ContentInfo → SignedData → 提取 SignerInfo 的 issuer/serial。
         let ci = ContentInfo::from_der(&result).expect("ContentInfo DER 解码失败");

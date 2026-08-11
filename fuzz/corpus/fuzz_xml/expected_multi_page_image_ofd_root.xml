@@ -1,0 +1,32 @@
+<!-- expected_multi_page_image_ofd_root.xml
+     Expected OFD.xml structure for multi_page_image.ofd
+     Produced by HuhuangSDK v1.0.0518.2; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:OFD> with xmlns:ofd namespace
+     [GB/T 33190] Version attribute required (value: "1.0")
+     [GB/T 33190] DocType attribute required (value: "OFD")
+     [ofdrw]      DocBody contains DocInfo with CustomDatas for invoice metadata
+     [ofdrw]      DocRoot points to Doc_0/Document.xml
+     [ofdrw]      Signatures element references Doc_0/Signs/Signatures.xml
+-->
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" DocType="OFD" Version="1.0">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <!-- [ofdrw] Invoice-style DocID: code + number -->
+      <ofd:DocID>050001700111_12235358</ofd:DocID>
+      <!-- [ofdrw] Author field present in invoice OFDs -->
+      <ofd:Author>Huhuang Software</ofd:Author>
+      <ofd:CreationDate>2020-08-17</ofd:CreationDate>
+      <ofd:ModDate>2020-08-17</ofd:ModDate>
+      <ofd:Creator>Huhuang Software</ofd:Creator>
+      <!-- [ofdrw] CustomDatas for invoice-specific metadata -->
+      <ofd:CustomDatas>
+        <ofd:CustomData Name="native-producer">HuhuangSDK</ofd:CustomData>
+        <ofd:CustomData Name="producer-version">v1.0.0518.2</ofd:CustomData>
+      </ofd:CustomDatas>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+    <!-- [ofdrw] Signatures element present when document is signed -->
+    <ofd:Signatures>/Doc_0/Signs/Signatures.xml</ofd:Signatures>
+  </ofd:DocBody>
+</ofd:OFD>

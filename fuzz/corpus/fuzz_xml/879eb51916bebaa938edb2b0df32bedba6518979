@@ -1,0 +1,60 @@
+<!--
+  Expected Page_0/Content.xml for simple_1.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  =Structure derived from:
+  - of<!--
+  Expected OFD.xml for multi_page_image.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Multi-page document with images. ofdrw uses the same OFD.xml structure
+  regardless of page count; the page tree is dd OFD.xml for multi_page_image.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Multi-page document with images. ofdrw uses the same OFD.xml structure
+  regardless of page count; the page tree is defined in Document.xml.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>c3d4e5f6789012345678abcdef012345</ofd:DocID>
+     .ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Multi-page document with images. ofdrw uses the same OFD.xml structure
+  regardless of page count; the page tree is dd OFD.xml for multi_page_image.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Multi-page document with images. ofdrw usent with images. ofdrw uses the same OFD.xml structure
+  regardless of page count; the page tree is dd OFD.xml for multi_page_image.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Multi-page document with images. ofdrw uses the same OFD.xml structure
+  regardless of page count; the page tree is defined in Document.xml.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2es the same OFD.xml structure
+  regardless of page count; the page tree is defined in Document.xml.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>c3d4e5f6789012345678abcdef012345</ofd:DocID>
+      <ofd:CreationDate>2024-01-15</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFefined in Document.xml.
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>c3d4e5f6789012345678abcdef012345</ofd:DocID>
+      <ofd:CreationDate>2024-01-15</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:Crea0 10 190 20"01 F-15o

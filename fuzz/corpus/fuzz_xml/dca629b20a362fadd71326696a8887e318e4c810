@@ -1,0 +1,24 @@
+<!--
+  Expected Page_0/Content.xml for multi_page_image.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Multi-page document with images. Page_0 contains both text and image objects.
+  ofdrw uses ImageObject for embedded images with:
+  - ID: unique object identifier
+  - Boundary: position and size (x y width height)
+  - ResourceID: reference to image resource in PublicRes.xml
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Area>
+    <ofm:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+  </ofd:Area>
+  <ofd:Content>
+    <ofd:Layer Type="Body">
+      <ofd:TextObject ID="1" Boundary="10 10 190 20" Font="1" Size="12">
+        <ofd:TextCode X="10" Y="20">Page 1 Content</ofd:TextCode>
+      </ofd:TextObject>
+      <ofd:ImageObject ID="2" Boundary="10 30 100 80" ResourceID="10" />
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

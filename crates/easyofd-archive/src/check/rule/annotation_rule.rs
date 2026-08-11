@@ -88,4 +88,116 @@ mod tests {
         )];
         assert!(AnnotationRule.check(&entries).passed);
     }
+
+    // ── 违规：ReadOnly="false" ─────────────────────────────────────────
+
+    #[test]
+    fn annotation_rule_fails_with_readonly_false() {
+        let entries = vec![(
+            "Doc_0/Annotations.xml".into(),
+            br#"<ofd:Annotations><ofd:Annot ReadOnly="false"/></ofd:Annotations>"#.to_vec(),
+        )];
+        let result = AnnotationRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains("OFD-A"));
+    }
+
+    // ── 违规：NoZoom="false" ───────────────────────────────────────────
+
+    #[test]
+    fn annotation_rule_fails_with_nozoom_false() {
+        let entries = vec![(
+            "Doc_0/Annotations.xml".into(),
+            br#"<ofd:Annotations><ofd:Annot NoZoom="false"/></ofd:Annotations>"#.to_vec(),
+        )];
+        let result = AnnotationRule.check(&entries);
+        assert!(!result.passed);
+    }
+
+    // ── 违规：NoRotate="false" ─────────────────────────────────────────
+
+    #[test]
+    fn annotation_rule_fails_with_norotate_false() {
+        let entries = vec![(
+            "Doc_0/Annotations.xml".into(),
+            br#"<ofd:Annotations><ofd:Annot NoRotate="false"/></ofd:Annotations>"#.to_vec(),
+        )];
+        let result = AnnotationRule.check(&entries);
+        assert!(!result.passed);
+    }
+
+    // ── 边界：非 Annotation 文件应跳过 ────────────────────────────────
+
+    #[test]
+    fn annotation_rule_ignores_non_annotation_xml() {
+        let entries = vec![(
+            "Doc_0/Page_0.xml".into(),
+            br#"<ofd:Page ReadOnly="false"/>"#.to_vec(),
+        )];
+        assert!(AnnotationRule.check(&entries).passed);
+    }
+
+    // ── 边界：非 XML 文件应跳过 ────────────────────────────────────────
+
+    #[test]
+    fn annotation_rule_ignores_non_xml() {
+        let entries = vec![("Annotation.txt".into(), b"ReadOnly=\"false\"".to_vec())];
+        assert!(AnnotationRule.check(&entries).passed);
+    }
+
+    // ── 边界：空条目列表 ───────────────────────────────────────────────
+
+    #[test]
+    fn annotation_rule_passes_empty() {
+        assert!(AnnotationRule.check(&[]).passed);
+    }
+
+    // ── 边界：注释文件无属性 ───────────────────────────────────────────
+
+    #[test]
+    fn annotation_rule_passes_without_attrs() {
+        let entries = vec![(
+            "Doc_0/Annotations.xml".into(),
+            br"<ofd:Annotations><ofd:Annot/></ofd:Annotations>".to_vec(),
+        )];
+        assert!(AnnotationRule.check(&entries).passed);
+    }
+
+    // ── check_violations：ReadOnly="false" ─────────────────────────────
+
+    #[test]
+    fn annotation_violations_with_readonly_false() {
+        let entries = vec![(
+            "Doc_0/Annotations.xml".into(),
+            br#"<ofd:Annotations><ofd:Annot ReadOnly="false"/></ofd:Annotations>"#.to_vec(),
+        )];
+        let violations = AnnotationRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "ANNOTATION");
+        assert_eq!(violations[0].severity(), Severity::Warn);
+        assert_eq!(violations[0].actual_value(), Some("false"));
+        assert_eq!(violations[0].expected_value(), Some("true"));
+    }
+
+    // ── check_violations：合规场景 ─────────────────────────────────────
+
+    #[test]
+    fn annotation_violations_empty_on_pass() {
+        let entries = vec![(
+            "Doc_0/Annotations.xml".into(),
+            br#"<ofd:Annotations><ofd:Annot ReadOnly="true"/></ofd:Annotations>"#.to_vec(),
+        )];
+        assert!(AnnotationRule.check_violations(&entries).is_empty());
+    }
+
+    // ── check_violations：非 Annotation 文件 ───────────────────────────
+
+    #[test]
+    fn annotation_violations_ignores_non_annotation() {
+        let entries = vec![(
+            "Doc_0/Page_0.xml".into(),
+            br#"<ofd:Page ReadOnly="false"/>"#.to_vec(),
+        )];
+        assert!(AnnotationRule.check_violations(&entries).is_empty());
+    }
 }

@@ -40,7 +40,7 @@ pub use crl::{CrlInfo, check_revoked, ocsp_check, ocsp_check_with_endpoint, pars
 pub use electronic_seal::ElectronicSeal;
 pub use errors::{
     DocNotSignException, FileIntegrityException, InvalidSignedValueException, OfdVerifyException,
-    SignatureException, SignatureTerminateException,
+    SignError, SignatureException, SignatureTerminateException,
 };
 pub use ofd_signature_builder::{
     DigitalSignContainer, OfdSignatureBuilder, SignMode, SignatureContainer, SignatureMethod,

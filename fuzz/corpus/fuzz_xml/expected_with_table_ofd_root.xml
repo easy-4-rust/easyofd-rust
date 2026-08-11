@@ -1,0 +1,28 @@
+<!-- expected_with_table_ofd_root.xml
+     Expected OFD.xml structure for with_table.ofd
+     Produced by swdomsdk 2.0.23.1108.1400; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:OFD> with xmlns:ofd namespace
+     [GB/T 33190] Version attribute required (value: "1.0")
+     [GB/T 33190] DocType attribute required (value: "OFD")
+     [ofdrw]      DocBody contains DocInfo with CustomDatas for invoice metadata
+     [ofdrw]      DocRoot points to Doc_0/Document.xml
+-->
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" DocType="OFD" Version="1.0">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>90baf370c9dc11e980000b7700000a77</ofd:DocID>
+      <ofd:Author>China Tax</ofd:Author>
+      <ofd:CreationDate>2024-05-31</ofd:CreationDate>
+      <ofd:ModDate>2024-05-31</ofd:ModDate>
+      <ofd:Creator>Suwell</ofd:Creator>
+      <!-- [ofdrw] CustomDatas for invoice-specific metadata -->
+      <ofd:CustomDatas>
+        <ofd:CustomData Name="template-version">1.0.20.0422</ofd:CustomData>
+        <ofd:CustomData Name="native-producer">swdomsdk</ofd:CustomData>
+        <ofd:CustomData Name="producer-version">2.0.23.1108.1400</ofd:CustomData>
+      </ofd:CustomDatas>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFD>

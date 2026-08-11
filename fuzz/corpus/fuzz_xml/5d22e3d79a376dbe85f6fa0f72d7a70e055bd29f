@@ -1,0 +1,33 @@
+<!-- expected_multi_page_image_page_0.xml
+     Expected Page_0/Content.xml structure for multi_page_image.ofd
+     Produced by HuhuangSDK v1.0.0518.2; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:Page> with xmlns:ofd namespace
+     [GB/T 33190] Content section contains Layer elements
+     [GB/T 33190] Layer contains TextObject and ImageObject children
+     [ofdrw]      Area element with PhysicalBox for page-specific dimensions
+     [ofdrw]      Template reference via TemplateID and ZOrder="Background"
+     [ofdrw]      ImageObject for QR code with CTM transform
+     [ofdrw]      Multiple TextObjects for invoice fields
+-->
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <!-- [ofdrw] Area element overrides page dimensions -->
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+  </ofd:Area>
+  <!-- [ofdrw] Template reference with ZOrder for layering -->
+  <ofd:Template TemplateID="9" ZOrder="Background"/>
+  <ofd:Content>
+    <ofd:Layer ID="67">
+      <!-- [ofdrw] ImageObject: QR code with CTM affine transform -->
+      <ofd:ImageObject ID="68" CTM="20 0 0 20 0 0" ResourceID="6" Boundary="8.5 3.5 20 20"/>
+      <!-- [ofdrw] TextObjects for invoice number, date, verification code, etc. -->
+      <ofd:TextObject ID="69" Boundary="164 6.2 40 5" Font="3" Size="3.175">
+        <ofd:TextCode X="0" Y="4.0875" DeltaX="g 11 1.5875 -17.4625" DeltaY="g 11 0 3.175">050001700111</ofd:TextCode>
+      </ofd:TextObje`ct>
+      <ofd:TextObject ID="70" Boundary="164 11.7 40 5" Font="3" Size="3.175">
+        <ofd:TextCode X="0" Y="4.0875" DeltaX="g 7 1.5875 -11.1125" DeltaY="g 7 0 3.175">12235358</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

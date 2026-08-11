@@ -81,4 +81,82 @@ mod tests {
         )];
         assert!(!PermissionRule.check(&entries).passed);
     }
+
+    // ── 违规：无命名空间前缀的 Permissions ────────────────────────────
+
+    #[test]
+    fn permission_rule_fails_with_plain_permissions() {
+        let entries = vec![(
+            "Doc_0/Document.xml".into(),
+            br"<Document><Permissions/></Document>".to_vec(),
+        )];
+        let result = PermissionRule.check(&entries);
+        assert!(!result.passed);
+        assert!(result.message.contains("权限声明"));
+    }
+
+    // ── 边界：非 Document.xml 文件应跳过 ──────────────────────────────
+
+    #[test]
+    fn permission_rule_ignores_non_document_xml() {
+        let entries = vec![(
+            "Doc_0/Page_0.xml".into(),
+            br"<ofd:Page><ofd:Permissions/></ofd:Page>".to_vec(),
+        )];
+        assert!(PermissionRule.check(&entries).passed);
+    }
+
+    // ── 边界：空条目列表 ───────────────────────────────────────────────
+
+    #[test]
+    fn permission_rule_passes_empty() {
+        assert!(PermissionRule.check(&[]).passed);
+    }
+
+    // ── 边界：Document.xml 无 Permissions 元素 ─────────────────────────
+
+    #[test]
+    fn permission_rule_passes_with_only_pages() {
+        let entries = vec![(
+            "Doc_0/Document.xml".into(),
+            br"<ofd:Document><ofd:Pages/></ofd:Document>".to_vec(),
+        )];
+        assert!(PermissionRule.check(&entries).passed);
+    }
+
+    // ── check_violations：违规场景 ─────────────────────────────────────
+
+    #[test]
+    fn permission_violations_with_permissions() {
+        let entries = vec![(
+            "Doc_0/Document.xml".into(),
+            br"<ofd:Document><ofd:Permissions/></ofd:Document>".to_vec(),
+        )];
+        let violations = PermissionRule.check_violations(&entries);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].rule_name(), "PERMISSION");
+        assert_eq!(violations[0].severity(), Severity::Warn);
+        assert!(violations[0].location().unwrap().contains("Document.xml"));
+        assert_eq!(violations[0].actual_value(), Some("存在"));
+        assert_eq!(violations[0].expected_value(), Some("无"));
+    }
+
+    // ── check_violations：合规场景 ─────────────────────────────────────
+
+    #[test]
+    fn permission_violations_empty_on_pass() {
+        let entries = vec![("Doc_0/Document.xml".into(), b"<ofd:Document/>".to_vec())];
+        assert!(PermissionRule.check_violations(&entries).is_empty());
+    }
+
+    // ── check_violations：非 Document.xml 跳过 ─────────────────────────
+
+    #[test]
+    fn permission_violations_ignores_non_document() {
+        let entries = vec![(
+            "Doc_0/Page_0.xml".into(),
+            br"<ofd:Page><ofd:Permissions/></ofd:Page>".to_vec(),
+        )];
+        assert!(PermissionRule.check_violations(&entries).is_empty());
+    }
 }
