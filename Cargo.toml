@@ -65,7 +65,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 # ═══ 国密算法 ═══
 sm2 = { version = "0.14.0-rc.15", features = ["dsa", "arithmetic", "getrandom"] }
 sm3 = "0.5.0"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 der = "0.8.1"
 x509-cert = "0.3.0"
 pem = "4.0.0"
