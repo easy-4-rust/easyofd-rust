@@ -1,0 +1,26 @@
+<!--
+  Expected OFD.xml structure for simple_1.ofd
+  Source: ofdrw/ofdrw ofdrw-reader test resource (helloworld.ofd)
+
+  This file documents the OFD-spec-compliant XML elements and attributes
+  that the ofdrw (Java) implementation produces.  The Rust reader must
+  correctly parse all of these elements.
+
+  Key structural requirements (GB/T 33190-2016):
+  - Root element: <ofd:OFD> with xmlns:ofd="http://www.ofdspec.org/2016"
+  - Version attribute (e.g. "1.0")
+  - DocType="OFD"
+  - <ofd:DocBody> containing <ofd:DocRoot> pointing to Document.xml
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo>
+      <ofd:DocID>220c5913ebfe4f6e8070dabd3647f157</ofd:DocID>
+      <ofd:CreationDate>2020-09-21</ofd:CreationDate>
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFD>

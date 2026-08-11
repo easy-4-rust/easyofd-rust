@@ -1,0 +1,12 @@
+[package]
+name = "easyofd-font"
+description = "OFD 字体管理与嵌入，对应 ofdrw-font"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = true
+
+[lints]
+workspace = true

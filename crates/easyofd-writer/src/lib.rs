@@ -23,193 +23,19 @@
 //!         └── ...
 //! ```
 
-mod stream_writer;
 mod editor;
-mod helpers;
 mod font;
+mod helpers;
+mod ofd_writer;
+mod stream_writer;
+mod write_options;
 mod xml_builder;
 
-pub use stream_writer::OfdStreamWriter;
 pub use editor::OfdEditor;
 pub use font::{EmbeddedFont, FontFormat};
-
-use std::io::{Cursor, Write};
-
-use chrono::Utc;
-use easyofd_core::{ContentObject, ImageFormat, OfdMetadata, OfdPage, OfdResult};
-use easyofd_package::atomic_write;
-use zip::write::{SimpleFileOptions, ZipWriter};
-use crate::helpers::{zip_err, io_err};
-
-// ─── Public API ──────────────────────────────────────────────────────────────
-
-/// Write options for OFD generation.
-#[derive(Debug, Clone)]
-pub struct WriteOptions {
-    /// Document metadata.
-    pub metadata: OfdMetadata,
-}
-
-impl Default for WriteOptions {
-    fn default() -> Self {
-        Self {
-            metadata: OfdMetadata {
-                version: "1.0".to_string(),
-                title: Some("EasyOFD Document".to_string()),
-                author: Some("easyofd-rust".to_string()),
-                creator: Some("easyofd-rust".to_string()),
-                creation_date: Some(Utc::now().naive_utc()),
-            },
-        }
-    }
-}
-
-/// The OFD writer. Collects pages and writes them to a ZIP archive.
-pub struct OfdWriter {
-    pages: Vec<OfdPage>,
-    options: WriteOptions,
-}
-
-impl OfdWriter {
-    /// Create a new OFD writer with default options.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            pages: Vec::new(),
-            options: WriteOptions::default(),
-        }
-    }
-
-    /// Create a new OFD writer with custom options.
-    #[must_use]
-    pub fn with_options(options: WriteOptions) -> Self {
-        Self {
-            pages: Vec::new(),
-            options,
-        }
-    }
-
-    /// Add a page to the document.
-    pub fn add_page(&mut self, page: OfdPage) {
-        self.pages.push(page);
-    }
-
-    /// Add multiple pages to the document.
-    pub fn add_pages(&mut self, pages: Vec<OfdPage>) {
-        self.pages.extend(pages);
-    }
-
-    /// Build the OFD file and return the raw bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if ZIP creation fails.
-    pub fn build(&self) -> OfdResult<Vec<u8>> {
-        let cursor = Cursor::new(Vec::with_capacity(4096));
-        let cursor = self.write_to(cursor)?;
-        Ok(cursor.into_inner())
-    }
-
-    /// 将 OFD 直接写入支持定位的输出，不额外构造完整字节数组。
-    ///
-    /// # Errors
-    ///
-    /// ZIP 创建或输出写入失败时返回错误。
-    pub fn write_to<W: Write + std::io::Seek>(&self, output: W) -> OfdResult<W> {
-        let mut zip = ZipWriter::new(output);
-        let options =
-            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-        self.write_zip(&mut zip, &options)?;
-        zip.finish().map_err(zip_err)
-    }
-
-    /// Build the OFD file and write it to a file path.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if ZIP creation or file I/O fails.
-    pub fn build_to_file(&self, path: impl AsRef<std::path::Path>) -> OfdResult<()> {
-        atomic_write(path, |file| {
-            self.write_to(file)?;
-            Ok(())
-        })
-    }
-
-    fn write_zip<W: Write + std::io::Seek>(
-        &self,
-        zip: &mut ZipWriter<W>,
-        options: &SimpleFileOptions,
-    ) -> OfdResult<()> {
-        // Collect all image resources across all pages.
-        let mut image_resources: Vec<(String, &[u8], ImageFormat)> = Vec::new();
-
-        for page in &self.pages {
-            for obj in &page.content {
-                if let ContentObject::Image(img) = obj {
-                    let ext = match img.format {
-                        ImageFormat::Jpeg => "jpeg",
-                        ImageFormat::Png => "png",
-                        ImageFormat::Bmp => "bmp",
-                        ImageFormat::Tiff => "tiff",
-                    };
-                    let res_name = format!("Doc_0/Res/Image_{}.{}", image_resources.len(), ext);
-                    image_resources.push((res_name, img.data.as_slice(), img.format));
-                }
-            }
-        }
-
-        // 1. Write OFD.xml
-        let ofd_xml = self.build_ofd_xml();
-        zip.start_file("OFD.xml", *options).map_err(zip_err)?;
-        zip.write_all(ofd_xml.as_bytes()).map_err(io_err)?;
-
-        // 2. Write Document.xml
-        let doc_xml = self.build_document_xml(&image_resources);
-        zip.start_file("Doc_0/Document.xml", *options)
-            .map_err(zip_err)?;
-        zip.write_all(doc_xml.as_bytes()).map_err(io_err)?;
-
-        // 3. Write DocumentRes.xml
-        let doc_res_xml = self.build_document_res_xml(&image_resources);
-        zip.start_file("Doc_0/DocumentRes.xml", *options)
-            .map_err(zip_err)?;
-        zip.write_all(doc_res_xml.as_bytes()).map_err(io_err)?;
-
-        // PublicRes is referenced by Document.xml even when no custom font is embedded.
-        zip.start_file("Doc_0/PublicRes.xml", *options)
-            .map_err(zip_err)?;
-        zip.write_all(self.build_public_res_xml().as_bytes())
-            .map_err(io_err)?;
-
-        // 4. Write each page
-        let mut page_image_start = 0;
-        for (i, page) in self.pages.iter().enumerate() {
-            let page_xml = self.build_page_xml(page, i, page_image_start);
-            zip.start_file(format!("Doc_0/Pages/Page_{i}.xml"), *options)
-                .map_err(zip_err)?;
-            zip.write_all(page_xml.as_bytes()).map_err(io_err)?;
-            page_image_start += page
-                .content
-                .iter()
-                .filter(|object| matches!(object, ContentObject::Image(_)))
-                .count();
-        }
-
-        // 5. Write image resources
-        for (res_name, data, _) in &image_resources {
-            zip.start_file(res_name, *options).map_err(zip_err)?;
-            zip.write_all(data).map_err(io_err)?;
-        }
-
-        Ok(())
-    }
-
-}
-impl Default for OfdWriter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub use ofd_writer::OfdWriter;
+pub use stream_writer::OfdStreamWriter;
+pub use write_options::WriteOptions;
 
 #[cfg(test)]
 mod font_tests {
@@ -249,9 +75,9 @@ mod font_tests {
 
 #[cfg(test)]
 mod tests {
-    use crate::helpers::xml_escape;
     use super::*;
-    use easyofd_core::{ImageObject, PathObject, TextObject};
+    use crate::helpers::xml_escape;
+    use easyofd_core::{ContentObject, ImageFormat, ImageObject, OfdPage, PathObject, TextObject};
 
     // ── WriteOptions ──────────────────────────────────────────────────────────
 
@@ -672,14 +498,14 @@ mod tests {
     #[test]
     fn test_zip_err() {
         let zip_err = zip::result::ZipError::FileNotFound;
-        let err = super::zip_err(zip_err);
+        let err = crate::helpers::zip_err(zip_err);
         assert!(format!("{err}").contains("ZIP error"));
     }
 
     #[test]
     fn test_io_err() {
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "test");
-        let err = super::io_err(io_err);
+        let io_err = std::io::Error::other("test");
+        let err = crate::helpers::io_err(io_err);
         assert!(format!("{err}").contains("I/O error"));
     }
 
@@ -714,4 +540,3 @@ mod tests {
             .collect()
     }
 }
-

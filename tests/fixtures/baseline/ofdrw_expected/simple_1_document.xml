@@ -1,0 +1,30 @@
+<!--
+  Expected Document.xml for simple_1.ofd
+  Source: ofdrw/ofdrw conventions + GB/T 33190-2016
+
+  Structure derived from:
+  - ofdrw Document.java: CommonData + Pages (required), optional Outlines/Permissions
+  - ofdrw CT_CommonData.java: MaxUnitID, PageArea, PublicRes, DocumentRes
+  - ofdrw Pages.java: flat list of Page children
+  - ofdrw Page.java (tree node): ID + BaseLoc attributes
+
+  ofdrw behavior notes:
+  - MaxUnitID is auto-incremented as objects are added
+  - PageArea defines default page dimensions (PhysicalBox)
+  - PublicRes.xml and DocumentRes.xml are resource descriptors
+  - Page BaseLoc follows "Pages/Page_N/Content.xml" pattern
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>100</ofd:MaxUnitID>
+    <ofd:PageArea>
+      <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+    </ofd:PageArea>
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml" />
+  </ofd:Pages>
+</ofd:Document>

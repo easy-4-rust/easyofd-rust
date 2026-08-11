@@ -13,10 +13,17 @@ members = [
     "crates/easyofd-template",
     "crates/easyofd-writer",
     "crates/easyofd",
+    # ── ofdrw 对齐新增 crate ──
+    "crates/easyofd-gm",
+    "crates/easyofd-archive",
+    "crates/easyofd-crypto",
+    "crates/easyofd-graphics2d",
+    "crates/easyofd-font",
+    "crates/easyofd-tool",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -26,19 +33,26 @@ keywords = ["ofd", "document", "writer", "reader", "easyofd"]
 categories = ["encoding", "parser"]
 
 [workspace.dependencies]
-easyofd-core = { path = "crates/easyofd-core" , version = "0.1.0" }
-easyofd-convert = { path = "crates/easyofd-convert" , version = "0.1.0" }
-easyofd-derive = { path = "crates/easyofd-derive" , version = "0.1.0" }
-easyofd-derive-impl = { path = "crates/easyofd-derive-impl" , version = "0.1.0" }
-easyofd-layout = { path = "crates/easyofd-layout" , version = "0.1.0" }
-easyofd-markdown = { path = "crates/easyofd-markdown" , version = "0.1.0" }
-easyofd-package = { path = "crates/easyofd-package" , version = "0.1.0" }
-easyofd-reader = { path = "crates/easyofd-reader" , version = "0.1.0" }
-easyofd-signature = { path = "crates/easyofd-signature" , version = "0.1.0" }
-easyofd-template = { path = "crates/easyofd-template" , version = "0.1.0" }
-easyofd-writer = { path = "crates/easyofd-writer" , version = "0.1.0" }
-easyofd = { path = "crates/easyofd" , version = "0.1.0" }
+easyofd-core = { path = "crates/easyofd-core" , version = "1.0.0" }
+easyofd-convert = { path = "crates/easyofd-convert" , version = "1.0.0" }
+easyofd-derive = { path = "crates/easyofd-derive" , version = "1.0.0" }
+easyofd-derive-impl = { path = "crates/easyofd-derive-impl" , version = "1.0.0" }
+easyofd-layout = { path = "crates/easyofd-layout" , version = "1.0.0" }
+easyofd-markdown = { path = "crates/easyofd-markdown" , version = "1.0.0" }
+easyofd-package = { path = "crates/easyofd-package" , version = "1.0.0" }
+easyofd-reader = { path = "crates/easyofd-reader" , version = "1.0.0" }
+easyofd-signature = { path = "crates/easyofd-signature" , version = "1.0.0" }
+easyofd-template = { path = "crates/easyofd-template" , version = "1.0.0" }
+easyofd-writer = { path = "crates/easyofd-writer" , version = "1.0.0" }
+easyofd = { path = "crates/easyofd" , version = "1.0.0" }
+easyofd-gm = { path = "crates/easyofd-gm" , version = "1.0.0" }
+easyofd-archive = { path = "crates/easyofd-archive" , version = "1.0.0" }
+easyofd-crypto = { path = "crates/easyofd-crypto" , version = "1.0.0" }
+easyofd-graphics2d = { path = "crates/easyofd-graphics2d" , version = "1.0.0" }
+easyofd-font = { path = "crates/easyofd-font" , version = "1.0.0" }
+easyofd-tool = { path = "crates/easyofd-tool" , version = "1.0.0" }
 
+clap = { version = "4.5", features = ["derive"] }
 thiserror = "2.0.18"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
@@ -51,9 +65,16 @@ criterion = { version = "0.5", features = ["html_reports"] }
 # ═══ 国密算法 ═══
 sm2 = { version = "0.14.0-rc.15", features = ["dsa", "arithmetic", "getrandom"] }
 sm3 = "0.5.0"
+sha2 = "0.10.9"
+der = "0.8.1"
+x509-cert = "0.3.0"
+pem = "4.0.0"
 lopdf = "0.35"
-printpdf = "0.7"
+printpdf = { version = "0.7", default-features = false, features = ["font_subsetting"] }
+ttf-parser = "0.21"
 rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -76,7 +97,3 @@ unnecessary_map_or = "allow"
 missing_errors_doc = "allow"
 items_after_statements = "allow"
 manual_string_new = "allow"
-
-
-[workspace.dev-dependencies]
-criterion = { workspace = true }

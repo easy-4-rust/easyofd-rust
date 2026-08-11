@@ -1,0 +1,15 @@
+[package]
+name = "easyofd-gm"
+description = "国密算法（SM2/SM3/SM4）集成，对应 ofdrw-gm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = true
+
+[dependencies]
+der = { workspace = true }
+
+[lints]
+workspace = true

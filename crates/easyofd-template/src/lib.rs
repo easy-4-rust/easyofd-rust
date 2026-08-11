@@ -16,130 +16,17 @@
 //!     .save("output.ofd")?;
 //! ```
 
-use std::collections::HashMap;
-use std::io::{Cursor, Read, Write};
+mod ofd_template_filler;
 
-use easyofd_core::OfdResult;
-use zip::ZipWriter;
-use zip::write::SimpleFileOptions;
-
-/// An OFD template filler.
-///
-/// Opens a template OFD file, replaces `{key}` placeholders in XML content,
-/// and writes the result to a new OFD file.
-pub struct OfdTemplateFiller {
-    output: Vec<u8>,
-}
-
-impl OfdTemplateFiller {
-    /// Fill a template OFD with placeholder values.
-    ///
-    /// Supports `{key}` style placeholders in all XML files within the OFD ZIP.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the template file cannot be read or is not a valid ZIP.
-    pub fn fill(
-        template_path: impl AsRef<std::path::Path>,
-        data: &HashMap<String, String>,
-    ) -> OfdResult<Self> {
-        let template_bytes = std::fs::read(template_path).map_err(easyofd_core::OfdError::Io)?;
-        Self::fill_bytes(&template_bytes, data)
-    }
-
-    /// Fill a template OFD from in-memory bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the data is not a valid ZIP.
-    pub fn fill_bytes(template_bytes: &[u8], data: &HashMap<String, String>) -> OfdResult<Self> {
-        let cursor = Cursor::new(template_bytes);
-        let mut archive =
-            zip::ZipArchive::new(cursor).map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-        easyofd_package::validate_archive(&mut archive, easyofd_package::PackageLimits::default())?;
-
-        let out_buf = Vec::new();
-        let out_cursor = Cursor::new(out_buf);
-        let mut zip = ZipWriter::new(out_cursor);
-        let options =
-            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-
-        for i in 0..archive.len() {
-            let mut entry = archive
-                .by_index(i)
-                .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-            let name = entry.name().to_string();
-            let mut content = Vec::new();
-            entry
-                .read_to_end(&mut content)
-                .map_err(easyofd_core::OfdError::Io)?;
-
-            // Replace placeholders in XML files
-            let is_xml = std::path::Path::new(&name)
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"));
-            if is_xml {
-                let text = String::from_utf8(content)
-                    .map_err(|error| easyofd_core::OfdError::Xml(format!("{name}: {error}")))?;
-                let mut replaced = text;
-                for (key, value) in data {
-                    let placeholder = format!("{{{key}}}");
-                    replaced = replaced.replace(&placeholder, &xml_escape(value));
-                }
-                zip.start_file(name, options)
-                    .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-                zip.write_all(replaced.as_bytes())
-                    .map_err(easyofd_core::OfdError::Io)?;
-            } else {
-                // Binary files (images, etc.) — copy as-is
-                zip.start_file(name, options)
-                    .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-                zip.write_all(&content)
-                    .map_err(easyofd_core::OfdError::Io)?;
-            }
-        }
-
-        let cursor = zip
-            .finish()
-            .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-        let output = cursor.into_inner();
-
-        Ok(Self { output })
-    }
-
-    /// Return the filled OFD as bytes.
-    #[must_use]
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.output
-    }
-
-    /// Save the filled OFD to a file.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if file I/O fails.
-    pub fn save(self, path: impl AsRef<std::path::Path>) -> OfdResult<()> {
-        easyofd_package::atomic_write(path, |file| {
-            file.write_all(&self.output)?;
-            Ok(())
-        })
-    }
-}
-
-fn xml_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}
+pub use ofd_template_filler::OfdTemplateFiller;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use easyofd_core::{OfdPage, TextObject};
     use easyofd_writer::OfdWriter;
+    use std::collections::HashMap;
+    use std::io::Cursor;
 
     fn make_template(placeholders: &[&str]) -> Vec<u8> {
         let mut page = OfdPage::new(210.0, 297.0);
@@ -163,7 +50,7 @@ mod tests {
         // Verify the output is a valid ZIP
         let cursor = Cursor::new(&output);
         let archive = zip::ZipArchive::new(cursor).unwrap();
-        assert!(archive.len() > 0);
+        assert!(!archive.is_empty());
 
         // Read the page XML and check replacement
         let reader = easyofd_reader::OfdReader::from_bytes(&output).unwrap();

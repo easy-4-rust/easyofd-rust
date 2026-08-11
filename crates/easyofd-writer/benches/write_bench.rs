@@ -2,6 +2,9 @@
 //!
 //! 测试不同规模页面的写入性能。
 
+// criterion_group! 宏展开会产生无文档函数；本地抑制以满足 workspace `-D warnings`。
+#![allow(missing_docs, clippy::needless_borrows_for_generic_args)]
+
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use easyofd_core::{OfdPage, TextObject};
 use easyofd_writer::OfdWriter;
@@ -52,11 +55,7 @@ fn bench_text_density(c: &mut Criterion) {
                     let mut page = OfdPage::new(210.0, 297.0);
                     for i in 0..count {
                         let y = 20.0 + f64::from(i) * 5.0;
-                        page.add_text(TextObject::new(
-                            10.0,
-                            y,
-                            &format!("Text line {i}"),
-                        ));
+                        page.add_text(TextObject::new(10.0, y, &format!("Text line {i}")));
                     }
                     writer.add_page(page);
                     writer.build().unwrap()
@@ -67,5 +66,10 @@ fn bench_text_density(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_single_page, bench_multi_page, bench_text_density);
+criterion_group!(
+    benches,
+    bench_single_page,
+    bench_multi_page,
+    bench_text_density
+);
 criterion_main!(benches);

@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_error_from_io() {
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "oops");
+        let io_err = std::io::Error::other("oops");
         let err: OfdError = io_err.into();
         assert!(matches!(err, OfdError::Io(_)));
     }

@@ -1,0 +1,39 @@
+<!--
+  Expected Document.xml structure for multi_page_image.ofd
+  Source: ofdrw/ofdrw ofdrw-converter test resource (999.ofd)
+
+  Key structural requirements (GB/T 33190-2016):
+  - <ofd:Document> root with xmlns:ofd="http://www.ofdspec.org/2016"
+  - <ofd:CommonData> containing <ofd:PageArea> with <ofd:PhysicalBox>
+  - <ofd:Pages> containing 5 <ofd:Page> elements (Page_0 through Page_4)
+  - Each Page has ID and BaseLoc attributes
+  - <ofd:TemplatePage> elements for background templates
+  - <ofd:PublicRes> and <ofd:DocumentRes> resource references
+  - <ofd:Annotations>, <ofd:Attachments>, <ofd:CustomTags> sections
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>789</ofd:MaxUnitID>
+    <ofd:PageArea>
+      <ofd:PhysicalBox>0 0 210 140</ofd:PhysicalBox>
+    </ofd:PageArea>
+    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+    <ofd:TemplatePage ID="9" BaseLoc="Tpls/Tpl_0/Content.xml" />
+    <ofd:TemplatePage ID="91" BaseLoc="Tpls/Tpl_1/Content.xml" />
+    <ofd:TemplatePage ID="270" BaseLoc="Tpls/Tpl_2/Content.xml" />
+    <ofd:TemplatePage ID="449" BaseLoc="Tpls/Tpl_3/Content.xml" />
+    <ofd:TemplatePage ID="628" BaseLoc="Tpls/Tpl_4/Content.xml" />
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="10" BaseLoc="Pages/Page_0/Content.xml" />
+    <ofd:Page ID="92" BaseLoc="Pages/Page_1/Content.xml" />
+    <ofd:Page ID="271" BaseLoc="Pages/Page_2/Content.xml" />
+    <ofd:Page ID="450" BaseLoc="Pages/Page_3/Content.xml" />
+    <ofd:Page ID="629" BaseLoc="Pages/Page_4/Content.xml" />
+  </ofd:Pages>
+  <ofd:Annotations>Annots/Annotations.xml</ofd:Annotations>
+  <ofd:Attachments>Attachs/Attachments.xml</ofd:Attachments>
+  <ofd:CustomTags>Tags/CustomTags.xml</ofd:CustomTags>
+</ofd:Document>

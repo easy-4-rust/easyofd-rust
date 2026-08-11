@@ -1,0 +1,23 @@
+[package]
+name = "easyofd-tool"
+description = "CLI tool for OFD document operations (info, convert, sign, verify)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "easyofd"
+path = "src/main.rs"
+
+[dependencies]
+easyofd = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+easyofd-core = { workspace = true }
+easyofd-writer = { workspace = true }
+
+[lints]
+workspace = true

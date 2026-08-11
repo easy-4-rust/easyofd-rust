@@ -281,6 +281,23 @@ Output: JSON with page count, input size, read/write timings.
 
 ---
 
+## Examples
+
+| Example | Description | Run |
+|---|---|---|
+| `write_simple` | Create OFD with text, images, and paths | `cargo run --example write_simple` |
+| `read_simple` | Read OFD and print page count + text | `cargo run --example read_simple` |
+| `read_with_visitor` | Stream-read OFD page-by-page (visitor pattern) | `cargo run --example read_with_visitor` |
+| `markdown_export` | Export OFD to Markdown with loss reporting | `cargo run --example markdown_export` |
+| `signature_roundtrip` | GB/T 38540 sign → verify → tamper detection | `cargo run --example signature_roundtrip` |
+| `action_uri` | Create OFD with URI hyperlinks (GB/T 33190 Ch.15) | `cargo run --example action_uri` |
+| `annotation` | Create OFD with text/highlight/stamp annotations (Ch.16) | `cargo run --example annotation` |
+| `batch_sign` | Batch sign multiple OFDs + multi-signer mode | `cargo run --example batch_sign` |
+| `convert_pdf` | OFD → PDF conversion and PDF → OFD roundtrip | `cargo run --example convert_pdf` |
+| `benchmark` | Performance benchmark (read/write/markdown) | `cargo run --release --example benchmark -- 10000` |
+
+---
+
 ## Testing
 
 ```bash

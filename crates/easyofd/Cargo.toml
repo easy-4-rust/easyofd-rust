@@ -23,6 +23,9 @@ easyofd-writer = { workspace = true }
 chrono = { workspace = true }
 zip = { workspace = true }
 trybuild = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sm2 = { workspace = true }
 
 [lints]
 workspace = true

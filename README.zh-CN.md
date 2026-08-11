@@ -281,6 +281,23 @@ cargo run --release -p easyofd --example benchmark -- 10000
 
 ---
 
+## 示例
+
+| 示例 | 说明 | 运行 |
+|---|---|---|
+| `write_simple` | 创建含文本、图片、路径的 OFD 文档 | `cargo run --example write_simple` |
+| `read_simple` | 读取 OFD 并打印页数和文本内容 | `cargo run --example read_simple` |
+| `read_with_visitor` | 逐页流式读取 OFD（visitor 模式） | `cargo run --example read_with_visitor` |
+| `markdown_export` | 导出 OFD 为 Markdown 并报告损耗 | `cargo run --example markdown_export` |
+| `signature_roundtrip` | GB/T 38540 签名 → 验证 → 篡改检测 | `cargo run --example signature_roundtrip` |
+| `action_uri` | 创建含 URI 超链接的 OFD（GB/T 33190 第 15 章） | `cargo run --example action_uri` |
+| `annotation` | 创建含文本/高亮/印章注释的 OFD（第 16 章） | `cargo run --example annotation` |
+| `batch_sign` | 批量签章 + 多签章模式 | `cargo run --example batch_sign` |
+| `convert_pdf` | OFD → PDF 转换及 PDF → OFD 反向转换 | `cargo run --example convert_pdf` |
+| `benchmark` | 性能基准测试（读写/Markdown） | `cargo run --release --example benchmark -- 10000` |
+
+---
+
 ## 测试
 
 ```bash

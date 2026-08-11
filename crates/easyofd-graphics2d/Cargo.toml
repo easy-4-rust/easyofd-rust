@@ -1,0 +1,15 @@
+[package]
+name = "easyofd-graphics2d"
+description = "OFD 2D 图形渲染抽象层，对应 ofdrw-graphics2d"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = true
+
+[dependencies]
+easyofd-core = { workspace = true }
+
+[lints]
+workspace = true

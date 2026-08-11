@@ -16,6 +16,10 @@ zip = { workspace = true }
 sm2 = { workspace = true }
 sm3 = { workspace = true }
 rand = { workspace = true }
+der = { workspace = true }
+x509-cert = { workspace = true }
+pem = { workspace = true }
+quick-xml = { workspace = true }
 
 [dev-dependencies]
 easyofd-writer = { workspace = true }

@@ -8,11 +8,12 @@ use std::io::{BufReader, Cursor, Read, Seek};
 use easyofd_core::{
     ContentObject, ImageFormat, ImageObject, OfdError, OfdPage, OfdResult, PathObject, TextObject,
 };
-use quick_xml::events::Event;
 use quick_xml::Reader as XmlReader;
+use quick_xml::events::Event;
 
-
-pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(archive: &mut zip::ZipArchive<R>) -> OfdResult<String> {
+pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> OfdResult<String> {
     let xml = read_zip_entry(archive, "OFD.xml")?;
     let mut reader = XmlReader::from_reader(BufReader::new(Cursor::new(&xml)));
     reader.config_mut().trim_text(true);
@@ -88,12 +89,27 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     Ok(pages)
 }
 
+/// 对应 Java: ofdrw/ofdrw-parser/ResourceParser
+///
+/// A parsed resource entry from DocumentRes.xml.  The `location` field
+/// already incorporates the `BaseLoc` attribute from the enclosing
+/// `<ofd:Res>` element (per GB/T 33190-2016).  Child
+/// `<ofd:MediaFile>` paths are resolved relative to this base location.
 #[derive(Debug, Clone)]
 pub(crate) struct ResourceEntry {
-    location: String,
-    format: ImageFormat,
+    /// Final resolved path relative to the document directory (e.g.
+    /// `"Res/qrcode.png"`).  This already incorporates `base_loc`.
+    pub(crate) location: String,
+    pub(crate) format: ImageFormat,
 }
 
+/// 解析 `DocumentRes.xml`，提取所有多媒体资源。
+///
+/// 对应 Java: ofdrw/ofdrw-parser/ResourceParser#parseBaseLoc
+///
+/// Honours the `BaseLoc` attribute on `<ofd:Res>` (GB/T 33190-2016
+/// §12.3).  Child `<ofd:MediaFile>` paths are resolved relative to
+/// the enclosing `BaseLoc`.
 pub(crate) fn parse_document_resources<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     doc_dir: &str,
@@ -108,9 +124,28 @@ pub(crate) fn parse_document_resources<R: Read + Seek>(
     let mut buf = Vec::new();
     let mut current: Option<(String, ImageFormat)> = None;
     let mut in_media_file = false;
+    // Stack of BaseLoc values for nested `<ofd:Res>` elements.
+    // For a flat document this will be at most one entry.
+    let mut base_loc_stack: Vec<String> = Vec::new();
     let mut resources = HashMap::new();
     loop {
         match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref event)) if event.name().as_ref() == b"ofd:Res" => {
+                // 对应 Java: ResourceParser#parseBaseLoc
+                let mut base_loc = String::new();
+                for attribute in event.attributes().flatten() {
+                    if attribute.key.as_ref() == b"BaseLoc" {
+                        base_loc = attribute
+                            .decoded_and_normalized_value(
+                                quick_xml::XmlVersion::Explicit1_0,
+                                reader.decoder(),
+                            )
+                            .unwrap_or_default()
+                            .to_string();
+                    }
+                }
+                base_loc_stack.push(base_loc);
+            }
             Ok(Event::Start(ref event)) if event.name().as_ref() == b"ofd:MultiMedia" => {
                 let mut id = None;
                 let mut format = ImageFormat::Jpeg;
@@ -134,15 +169,28 @@ pub(crate) fn parse_document_resources<R: Read + Seek>(
             }
             Ok(Event::Text(ref event)) if in_media_file => {
                 if let Some((id, format)) = current.take() {
-                    let location = event
+                    let raw_path = event
                         .xml10_content()
                         .map(|value| value.into_owned())
                         .unwrap_or_default();
+                    // Prepend the current BaseLoc (if any) to the
+                    // MediaFile path so that the location stored in
+                    // ResourceEntry is already relative to the
+                    // document directory.
+                    let base = base_loc_stack.last().map_or("", String::as_str);
+                    let location = if base.is_empty() {
+                        raw_path
+                    } else {
+                        format!("{}/{}", base.trim_end_matches('/'), raw_path)
+                    };
                     resources.insert(id, ResourceEntry { location, format });
                 }
             }
             Ok(Event::End(ref event)) if event.name().as_ref() == b"ofd:MediaFile" => {
                 in_media_file = false;
+            }
+            Ok(Event::End(ref event)) if event.name().as_ref() == b"ofd:Res" => {
+                base_loc_stack.pop();
             }
             Ok(Event::Eof) => break,
             Err(error) => return Err(OfdError::Xml(format!("{path}: {error}"))),
@@ -509,4 +557,3 @@ pub(crate) fn resolve_resource_path(doc_dir: &str, location: &str) -> OfdResult<
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
-

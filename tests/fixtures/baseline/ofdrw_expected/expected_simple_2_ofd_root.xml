@@ -1,0 +1,29 @@
+<!-- expected_simple_2_ofd_root.xml
+     Expected OFD.xml structure for simple_2.ofd
+     Produced by ofdrw 1.5.5; conforms to GB/T 33190-2016
+
+     [GB/T 33190] Root element must be <ofd:OFD> with xmlns:ofd namespace
+     [GB/T 33190] Version attribute required (value: "1.0")
+     [GB/T 33190] DocType attribute required (value: "OFD")
+     [ofdrw]      Single DocBody child element
+     [ofdrw]      DocInfo contains DocID, CreationDate, Creator, CreatorVersion
+     [ofdrw]      DocRoot points to Doc_0/Document.xml
+-->
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <!-- [GB/T 33190] DocBody wraps document metadata and root reference -->
+  <ofd:DocBody>
+    <!-- [GB/T 33190] DocInfo contains document identification -->
+    <ofd:DocInfo>
+      <!-- [ofdrw] DocID is a hex UUID without dashes -->
+      <ofd:DocID>220c5913ebfe4f6e8070dabd3647f157</ofd:DocID>
+      <!-- [ofdrw] CreationDate in YYYY-MM-DD format -->
+      <ofd:CreationDate>2020-09-21</ofd:CreationDate>
+      <!-- [ofdrw] Creator identifies the producing software -->
+      <ofd:Creator>OFD R&amp;W</ofd:Creator>
+      <!-- [ofdrw] CreatorVersion identifies the software version -->
+      <ofd:CreatorVersion>1.5.5</ofd:CreatorVersion>
+    </ofd:DocInfo>
+    <!-- [GB/T 33190] DocRoot must point to the Document.xml path -->
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+  </ofd:DocBody>
+</ofd:OFD>

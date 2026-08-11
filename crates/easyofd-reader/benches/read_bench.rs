@@ -1,5 +1,8 @@
 //! OFD 读取性能基准测试。
 
+// criterion_group! 宏展开会产生无文档函数；本地抑制以满足 workspace `-D warnings`。
+#![allow(missing_docs, clippy::needless_borrows_for_generic_args)]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use easyofd_core::{OfdPage, TextObject};
 use easyofd_reader::OfdReader;
@@ -51,5 +54,10 @@ fn bench_read_large(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_read_small, bench_read_medium, bench_read_large);
+criterion_group!(
+    benches,
+    bench_read_small,
+    bench_read_medium,
+    bench_read_large
+);
 criterion_main!(benches);

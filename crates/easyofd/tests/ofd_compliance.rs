@@ -9,7 +9,7 @@
 
 use std::io::Cursor;
 
-use easyofd_core::{ContentObject, ImageObject, OfdPage, PathObject, TextObject};
+use easyofd_core::{ContentObject, OfdPage, PathObject, TextObject};
 use easyofd_reader::OfdReader;
 use easyofd_writer::OfdWriter;
 use zip::read::ZipArchive;
@@ -28,7 +28,7 @@ fn build_multi_page_ofd() -> Vec<u8> {
     let mut writer = OfdWriter::new();
     for i in 0..3 {
         let mut page = OfdPage::new(210.0, 297.0);
-        page.add_text(TextObject::new(10.0, 20.0, &format!("第{i}页")));
+        page.add_text(TextObject::new(10.0, 20.0, format!("第{i}页")));
         writer.add_page(page);
     }
     writer.build().expect("build should succeed")
@@ -102,8 +102,14 @@ fn compliance_ofd_xml_has_doc_body() {
     let mut file = archive.by_name("OFD.xml").unwrap();
     let mut content = String::new();
     std::io::Read::read_to_string(&mut file, &mut content).unwrap();
-    assert!(content.contains("ofd:DocBody"), "OFD.xml must contain ofd:DocBody");
-    assert!(content.contains("ofd:DocRoot"), "OFD.xml must contain ofd:DocRoot");
+    assert!(
+        content.contains("ofd:DocBody"),
+        "OFD.xml must contain ofd:DocBody"
+    );
+    assert!(
+        content.contains("ofd:DocRoot"),
+        "OFD.xml must contain ofd:DocRoot"
+    );
 }
 
 #[test]
@@ -118,7 +124,10 @@ fn compliance_document_xml_has_page_area() {
         content.contains("ofd:PageArea"),
         "Document.xml must contain ofd:PageArea"
     );
-    assert!(content.contains("ofd:Pages"), "Document.xml must contain ofd:Pages");
+    assert!(
+        content.contains("ofd:Pages"),
+        "Document.xml must contain ofd:Pages"
+    );
 }
 
 #[test]
@@ -174,7 +183,9 @@ fn compliance_roundtrip_path_object() {
     // Path 对象应存在
     let page = &reader.pages()[0];
     assert!(
-        page.content.iter().any(|c| matches!(c, ContentObject::Path(_))),
+        page.content
+            .iter()
+            .any(|c| matches!(c, ContentObject::Path(_))),
         "should contain path object"
     );
 }

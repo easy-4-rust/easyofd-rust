@@ -3,6 +3,9 @@
 //! This is a regular (non-proc-macro) crate that contains all the heavy logic.
 //! The `easyofd-derive` proc-macro crate is a thin shim that delegates to this crate.
 
+mod field_config;
+
+use field_config::FieldConfig;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::{Data, DeriveInput, Fields};
@@ -145,19 +148,6 @@ fn process_fields(
     }
 
     Ok((schema_entries, page_pushes))
-}
-
-struct FieldConfig {
-    x: f64,
-    y: f64,
-    font: String,
-    size: f64,
-    weight: u32,
-    italic: bool,
-    color: u32,
-    kind: String,
-    img_width: f64,
-    img_height: f64,
 }
 
 fn parse_page_attrs(input: &DeriveInput) -> syn::Result<(f64, f64)> {

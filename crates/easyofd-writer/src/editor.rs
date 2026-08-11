@@ -6,8 +6,6 @@ use std::path::Path;
 
 use easyofd_core::{OfdError, OfdMetadata, OfdPage, OfdResult, TextObject, Watermark};
 
-
-
 use crate::{OfdWriter, WriteOptions};
 
 /// OFD 编辑器。打开已有 OFD 文件，支持添加文本、页面和水印，然后保存。
@@ -37,12 +35,13 @@ impl OfdEditor {
     /// 不是有效 ZIP 或 OFD 时返回错误。
     pub fn from_bytes(bytes: &[u8]) -> OfdResult<Self> {
         let cursor = std::io::Cursor::new(bytes);
-        let mut archive = zip::ZipArchive::new(cursor)
-            .map_err(|e| OfdError::Zip(e.to_string()))?;
+        let mut archive = zip::ZipArchive::new(cursor).map_err(|e| OfdError::Zip(e.to_string()))?;
 
         let mut original_entries = HashMap::new();
         for i in 0..archive.len() {
-            let mut file = archive.by_index(i).map_err(|e| OfdError::Zip(e.to_string()))?;
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| OfdError::Zip(e.to_string()))?;
             let name = file.name().to_string();
             let mut buf = Vec::new();
             file.read_to_end(&mut buf).map_err(OfdError::Io)?;
@@ -151,7 +150,9 @@ mod tests {
         let mut editor = OfdEditor::open(path.to_string_lossy().into_owned()).unwrap();
         assert_eq!(editor.page_count(), 1);
 
-        editor.add_text_to_page(0, TextObject::new(10.0, 40.0, "Edited text")).unwrap();
+        editor
+            .add_text_to_page(0, TextObject::new(10.0, 40.0, "Edited text"))
+            .unwrap();
 
         let out = dir.join("edited.ofd");
         editor.save(&out).unwrap();

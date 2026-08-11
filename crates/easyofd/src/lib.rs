@@ -3,6 +3,34 @@
 //! A Rust library for easy OFD (Open Fixed-layout Document) operations,
 //! inspired by [EasyExcel](https://github.com/alibaba/easyexcel).
 //!
+//! ## ofdrw 子模块对照表
+//!
+//! 本项目在架构上对标 Java 版 [ofdrw](https://github.com/ofdrw/ofdrw) v2.4.0 的 14 个子模块。
+//! 下表列出每个 ofdrw 模块与对应 easyofd crate 的映射关系：
+//!
+//! | ofdrw 模块 | easyofd crate | 说明 |
+//! |---|---|---|
+//! | `ofdrw-core` | `easyofd-core` | 核心数据模型 |
+//! | `ofdrw-pkg` | `easyofd-package` | ZIP 安全与包结构 |
+//! | `ofdrw-layout` | `easyofd-layout` | 版面分析 |
+//! | `ofdrw-font` | `easyofd-font` | 字体管理与嵌入（预留） |
+//! | `ofdrw-full` | `easyofd`（本 crate） | 聚合门面 |
+//! | `ofdrw-reader` | `easyofd-reader` | OFD 解析 |
+//! | `ofdrw-sign` | `easyofd-signature` | 数字签名（GB/T 38540） |
+//! | `ofdrw-gv` | 不单独建 crate | 全局变量，仅 1 个文件 |
+//! | `ofdrw-gm` | `easyofd-gm` | 国密算法 SM2/SM3/SM4（预留） |
+//! | `ofdrw-converter` | `easyofd-convert` | OFD/PDF 互转 |
+//! | `ofdrw-crypto` | `easyofd-crypto` | 加密基础设施（预留） |
+//! | `ofdrw-tool` | 不单独建 crate | CLI 工具，用户可后续决策 |
+//! | `ofdrw-graphics2d` | `easyofd-graphics2d` | 2D 图形渲染抽象（预留） |
+//! | `ofdrw-archive` | `easyofd-archive` | 归档合规规则引擎（预留） |
+//!
+//! 额外 crate（ofdrw 无直接对应）：
+//! - `easyofd-derive` / `easyofd-derive-impl`：过程宏（`#[derive(OfdModel)]`）
+//! - `easyofd-markdown`：OFD 转 Markdown
+//! - `easyofd-template`：OFD 模板填充
+//! - `easyofd-writer`：OFD 写入器
+//!
 //! ## Quick Start
 //!
 //! ### One-liner write with derive macro
@@ -40,12 +68,16 @@
 //!     .do_write(vec![page])?;
 //! ```
 
+mod easy_ofd;
 mod ofd_read_builder;
+mod ofd_writer_builder;
+mod page_writer_builder;
 
 // Re-export core types for convenience.
 pub use easyofd_core::{
-    ContentObject, ImageFormat, ImageObject, OfdError, OfdField, OfdFieldKind, OfdMetadata,
-    OfdModel, OfdPage, OfdResult, PathObject, TextObject, Watermark, page_size,
+    AnnPage, Annot, AnnotType, Annotations, Appearance, CTAction, ContentObject, EventType,
+    ImageFormat, ImageObject, OfdAction, OfdError, OfdField, OfdFieldKind, OfdMetadata, OfdModel,
+    OfdPage, OfdResult, PageAnnot, PathObject, TextObject, URI, Watermark, page_size,
 };
 
 // Re-export derive macro.
@@ -74,255 +106,20 @@ pub use easyofd_package::PackageLimits;
 pub use easyofd_template::OfdTemplateFiller;
 
 // Re-export signature types for advanced usage.
-pub use easyofd_signature::{ElectronicSeal, OfdSignatureBuilder, SignatureAlgorithm, SignedOfd};
+pub use easyofd_signature::{
+    ElectronicSeal, OfdSignatureBuilder, SignatureAlgorithm, SignedOfd, read_signature,
+    verify_signature,
+};
 
 // Re-export convert functions for advanced usage.
 pub use easyofd_convert::{
     ConvertOptions, ImageConvertFormat, convert_image, ofd_to_pdf, pdf_to_ofd,
 };
 
-// ─── EasyOfd Static Factory ──────────────────────────────────────────────────
-
-/// The main entry point for easyofd operations.
-///
-/// Mirrors the `EasyExcel` / `EasyExcelFactory` pattern from the Java library.
-/// All methods are static and return builders.
-pub struct EasyOfd;
-
-impl EasyOfd {
-    /// Start a typed write operation using an `OfdModel` type.
-    ///
-    /// Returns an [`OfdWriterBuilder`] for fluent configuration.
-    pub fn write<T: OfdModel>(path: impl Into<String>) -> OfdWriterBuilder<T> {
-        OfdWriterBuilder {
-            path: path.into(),
-            _phantom: std::marker::PhantomData,
-            metadata: OfdMetadata::default(),
-        }
-    }
-
-    /// Start a page-based write operation (no model type required).
-    ///
-    /// Returns a [`PageWriterBuilder`] for fluent configuration.
-    pub fn write_pages(path: impl Into<String>) -> PageWriterBuilder {
-        PageWriterBuilder {
-            path: path.into(),
-            metadata: OfdMetadata::default(),
-        }
-    }
-
-    /// 创建增量 OFD Writer，页面和图片在调用 `write_page` 时直接进入输出。
-    #[must_use]
-    pub fn stream_writer<W: std::io::Write + std::io::Seek>(output: W) -> OfdStreamWriter<W> {
-        OfdStreamWriter::new(output, WriteOptions::default())
-    }
-
-    /// 使用自定义元数据创建增量 OFD Writer。
-    #[must_use]
-    pub fn stream_writer_with_options<W: std::io::Write + std::io::Seek>(
-        output: W,
-        options: WriteOptions,
-    ) -> OfdStreamWriter<W> {
-        OfdStreamWriter::new(output, options)
-    }
-
-    /// Write pages directly to a file in one call.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if ZIP creation or file I/O fails.
-    pub fn write_pages_to(path: impl AsRef<std::path::Path>, pages: Vec<OfdPage>) -> OfdResult<()> {
-        let mut writer = OfdWriter::new();
-        writer.add_pages(pages);
-        writer.build_to_file(path)
-    }
-
-    /// Write pages directly to bytes in one call.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if ZIP creation fails.
-    pub fn write_pages_to_bytes(pages: Vec<OfdPage>) -> OfdResult<Vec<u8>> {
-        let mut writer = OfdWriter::new();
-        writer.add_pages(pages);
-        writer.build()
-    }
-
-    /// Open and parse an OFD file for reading.
-    ///
-    /// Returns an [`OfdReader`] that provides access to pages and text content.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be read or is not a valid OFD document.
-    pub fn read(path: impl AsRef<std::path::Path>) -> OfdResult<OfdReader> {
-        OfdReader::open(path)
-    }
-
-    /// 创建逐页读取构建器，适合大文件和有限内存场景。
-    #[must_use]
-    pub fn read_pages(path: impl AsRef<std::path::Path>) -> OfdReadBuilder {
-        OfdReadBuilder::new(path)
-    }
-
-    /// 创建 OFD 到 Markdown 的转换构建器。
-    #[must_use]
-    pub fn to_markdown(path: impl AsRef<std::path::Path>) -> MarkdownConversionBuilder {
-        MarkdownConversionBuilder::new(path)
-    }
-
-    /// Parse an OFD file from in-memory bytes.
-    ///
-    /// Returns an [`OfdReader`] for extracting content.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the data is not a valid OFD document.
-    pub fn read_from_bytes(data: &[u8]) -> OfdResult<OfdReader> {
-        OfdReader::from_bytes(data)
-    }
-
-    /// Fill an OFD template with placeholder values.
-    ///
-    /// Replaces `{key}` patterns in XML content with values from the data map.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the template file cannot be read.
-    pub fn fill_template(
-        template_path: impl AsRef<std::path::Path>,
-        data: &std::collections::HashMap<String, String>,
-    ) -> OfdResult<OfdTemplateFiller> {
-        OfdTemplateFiller::fill(template_path, data)
-    }
-}
-
-// ─── Typed Writer Builder ────────────────────────────────────────────────────
-
-/// Builder for typed OFD write operations using `OfdModel`.
-///
-/// Created by [`EasyOfd::write::<T>(path)`](EasyOfd::write).
-pub struct OfdWriterBuilder<T: OfdModel> {
-    path: String,
-    _phantom: std::marker::PhantomData<T>,
-    metadata: OfdMetadata,
-}
-
-impl<T: OfdModel> OfdWriterBuilder<T> {
-    /// Set the document title.
-    #[must_use]
-    pub fn metadata_title(mut self, title: impl Into<String>) -> Self {
-        self.metadata.title = Some(title.into());
-        self
-    }
-
-    /// Set the document author.
-    #[must_use]
-    pub fn metadata_author(mut self, author: impl Into<String>) -> Self {
-        self.metadata.author = Some(author.into());
-        self
-    }
-
-    /// Set the document creator.
-    #[must_use]
-    pub fn metadata_creator(mut self, creator: impl Into<String>) -> Self {
-        self.metadata.creator = Some(creator.into());
-        self
-    }
-
-    /// Execute the write operation.
-    ///
-    /// Each item in `data` becomes one page in the OFD document.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if model conversion, ZIP creation, or file I/O fails.
-    pub fn do_write(&self, data: &[T]) -> OfdResult<()> {
-        let pages = T::to_pages(data)?;
-        let options = WriteOptions {
-            metadata: self.metadata.clone(),
-        };
-        let mut writer = OfdWriter::with_options(options);
-        writer.add_pages(pages);
-        writer.build_to_file(&self.path)
-    }
-
-    /// Execute the write operation and return the OFD bytes (no file I/O).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if model conversion or ZIP creation fails.
-    pub fn do_write_to_bytes(&self, data: &[T]) -> OfdResult<Vec<u8>> {
-        let pages = T::to_pages(data)?;
-        let options = WriteOptions {
-            metadata: self.metadata.clone(),
-        };
-        let mut writer = OfdWriter::with_options(options);
-        writer.add_pages(pages);
-        writer.build()
-    }
-}
-
-// ─── Page Writer Builder ─────────────────────────────────────────────────────
-
-/// Builder for page-based OFD write operations (no model type).
-///
-/// Created by [`EasyOfd::write_pages(path)`](EasyOfd::write_pages).
-pub struct PageWriterBuilder {
-    path: String,
-    metadata: OfdMetadata,
-}
-
-impl PageWriterBuilder {
-    /// Set the document title.
-    #[must_use]
-    pub fn metadata_title(mut self, title: impl Into<String>) -> Self {
-        self.metadata.title = Some(title.into());
-        self
-    }
-
-    /// Set the document author.
-    #[must_use]
-    pub fn metadata_author(mut self, author: impl Into<String>) -> Self {
-        self.metadata.author = Some(author.into());
-        self
-    }
-
-    /// Set the document creator.
-    #[must_use]
-    pub fn metadata_creator(mut self, creator: impl Into<String>) -> Self {
-        self.metadata.creator = Some(creator.into());
-        self
-    }
-
-    /// Execute the write operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if ZIP creation or file I/O fails.
-    pub fn do_write(&self, pages: Vec<OfdPage>) -> OfdResult<()> {
-        let options = WriteOptions {
-            metadata: self.metadata.clone(),
-        };
-        let mut writer = OfdWriter::with_options(options);
-        writer.add_pages(pages);
-        writer.build_to_file(&self.path)
-    }
-
-    /// Execute the write operation and return the OFD bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if ZIP creation fails.
-    pub fn do_write_to_bytes(&self, pages: Vec<OfdPage>) -> OfdResult<Vec<u8>> {
-        let options = WriteOptions {
-            metadata: self.metadata.clone(),
-        };
-        let mut writer = OfdWriter::with_options(options);
-        writer.add_pages(pages);
-        writer.build()
-    }
-}
+// Re-export facade types.
+pub use easy_ofd::EasyOfd;
+pub use ofd_writer_builder::OfdWriterBuilder;
+pub use page_writer_builder::PageWriterBuilder;
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -349,7 +146,7 @@ mod tests {
     #[test]
     fn test_write_pages_to_bytes_static() {
         let mut page = OfdPage::new(210.0, 297.0);
-        page.add_text(TextObject::new(20.0, 30.0, "Direct bytes"));
+        page.add_text(TextObject::new(0.0, 0.0, "Direct bytes"));
 
         let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
         assert!(!bytes.is_empty());

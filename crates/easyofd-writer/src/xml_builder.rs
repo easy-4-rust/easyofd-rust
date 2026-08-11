@@ -2,9 +2,9 @@
 //!
 //! 包含 OfdWriter 的 XML 构建方法，用于生成 GB/T 33190-2016 标准的 XML 文件。
 
-use easyofd_core::{ContentObject, ImageFormat, OfdPage};
 use crate::OfdWriter;
 use crate::helpers::xml_escape;
+use easyofd_core::{ContentObject, ImageFormat, OfdPage};
 
 impl OfdWriter {
     pub(crate) fn build_ofd_xml(&self) -> String {
@@ -61,7 +61,10 @@ impl OfdWriter {
         xml
     }
 
-    pub(crate) fn build_document_xml(&self, image_resources: &[(String, &[u8], ImageFormat)]) -> String {
+    pub(crate) fn build_document_xml(
+        &self,
+        image_resources: &[(String, &[u8], ImageFormat)],
+    ) -> String {
         let mut xml = String::with_capacity(1024);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
@@ -114,7 +117,10 @@ impl OfdWriter {
     }
 
     #[allow(clippy::unused_self)]
-    pub(crate) fn build_document_res_xml(&self, image_resources: &[(String, &[u8], ImageFormat)]) -> String {
+    pub(crate) fn build_document_res_xml(
+        &self,
+        image_resources: &[(String, &[u8], ImageFormat)],
+    ) -> String {
         let mut xml = String::with_capacity(512);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
@@ -161,7 +167,12 @@ impl OfdWriter {
     }
 
     #[allow(clippy::unused_self)]
-    pub(crate) fn build_page_xml(&self, page: &OfdPage, page_index: usize, page_image_start: usize) -> String {
+    pub(crate) fn build_page_xml(
+        &self,
+        page: &OfdPage,
+        page_index: usize,
+        page_image_start: usize,
+    ) -> String {
         let mut xml = String::with_capacity(2048);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
@@ -262,5 +273,3 @@ impl OfdWriter {
         xml
     }
 }
-
-

@@ -1,0 +1,19 @@
+[package]
+name = "easyofd-archive"
+description = "OFD 归档合规规则引擎，对应 ofdrw-archive"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = true
+
+[dependencies]
+easyofd-core = { workspace = true }
+sm3 = { workspace = true }
+sha2 = { workspace = true }
+zip = { workspace = true }
+quick-xml = { workspace = true }
+
+[lints]
+workspace = true

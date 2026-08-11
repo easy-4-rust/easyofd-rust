@@ -92,9 +92,9 @@ mod tests {
     #[test]
     fn test_watermark_default() {
         let wm = Watermark::default();
-        assert_eq!(wm.font_size, 24.0);
-        assert_eq!(wm.opacity, 0.3);
-        assert_eq!(wm.rotation, 45.0);
+        assert!((wm.font_size - 24.0).abs() < f64::EPSILON);
+        assert!((wm.opacity - 0.3).abs() < f64::EPSILON);
+        assert!((wm.rotation - 45.0).abs() < f64::EPSILON);
         assert!(wm.text.is_none());
         assert!(wm.page.is_none());
     }
@@ -109,9 +109,9 @@ mod tests {
             .page(1);
         assert_eq!(wm.text.as_deref(), Some("CONFIDENTIAL"));
         assert_eq!(wm.position, (50.0, 100.0));
-        assert_eq!(wm.font_size, 36.0);
-        assert_eq!(wm.opacity, 0.5);
-        assert_eq!(wm.rotation, 30.0);
+        assert!((wm.font_size - 36.0).abs() < f64::EPSILON);
+        assert!((wm.opacity - 0.5).abs() < f64::EPSILON);
+        assert!((wm.rotation - 30.0).abs() < f64::EPSILON);
         assert_eq!(wm.page, Some(1));
     }
 

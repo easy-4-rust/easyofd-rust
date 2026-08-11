@@ -1,0 +1,36 @@
+<!--
+  Expected Signature.xml structure for signed.ofd
+  Source: ofdrw/ofdrw ofdrw-sign test resource (signedFile.ofd)
+
+  Key structural requirements (GB/T 33190-2016 / GBT 38540-2020):
+  - <ofd:Signature> root with xmlns:ofd="http://www.ofdspec.org/2016"
+  - <ofd:SignedInfo> containing:
+    - <ofd:Provider> with ProviderName, Company, Version
+    - <ofd:SignatureMethod> OID for SM2 (1.2.156.10197.1.501)
+    - <ofd:SignatureDateTime> in UTC format
+    - <ofd:References> with CheckMethod and multiple <ofd:Reference> children
+    - Each Reference has FileRef and <ofd:CheckValue>
+    - <ofd:StampAnnot> with ID, PageRef, Boundary
+  - <ofd:SignedValue> pointing to SignedValue.dat binary
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:SignedInfo>
+    <ofd:Provider ProviderName="gomain_eseal" Version="2.0" Company="gomain"/>
+    <ofd:SignatureMethod>1.2.156.10197.1.501</ofd:SignatureMethod>
+    <ofd:SignatureDateTime>20201004072855.302Z</ofd:SignatureDateTime>
+    <ofd:References CheckMethod="1.2.156.10197.1.401">
+      <ofd:Reference FileRef="/Doc_0/Pages/Page_0/Content.xml">
+        <ofd:CheckValue>ZCjb4QrwuyZxu3Z19P6ZHH02I52/U79cvuIZMhiI0z0=</ofd:CheckValue>
+      </ofd:Reference>
+      <ofd:Reference FileRef="/Doc_0/Document.xml">
+        <ofd:CheckValue>O1DS0CfaB17LJA9qK056OlRNEi4tgfcXOhJ9elfPieE=</ofd:CheckValue>
+      </ofd:Reference>
+      <ofd:Reference FileRef="/OFD.xml">
+        <ofd:CheckValue>Y1nphJ6OLyXCg9zsceyFdyYyb9T1al2JHEG/F/6SVBM=</ofd:CheckValue>
+      </ofd:Reference>
+    </ofd:References>
+    <ofd:StampAnnot ID="1" PageRef="1" Boundary="90.00 8.00 30.00 20.00"/>
+  </ofd:SignedInfo>
+  <ofd:SignedValue>/Doc_0/Signs/Sign_0/SignedValue.dat</ofd:SignedValue>
+</ofd:Signature>

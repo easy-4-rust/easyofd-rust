@@ -1,0 +1,19 @@
+[package]
+name = "easyofd-crypto"
+description = "OFD 加密基础设施，对应 ofdrw-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = true
+
+[dependencies]
+easyofd-core = { workspace = true }
+sm4 = "0.6"
+cbc = "0.2"
+rand = "0.8"
+zip = { workspace = true }
+
+[lints]
+workspace = true

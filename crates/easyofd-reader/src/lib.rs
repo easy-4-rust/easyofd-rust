@@ -15,170 +15,20 @@
 //!         └── Page_N.xml
 //! ```
 
+mod ofd_reader;
 mod parser;
+mod read_options;
 
-use std::fs::File;
-use std::io::{Cursor, Read, Seek};
+pub use ofd_reader::OfdReader;
+pub use read_options::ReadOptions;
 
-use parser::{
-    parse_document_entry, parse_document_resources, parse_ofd_entry, parse_page_entry,
-};
-use easyofd_core::{
-    ContentObject, OfdError, OfdPage, OfdResult,
-};
-use easyofd_package::{PackageLimits, validate_archive};
-
-/// OFD 读取选项。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct ReadOptions {
-    /// 第一个读取页码，使用从 1 开始的页码。
-    pub first_page: Option<usize>,
-    /// 最后一个读取页码，使用从 1 开始的页码。
-    pub last_page: Option<usize>,
-    /// ZIP 包安全限制。
-    pub package_limits: PackageLimits,
-}
-
-/// An OFD document reader.
-pub struct OfdReader {
-    pages: Vec<OfdPage>,
-}
-
-impl OfdReader {
-    /// Open and parse an OFD file from a path.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be read or contains invalid OFD data.
-    pub fn open(path: impl AsRef<std::path::Path>) -> OfdResult<Self> {
-        Self::open_with_options(path, ReadOptions::default())
-    }
-
-    /// 使用指定选项打开 OFD 文件。
-    ///
-    /// # Errors
-    ///
-    /// 文件、ZIP 包或 XML 无效时返回错误。
-    pub fn open_with_options(
-        path: impl AsRef<std::path::Path>,
-        options: ReadOptions,
-    ) -> OfdResult<Self> {
-        let file = File::open(path)?;
-        Self::from_seek(file, options)
-    }
-
-    /// Parse an OFD file from in-memory bytes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the data is invalid.
-    pub fn from_bytes(data: &[u8]) -> OfdResult<Self> {
-        Self::from_seek(Cursor::new(data), ReadOptions::default())
-    }
-
-    /// 从实现 `Read + Seek` 的输入读取文档。
-    ///
-    /// # Errors
-    ///
-    /// ZIP 包或 XML 无效时返回错误。
-    pub fn from_seek<R: Read + Seek>(source: R, options: ReadOptions) -> OfdResult<Self> {
-        let mut pages = Vec::new();
-        visit_archive(source, options, |_, page| {
-            pages.push(page);
-            Ok(())
-        })?;
-        Ok(Self { pages })
-    }
-
-    /// 逐页访问文件，不在内存中保留已经处理过的页面。
-    ///
-    /// 回调页码从 1 开始。回调返回错误时立即停止解析。
-    ///
-    /// # Errors
-    ///
-    /// 文件、ZIP、XML 或页面回调失败时返回错误。
-    pub fn visit_path(
-        path: impl AsRef<std::path::Path>,
-        options: ReadOptions,
-        visitor: impl FnMut(usize, OfdPage) -> OfdResult<()>,
-    ) -> OfdResult<usize> {
-        visit_archive(File::open(path)?, options, visitor)
-    }
-
-    /// Number of pages in the document.
-    #[must_use]
-    pub fn page_count(&self) -> usize {
-        self.pages.len()
-    }
-
-    /// All parsed pages.
-    #[must_use]
-    pub fn pages(&self) -> &[OfdPage] {
-        &self.pages
-    }
-
-    /// Extract text from all pages, one `String` per page.
-    #[must_use]
-    pub fn extract_text(&self) -> Vec<String> {
-        self.pages.iter().map(page_text).collect()
-    }
-
-    /// Extract all text joined into a single string with page separators.
-    #[must_use]
-    pub fn extract_all_text(&self) -> String {
-        self.extract_text().join("\n---\n")
-    }
-}
-
-fn visit_archive<R: Read + Seek>(
-    source: R,
-    options: ReadOptions,
-    mut visitor: impl FnMut(usize, OfdPage) -> OfdResult<()>,
-) -> OfdResult<usize> {
-    let mut archive = zip::ZipArchive::new(source).map_err(|e| OfdError::Zip(e.to_string()))?;
-    validate_archive(&mut archive, options.package_limits)?;
-    let doc_root = parse_ofd_entry(&mut archive)?;
-    let page_refs = parse_document_entry(&mut archive, &doc_root)?;
-    let resources = parse_document_resources(&mut archive, &doc_root)?;
-    let mut visited = 0;
-    for (index, page_loc) in page_refs.iter().enumerate() {
-        let page_number = index + 1;
-        if options.first_page.is_some_and(|first| page_number < first)
-            || options.last_page.is_some_and(|last| page_number > last)
-        {
-            continue;
-        }
-        let page_path = format!("{doc_root}/{page_loc}");
-        let page = parse_page_entry(&mut archive, &page_path, &doc_root, &resources)?;
-        visitor(page_number, page)?;
-        visited += 1;
-    }
-    Ok(visited)
-}
-
-/// Join all text objects on a page into one string.
-fn page_text(page: &OfdPage) -> String {
-    page.content
-        .iter()
-        .filter_map(|obj| {
-            if let ContentObject::Text(t) = obj {
-                Some(t.text.as_str())
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-// ─── XML Parsing ─────────────────────────────────────────────────────────────
-
-/// Parse OFD.xml → return the DocRoot directory (e.g. "Doc_0").
 #[cfg(test)]
 mod tests {
     use super::*;
-    use easyofd_core::{TextObject, ImageObject, PathObject};
+    use easyofd_core::{ImageObject, PathObject, TextObject};
     use easyofd_writer::OfdWriter;
+
+    use easyofd_core::OfdPage;
 
     fn roundtrip(pages: Vec<OfdPage>) -> Vec<u8> {
         let mut writer = OfdWriter::new();
@@ -252,7 +102,7 @@ mod tests {
 
         let reader = OfdReader::from_bytes(&bytes).unwrap();
         assert_eq!(reader.pages()[0].content.len(), 2);
-        let ContentObject::Image(image) = &reader.pages()[0].content[1] else {
+        let easyofd_core::ContentObject::Image(image) = &reader.pages()[0].content[1] else {
             panic!("expected image");
         };
         assert_eq!(image.data, vec![0xFF, 0xD8]);
@@ -278,7 +128,7 @@ mod tests {
                 ..ReadOptions::default()
             },
             |number, page| {
-                visited.push((number, page_text(&page)));
+                visited.push((number, ofd_reader::page_text(&page)));
                 Ok(())
             },
         )
@@ -297,7 +147,7 @@ mod tests {
         let reader = OfdReader::from_bytes(&bytes).unwrap();
         assert!(matches!(
             reader.pages()[0].content[0],
-            ContentObject::Path(_)
+            easyofd_core::ContentObject::Path(_)
         ));
     }
 
@@ -337,5 +187,166 @@ mod tests {
         let reader = OfdReader::from_bytes(&bytes).unwrap();
         assert_eq!(reader.page_count(), 1);
         assert!(reader.extract_all_text().contains("Styled"));
+    }
+
+    // ─── BaseLoc resource resolution tests ─────────────────────────────────
+
+    /// Build a minimal OFD ZIP whose `Doc_0/DocumentRes.xml` is the given
+    /// XML string.  Returns the raw bytes of the ZIP archive.
+    fn build_zip_with_document_res(document_res_xml: &str) -> Vec<u8> {
+        use std::io::Write;
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut buf);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+
+            // OFD.xml
+            zip.start_file("OFD.xml", options).unwrap();
+            zip.write_all(
+                br#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:DocBody><ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot></ofd:DocBody>
+</ofd:OFD>"#,
+            )
+            .unwrap();
+
+            // Doc_0/Document.xml (single empty page)
+            zip.start_file("Doc_0/Document.xml", options).unwrap();
+            zip.write_all(
+                br#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:PageArea><ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox></ofd:PageArea>
+    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages><ofd:Page BaseLoc="Pages/Page_0/Content.xml"/></ofd:Pages>
+</ofd:Document>"#,
+            )
+            .unwrap();
+
+            // Doc_0/Pages/Page_0/Content.xml (empty page)
+            zip.start_file("Doc_0/Pages/Page_0/Content.xml", options)
+                .unwrap();
+            zip.write_all(
+                br#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Content/>
+</ofd:Page>"#,
+            )
+            .unwrap();
+
+            // Doc_0/DocumentRes.xml (caller-supplied content)
+            zip.start_file("Doc_0/DocumentRes.xml", options).unwrap();
+            zip.write_all(document_res_xml.as_bytes()).unwrap();
+
+            zip.finish().unwrap();
+        }
+        buf.into_inner()
+    }
+
+    /// Helper: parse the DocumentRes.xml inside a test ZIP and return
+    /// the `ResourceEntry` map keyed by resource ID.
+    fn parse_resources_from_zip(bytes: &[u8]) -> std::collections::HashMap<String, String> {
+        use parser::parse_document_resources;
+
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let resources = parse_document_resources(&mut archive, "Doc_0").unwrap();
+        resources
+            .into_iter()
+            .map(|(id, entry)| (id, entry.location))
+            .collect()
+    }
+
+    /// 对应 Java: ofdrw/ofdrw-parser/ResourceParser#parseBaseLoc
+    ///
+    /// When `<ofd:Res BaseLoc="Res">` is present, MediaFile paths must be
+    /// resolved relative to the `Res/` subdirectory.
+    #[test]
+    fn parse_document_resources_respects_base_loc() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="6" Type="Image" Format="PNG">
+      <ofd:MediaFile>qrcode.png</ofd:MediaFile>
+    </ofd:MultiMedia>
+  </ofd:MultiMedias>
+</ofd:Res>"#;
+        let bytes = build_zip_with_document_res(xml);
+        let resources = parse_resources_from_zip(&bytes);
+
+        assert_eq!(
+            resources.get("6").map(String::as_str),
+            Some("Res/qrcode.png"),
+            "MediaFile path must include BaseLoc prefix"
+        );
+    }
+
+    /// When there is no `BaseLoc` attribute, paths are stored as-is
+    /// (backward-compatible with the pre-fix behaviour).
+    #[test]
+    fn parse_document_resources_no_base_loc_uses_default() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="10" Type="Image" Format="JPEG">
+      <ofd:MediaFile>photo.jpg</ofd:MediaFile>
+    </ofd:MultiMedia>
+  </ofd:MultiMedias>
+</ofd:Res>"#;
+        let bytes = build_zip_with_document_res(xml);
+        let resources = parse_resources_from_zip(&bytes);
+
+        assert_eq!(
+            resources.get("10").map(String::as_str),
+            Some("photo.jpg"),
+            "without BaseLoc, raw MediaFile path is kept"
+        );
+    }
+
+    /// Nested `<ofd:Res>` elements must each maintain their own BaseLoc
+    /// on the stack.  Resources inside the inner Res use the inner
+    /// BaseLoc; resources after the inner Res close tag use the outer.
+    #[test]
+    fn parse_document_resources_nested_res() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Outer">
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="1" Type="Image">
+      <ofd:MediaFile>outer.png</ofd:MediaFile>
+    </ofd:MultiMedia>
+  </ofd:MultiMedias>
+  <ofd:Res BaseLoc="Inner">
+    <ofd:MultiMedias>
+      <ofd:MultiMedia ID="2" Type="Image">
+        <ofd:MediaFile>inner.png</ofd:MediaFile>
+      </ofd:MultiMedia>
+    </ofd:MultiMedias>
+  </ofd:Res>
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="3" Type="Image">
+      <ofd:MediaFile>back_outer.png</ofd:MediaFile>
+    </ofd:MultiMedia>
+  </ofd:MultiMedias>
+</ofd:Res>"#;
+        let bytes = build_zip_with_document_res(xml);
+        let resources = parse_resources_from_zip(&bytes);
+
+        assert_eq!(
+            resources.get("1").map(String::as_str),
+            Some("Outer/outer.png"),
+            "outer resource uses outer BaseLoc"
+        );
+        assert_eq!(
+            resources.get("2").map(String::as_str),
+            Some("Inner/inner.png"),
+            "inner resource uses inner BaseLoc"
+        );
+        assert_eq!(
+            resources.get("3").map(String::as_str),
+            Some("Outer/back_outer.png"),
+            "resource after inner Res closes uses outer BaseLoc again"
+        );
     }
 }
