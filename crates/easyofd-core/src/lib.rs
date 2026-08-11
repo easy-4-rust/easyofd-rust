@@ -31,6 +31,12 @@ pub mod signatures;
 pub mod text;
 pub mod versions;
 pub mod watermark;
+pub mod xml_element;
+pub mod xml_parse;
+
+// Re-export core types at crate root for convenience.
+pub use xml_element::{XmlElement, XmlElementError, XmlNode, xml_escape};
+pub use xml_parse::parse_xml_to_nodes;
 
 // Re-export core types at crate root for convenience.
 pub use action::{
