@@ -1,0 +1,9 @@
+# cargo-audit 配置（与 deny.toml [advisories].ignore 保持同步）
+# 豁免理由见 deny.toml：lopdf 栈溢出(printpdf 硬锁 0.31，无修复路径)、
+# ttf-parser unmaintained(fontdue 依赖)、proc-macro-error unmaintained(printpdf 传递依赖)。
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0187",
+    "RUSTSEC-2026-0192",
+    "RUSTSEC-2024-0370",
+]

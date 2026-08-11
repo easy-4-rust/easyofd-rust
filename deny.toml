@@ -1,0 +1,63 @@
+# cargo-deny configuration for easyofd-rust
+# https://EmbarkStudios.github.io/cargo-deny/
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+# 豁免理由（2026-08-12）：
+# - RUSTSEC-2026-0187 (lopdf): 深层嵌套 PDF 对象栈溢出，仅 DoS（CVSS 7.5），
+#   修复需 lopdf >= 0.42，但 printpdf 0.7.0 硬锁 lopdf = "0.31.0"（workspace 直接
+#   依赖 0.35 亦受影响且无 0.42 兼容版）。无升级路径，仅影响不可信 PDF 输入解析。
+# - RUSTSEC-2026-0192 (ttf-parser): unmaintained，无安全升级可用；fontdue 0.9.4
+#   依赖 ttf-parser 0.25.1，仅用于可选栅格文本渲染（AWTMaker 替换路径）。
+# - RUSTSEC-2024-0370 (proc-macro-error): unmaintained，传递依赖
+#   printpdf -> allsorts -> ouroboros -> ouroboros_macro，printpdf 0.7 固定依赖，
+#   无升级路径。
+ignore = [
+    "RUSTSEC-2026-0187",
+    "RUSTSEC-2026-0192",
+    "RUSTSEC-2024-0370",
+]
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "CC0-1.0",
+    # 渲染/PDF：printpdf (MPL-2.0)、ttf-parser (MIT/Apache)
+    "MPL-2.0",
+    # 国密算法：sm2/sm3 系列 (Apache-2.0/MIT)
+    # 构建工具：criterion/trybuild/syn 等 (MIT/Apache-2.0)
+]
+confidence-threshold = 0.8
+
+[bans]
+# "warn" 因为传递依赖（如 criterion -> wasm-bindgen -> syn 2.x
+# 与直接依赖 syn 3.x）可能合法地引入多个版本。
+multiple-versions = "warn"
+# "warn" 因为 workspace 内部 path 依赖会被 cargo-deny 视为 wildcard；
+# 这是 workspace 内部 crate 的正常现象。
+wildcards = "warn"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
