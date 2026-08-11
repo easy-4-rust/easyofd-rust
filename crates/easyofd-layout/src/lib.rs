@@ -11,12 +11,14 @@
 //! - [`streaming_layout`] — 流式布局分析器（StreamingLayoutAnalyzer）。
 //! - [`vpage_parser`] — 虚拟页面 → OFD XML 转换引擎（VPageParseEngine）。
 
+mod attachment;
 mod border;
 mod div;
 mod layout_analyzer;
 mod layout_block;
 mod layout_options;
 mod layout_result;
+mod paragraph;
 mod position;
 mod rectangle;
 mod segment_engine;
@@ -25,12 +27,14 @@ mod streaming_layout;
 mod vpage_parser;
 mod xycut;
 
+pub use attachment::Attachment;
 pub use border::Border;
 pub use div::{Div, DivContent, TextStyle};
 pub use layout_analyzer::LayoutAnalyzer;
 pub use layout_block::LayoutBlock;
 pub use layout_options::LayoutOptions;
 pub use layout_result::LayoutResult;
+pub use paragraph::{Paragraph, TextAlign};
 pub use position::Position;
 pub use rectangle::Rectangle;
 pub use segment_engine::{Segment, SegmentationEngine};
