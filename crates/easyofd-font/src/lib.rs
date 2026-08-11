@@ -16,6 +16,8 @@
 
 /// 字体描述符，记录字体基本属性。
 pub mod font_descriptor;
+/// 标准字体名称（对应 Java: org.ofdrw.font.FontName）。
+pub mod font_name;
 /// 字体注册表，管理字体 ID 到描述符的映射。
 pub mod font_registry;
 /// 文本度量，估算文本的宽高。

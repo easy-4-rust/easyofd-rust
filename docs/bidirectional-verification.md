@@ -16,7 +16,7 @@ The verification is organized into four layers of increasing strictness:
 |-------|---------------------|------------|-------------------------------------------------------|
 | L1    | Metadata Comparison | **Done**   | Compare page count, image count, path count, signature presence, text hash |
 | L2    | XML Structure       | **Done**   | Verify key XML elements and attributes against expected patterns |
-| L3    | Byte-level PDF      | **Open**   | Compare PDF output byte-for-byte (requires a full PDF rendering engine aligned with ofdrw's IText/PDFBox) |
+| L3    | Byte-level PDF      | Excluded  | PDF byte-identical output requires a full rendering engine rewrite (separate milestone, not an OFD fidelity gate) |
 | L4    | Byte-level OFD      | **Done**   | Read-ofdrw → write → compare XML elements + ZIP entries (roundtrip_diff, 60/60 zero deviations) |
 
 ## Current Verification Status (2026-08-11)
@@ -50,14 +50,34 @@ PDF rendering engine rewrite. The `byte_diff` PDF check currently compares
 only byte length and PDF object count as a rough proxy; it remains an **open
 work item**, not part of the OFD roundtrip acceptance.
 
-### Java type coverage: 57% gap
+### Java type coverage: gap (ongoing)
 
-ofdrw has ~478 public types; easyofd-rust implements ~204 (43%). The
-remaining types are mostly internal ofdrw details (exceptions, utilities,
-Gm/SES seal internals, font containers). Closing the gap is a continuous
-API-alignment effort that is **orthogonal to byte-level OFD fidelity**
-(roundtrip is already 60/60). It is tracked separately from this
-verification.
+ofdrw has ~519 public types (strict name-match count); easyofd-rust matches
+~136 (26%). The gap is dominated by internal ofdrw details (exceptions,
+utilities, layout internals). High-frequency public types are being ported
+in priority order by usage:
+
+- **Font containers** — `FontName` ported to `easyofd-font` (6 variants,
+  family-name mapping, NOTO / Times New Roman printable-ASCII width tables).
+- **Gm/SES deep structures** — `sm2_struct` ported to `easyofd-gm`
+  (GB/T 35275 `SignedData` / `ContentInfo` / `SignerInfo` /
+  `IssuerAndSerialNumber` / `Sm2Cipher` / `OIDs`) with DER encode/decode.
+- Tools (`Holder`, `STBase`) are low value in Rust (native alternatives
+  exist) and are not ported.
+
+Each ported type ships unit tests (roundtrip DER encode/decode); type
+coverage is tracked separately from byte-level OFD fidelity (roundtrip is
+60/60).
+
+### L3 PDF output: excluded as a separate milestone
+
+easyofd-rust's OFD→PDF exporter (`easyofd-convert::ofd_to_pdf`, backed by
+`printpdf`) and ofdrw's IText/PDFBox renderer produce fundamentally
+different byte streams (object layout, font embedding, compression,
+coordinates). Byte-identical PDF output would require a full rendering
+engine rewrite — a separate milestone, **explicitly excluded** from the
+OFD byte-level acceptance. The `byte_diff` PDF check stays a rough
+byte-length/object-count proxy and is not a gate.
 
 ## ofdrw Verification Pipeline
 

@@ -6,6 +6,9 @@
 //!
 //! - [`ses`] — SES（Secure Electronic Seal）电子印章 ASN.1 结构定义
 //!   （V1 / V4 / V5 版本），实现 GB/T 38540-2020 标准。
+//! - [`sm2_struct`] — GB/T 35275 SM2 签名数据结构（SignedData /
+//!   ContentInfo / SignerInfo / IssuerAndSerialNumber / SM2Cipher / OIDs），
+//!   对应 Java `org.ofdrw.gm.sm2strut` 包。
 //!
 //! ## 规划功能
 //!
@@ -22,6 +25,8 @@ pub fn module_name() -> &'static str {
 
 /// SES（Secure Electronic Seal）电子印章 ASN.1 结构定义。
 pub mod ses;
+/// GB/T 35275 SM2 签名数据结构（对应 Java: org.ofdrw.gm.sm2strut）。
+pub mod sm2_struct;
 
 #[cfg(test)]
 mod tests {
