@@ -262,8 +262,9 @@ mod tests {
         let names = zip_entry_names(&bytes);
         // No image resource files in the ZIP
         assert!(!names.iter().any(|n| n.contains("Image_")));
-        // DocumentRes.xml is always present but has no MultiMedia entries
-        assert!(names.contains(&"Doc_0/DocumentRes.xml".to_string()));
+        // No DocumentRes.xml either: with no image resources the reference
+        // inside Document.xml is omitted (matching ofdrw output).
+        assert!(!names.contains(&"Doc_0/DocumentRes.xml".to_string()));
     }
 
     // ── DocumentRes.xml with all image formats ────────────────────────────────

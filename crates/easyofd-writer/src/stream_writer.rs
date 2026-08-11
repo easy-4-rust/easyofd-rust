@@ -57,8 +57,11 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
         let page_xml = helper.build_page_xml(&page, page_index, page_image_start);
         let file_options = self.file_options;
         let zip = self.zip_mut()?;
-        zip.start_file(format!("Doc_0/Pages/Page_{page_index}/Content.xml"), file_options)
-            .map_err(zip_err)?;
+        zip.start_file(
+            format!("Doc_0/Pages/Page_{page_index}/Content.xml"),
+            file_options,
+        )
+        .map_err(zip_err)?;
         zip.write_all(page_xml.as_bytes()).map_err(io_err)?;
         for (name, bytes) in page_images {
             zip.start_file(name, file_options).map_err(zip_err)?;
@@ -93,7 +96,7 @@ impl<W: Write + Seek> OfdStreamWriter<W> {
         let ofd_xml = helper.build_ofd_xml();
         let document_xml = helper.build_document_xml(&resources);
         let document_res_xml = helper.build_document_res_xml(&resources);
-        let public_res_xml = helper.build_public_res_xml();
+        let public_res_xml = helper.build_public_res_xml(&resources);
         let file_options = self.file_options;
         let zip = self.zip_mut()?;
         write_xml(zip, file_options, "OFD.xml", &ofd_xml)?;

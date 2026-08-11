@@ -48,7 +48,11 @@ fn ofdrw_samples() -> Vec<(String, String)> {
         for entry in entries.flatten() {
             let path = entry.path();
             if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
-                if fname.starts_with("ofdrw_") && fname.ends_with(".ofd") {
+                if fname.starts_with("ofdrw_")
+                    && path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("ofd"))
+                {
                     let name = fname.strip_suffix(".ofd").unwrap().to_string();
                     samples.push((name, fname.to_string()));
                 }
@@ -182,41 +186,18 @@ fn has_signature(ofd_path: &Path) -> bool {
 fn roundtrip(bytes: &[u8]) -> Vec<u8> {
     let reader = OfdReader::from_bytes(bytes).expect("initial read should succeed");
     let mut opts = easyofd_writer::WriteOptions::default();
-    // Preserve metadata from the original OFD
+    // Carry all parsed metadata (doc_id, author, creator, boxes, bookmarks,
+    // template pages, container paths, ...) so the roundtrip is faithful.
     let meta = reader.metadata();
-    opts.metadata.doc_id.clone_from(&meta.doc_id);
-    opts.metadata.author.clone_from(&meta.author);
-    opts.metadata.creator.clone_from(&meta.creator);
-    opts.metadata
-        .creator_version
-        .clone_from(&meta.creator_version);
+    opts.metadata = meta.clone();
     // ofdrw always writes ModDate; use current time if not present in original
-    opts.metadata.mod_date = Some(
-        meta.mod_date
-            .unwrap_or_else(|| chrono::Utc::now().naive_utc()),
-    );
-    // ofdrw writes ApplicationBox matching PageArea dimensions
-    if meta.application_box.is_some() {
-        opts.metadata
-            .application_box
-            .clone_from(&meta.application_box);
-    } else {
-        // Default: use first page dimensions
-        if let Some(page) = reader.pages().first() {
-            let w = if (page.width - page.width.round()).abs() < f64::EPSILON {
-                format!("{}", page.width as i64)
-            } else {
-                format!("{}", page.width)
-            };
-            let h = if (page.height - page.height.round()).abs() < f64::EPSILON {
-                format!("{}", page.height as i64)
-            } else {
-                format!("{}", page.height)
-            };
-            opts.metadata.application_box = Some(format!("0 0 {w} {h}"));
-        }
+    if opts.metadata.mod_date.is_none() {
+        opts.metadata.mod_date = Some(chrono::Utc::now().naive_utc());
     }
     let mut writer = easyofd_writer::OfdWriter::with_options(opts);
+    // Carry over entries the writer does not regenerate (template pages,
+    // annotations, attachments, signatures, custom tags and payload files).
+    writer.preserve_entries(reader.raw_entries().to_vec());
     for page in reader.pages() {
         writer.add_page(page.clone());
     }

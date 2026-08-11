@@ -107,6 +107,17 @@ impl OfdWriter {
         xml.push('\n');
         xml.push_str(r"    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>");
         xml.push('\n');
+
+        // Signatures container reference (ofdrw writes it inside DocBody,
+        // after DocRoot, pointing at the signatures list).
+        if let Some(ref signatures_path) = self.options.metadata.signatures_path {
+            xml.push_str(&format!(
+                "  <ofd:Signatures>{}</ofd:Signatures>",
+                xml_escape(signatures_path)
+            ));
+            xml.push('\n');
+        }
+
         xml.push_str(r"  </ofd:DocBody>");
         xml.push('\n');
         xml.push_str(r"</ofd:OFD>");
@@ -136,17 +147,21 @@ impl OfdWriter {
         ));
         xml.push('\n');
 
-        // Page area: use first page dimensions, or A4 default
-        let (pw, ph) = self
-            .pages
-            .first()
-            .map_or((210.0, 297.0), |p| (p.width, p.height));
-        let width_str = format_number(pw);
-        let height_str = format_number(ph);
-        xml.push_str(&format!(
-            r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {width_str} {height_str}</ofd:PhysicalBox></ofd:PageArea>"
-        ));
-        xml.push('\n');
+        // Page area: use first page dimensions, or A4 default.  The element is
+        // omitted when the source document did not declare one (ofdrw skips
+        // PageArea when the page size is not explicitly configured).
+        if self.options.metadata.page_area_present {
+            let (pw, ph) = self
+                .pages
+                .first()
+                .map_or((210.0, 297.0), |p| (p.width, p.height));
+            let width_str = format_number(pw);
+            let height_str = format_number(ph);
+            xml.push_str(&format!(
+                r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {width_str} {height_str}</ofd:PhysicalBox></ofd:PageArea>"
+            ));
+            xml.push('\n');
+        }
 
         // Optional box elements (ofdrw: ApplicationBox, ContentBox, ClipBox, BleedBox, TrimBox)
         if let Some(ref app_box) = self.options.metadata.application_box {
@@ -195,6 +210,16 @@ impl OfdWriter {
             xml.push('\n');
         }
 
+        // Template pages (ofdrw writes them in CommonData after DocumentRes).
+        for tpl in &self.options.metadata.template_pages {
+            xml.push_str(&format!(
+                r#"    <ofd:TemplatePage ID="{}" BaseLoc="{}"/>"#,
+                xml_escape(&tpl.id),
+                xml_escape(&tpl.base_loc),
+            ));
+            xml.push('\n');
+        }
+
         xml.push_str(r"  </ofd:CommonData>");
         xml.push('\n');
 
@@ -210,6 +235,58 @@ impl OfdWriter {
         }
         xml.push_str(r"  </ofd:Pages>");
         xml.push('\n');
+
+        // Bookmarks (ofd:Bookmarks lives in Document.xml per GB/T 33190-2016 §7.3).
+        // Matches ofdrw output shape: <Bookmark Name="..."><Dest Type="XYZ"
+        // PageID="..."/></Bookmark> (Bookmark/Dest without the ofd: prefix).
+        if let Some(ref bookmarks) = self.options.metadata.bookmarks {
+            if !bookmarks.is_empty() {
+                xml.push_str(r"  <ofd:Bookmarks>");
+                xml.push('\n');
+                for bm in &bookmarks.items {
+                    xml.push_str(&format!(
+                        r#"    <Bookmark Name="{}">"#,
+                        xml_escape(&bm.name)
+                    ));
+                    xml.push('\n');
+                    if let Some(ref target) = bm.goto_target {
+                        xml.push_str(&format!(
+                            r#"      <Dest Type="XYZ" PageID="{}"/>"#,
+                            xml_escape(target)
+                        ));
+                        xml.push('\n');
+                    }
+                    xml.push_str(r"    </Bookmark>");
+                    xml.push('\n');
+                }
+                xml.push_str(r"  </ofd:Bookmarks>");
+                xml.push('\n');
+            }
+        }
+
+        // Container references (Annotations/Attachments/CustomTags), written
+        // after Pages, matching ofdrw's layout.
+        if let Some(ref annotations_path) = self.options.metadata.annotations_path {
+            xml.push_str(&format!(
+                "  <ofd:Annotations>{}</ofd:Annotations>",
+                xml_escape(annotations_path)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref attachments_path) = self.options.metadata.attachments_path {
+            xml.push_str(&format!(
+                "  <ofd:Attachments>{}</ofd:Attachments>",
+                xml_escape(attachments_path)
+            ));
+            xml.push('\n');
+        }
+        if let Some(ref custom_tags_path) = self.options.metadata.custom_tags_path {
+            xml.push_str(&format!(
+                "  <ofd:CustomTags>{}</ofd:CustomTags>",
+                xml_escape(custom_tags_path)
+            ));
+            xml.push('\n');
+        }
 
         xml.push_str(r"</ofd:Document>");
         xml.push('\n');
@@ -417,7 +494,7 @@ impl OfdWriter {
                         lw = path.stroke_width,
                     ));
                     if let Some(fc) = path.fill_color {
-                        xml.push_str(&format!(r#" FillColor="{:06X}""#, fc));
+                        xml.push_str(&format!(r#" FillColor="{fc:06X}""#));
                     }
                     xml.push('>');
                     xml.push('\n');

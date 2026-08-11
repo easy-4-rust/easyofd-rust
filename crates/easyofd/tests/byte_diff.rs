@@ -178,7 +178,11 @@ fn test_json_summary_consistency() {
     }
 
     let samples = discover_samples();
-    assert!(!samples.is_empty(), "no samples discovered in {}", ofdrw_dir());
+    assert!(
+        !samples.is_empty(),
+        "no samples discovered in {}",
+        ofdrw_dir()
+    );
 
     for name in &samples {
         TOTAL_SAMPLES.fetch_add(1, Ordering::Relaxed);
@@ -249,7 +253,9 @@ fn test_json_summary_consistency() {
             .unwrap_or(0);
         if ofdrw_path_count != easyofd_path_count {
             JSON_DIFFS.fetch_add(1, Ordering::Relaxed);
-            eprintln!("DIFF [{name}] path_count: ofdrw={ofdrw_path_count} easyofd={easyofd_path_count}");
+            eprintln!(
+                "DIFF [{name}] path_count: ofdrw={ofdrw_path_count} easyofd={easyofd_path_count}"
+            );
         }
 
         // -- signature_present --

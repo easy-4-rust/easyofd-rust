@@ -49,8 +49,9 @@ pub use error::{OfdError, OfdResult};
 pub use extensions::{CtExtension, Extensions, Property};
 pub use graph::{AbbreviatedData, CT_Path, FillRule, PathCommand};
 pub use model::{
-    ContentObject, ImageFormat, ImageObject, OfdMetadata, OfdPage, PathObject, TextObject,
-    page_size,
+    Bookmark as ModelBookmark, Bookmarks as ModelBookmarks, ContentObject, CreationDate, Creator,
+    CustomData, CustomDatas, ImageFormat, ImageObject, OfdId, OfdMetadata, OfdPage, PathObject,
+    TextObject, page_size,
 };
 pub use ofd_model::{OfdField, OfdFieldKind, OfdModel};
 pub use page_obj::{

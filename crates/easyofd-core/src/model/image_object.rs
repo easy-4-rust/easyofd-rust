@@ -17,6 +17,11 @@ pub struct ImageObject {
     pub data: Vec<u8>,
     /// 图片格式。
     pub format: ImageFormat,
+    /// 原始资源路径（相对文档目录，如 `"Res/qrcode.png"`）。
+    ///
+    /// 读取 OFD 文件时保留，写入器优先使用该路径而非自动命名，
+    /// 从而在 roundtrip 时保持图片资源名与原始文件一致。
+    pub res_name: Option<String>,
 }
 
 impl ImageObject {
@@ -37,7 +42,15 @@ impl ImageObject {
             height,
             data,
             format,
+            res_name: None,
         }
+    }
+
+    /// 设置原始资源路径（roundtrip 保留图片名时使用）。
+    #[must_use]
+    pub fn with_res_name(mut self, res_name: impl Into<String>) -> Self {
+        self.res_name = Some(res_name.into());
+        self
     }
 
     /// 创建 JPEG 图片对象。

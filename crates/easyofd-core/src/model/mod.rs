@@ -2,21 +2,37 @@
 //!
 //! 这些类型直接映射到 GB/T 33190-2016 XML 元素。
 
+pub mod bookmark;
+pub mod bookmarks;
 mod content_object;
+pub mod creation_date;
+pub mod creator;
+pub mod custom_data;
+pub mod custom_datas;
 mod image_format;
 mod image_object;
+pub mod ofd_id;
 mod ofd_metadata;
 mod ofd_page;
 pub mod page_size;
 mod path_object;
+pub mod template_page;
 mod text_object;
 
+pub use bookmark::Bookmark;
+pub use bookmarks::Bookmarks;
 pub use content_object::ContentObject;
+pub use creation_date::CreationDate;
+pub use creator::Creator;
+pub use custom_data::CustomData;
+pub use custom_datas::CustomDatas;
 pub use image_format::ImageFormat;
 pub use image_object::ImageObject;
+pub use ofd_id::OfdId;
 pub use ofd_metadata::OfdMetadata;
 pub use ofd_page::OfdPage;
 pub use path_object::PathObject;
+pub use template_page::TemplatePage;
 pub use text_object::TextObject;
 
 #[cfg(test)]

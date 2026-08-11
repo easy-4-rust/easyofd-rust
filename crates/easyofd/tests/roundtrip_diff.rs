@@ -72,6 +72,9 @@ fn roundtrip(bytes: &[u8]) -> Vec<u8> {
     let reader = OfdReader::from_bytes(bytes).expect("initial read should succeed");
     let mut writer = OfdWriter::new();
     writer.set_metadata(reader.metadata().clone());
+    // Carry over entries the writer does not regenerate (template pages,
+    // annotations, attachments, signatures, custom tags and payload files).
+    writer.preserve_entries(reader.raw_entries().to_vec());
     for page in reader.pages() {
         writer.add_page(page.clone());
     }
@@ -125,9 +128,15 @@ fn analyze_fixture(name: &str) -> DiffReport {
     // Compare XML element distributions for shared files
     for (xml_name, orig_xml) in &[
         ("OFD.xml", read_zip_entry_as_string(&orig_bytes, "OFD.xml")),
-        ("Doc_0/Document.xml", read_zip_entry_as_string(&orig_bytes, "Doc_0/Document.xml")),
+        (
+            "Doc_0/Document.xml",
+            read_zip_entry_as_string(&orig_bytes, "Doc_0/Document.xml"),
+        ),
     ] {
-        let (Some(orig), Some(rt_xml)) = (orig_xml.as_ref(), read_zip_entry_as_string(&rt_bytes, xml_name)) else {
+        let (Some(orig), Some(rt_xml)) = (
+            orig_xml.as_ref(),
+            read_zip_entry_as_string(&rt_bytes, xml_name),
+        ) else {
             continue;
         };
         let orig_counts = count_xml_elements(orig);
@@ -136,12 +145,16 @@ fn analyze_fixture(name: &str) -> DiffReport {
         for (elem, count) in &orig_counts {
             let rt_count = rt_counts.get(elem).copied().unwrap_or(0);
             if *count != rt_count {
-                xml_diffs.push(format!("{xml_name} element {elem}: ofdrw={count} easyofd={rt_count}"));
+                xml_diffs.push(format!(
+                    "{xml_name} element {elem}: ofdrw={count} easyofd={rt_count}"
+                ));
             }
         }
         for (elem, count) in &rt_counts {
             if !orig_counts.contains_key(elem) {
-                xml_diffs.push(format!("{xml_name} element {elem} only in easyofd (count={count})"));
+                xml_diffs.push(format!(
+                    "{xml_name} element {elem} only in easyofd (count={count})"
+                ));
             }
         }
     }
@@ -178,8 +191,12 @@ fn roundtrip_diff_report() {
             println!("[OK] {name}: no deviations");
             continue;
         }
-        println!("\n[DIFF] {name}: {} ZIP + {} XML = {} total",
-            report.zip_diffs.len(), report.xml_diffs.len(), total);
+        println!(
+            "\n[DIFF] {name}: {} ZIP + {} XML = {} total",
+            report.zip_diffs.len(),
+            report.xml_diffs.len(),
+            total
+        );
         for d in &report.zip_diffs {
             println!("  ZIP: {d}");
         }
@@ -191,5 +208,8 @@ fn roundtrip_diff_report() {
     }
 
     println!("\n================================================================");
-    println!("Total: {total_zip} ZIP diffs + {total_xml} XML diffs = {}", total_zip + total_xml);
+    println!(
+        "Total: {total_zip} ZIP diffs + {total_xml} XML diffs = {}",
+        total_zip + total_xml
+    );
 }

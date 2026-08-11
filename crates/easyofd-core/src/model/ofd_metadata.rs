@@ -6,6 +6,7 @@ use chrono::NaiveDateTime;
 
 use crate::model::bookmarks::Bookmarks;
 use crate::model::custom_datas::CustomDatas;
+use crate::model::template_page::TemplatePage;
 
 /// OFD 文档元数据（OFD.xml 层级）。
 ///
@@ -44,6 +45,18 @@ pub struct OfdMetadata {
     pub bleed_box: Option<String>,
     /// 裁切区域（ofd:TrimBox），格式 "x y w h"。
     pub trim_box: Option<String>,
+    /// 签名容器路径（ofd:Signatures），位于 OFD.xml 的 DocBody 中，如 "/Doc_0/Signs/Signatures.xml"。
+    pub signatures_path: Option<String>,
+    /// 模板页引用（ofd:TemplatePage），位于 Document.xml 的 CommonData 中。
+    pub template_pages: Vec<TemplatePage>,
+    /// 注释容器路径（ofd:Annotations），位于 Document.xml 中，如 "Annots/Annotations.xml"。
+    pub annotations_path: Option<String>,
+    /// 附件容器路径（ofd:Attachments），位于 Document.xml 中，如 "Attachs/Attachments.xml"。
+    pub attachments_path: Option<String>,
+    /// 自定义标签容器路径（ofd:CustomTags），位于 Document.xml 中，如 "Tags/CustomTags.xml"。
+    pub custom_tags_path: Option<String>,
+    /// 原始 Document.xml 是否声明了 ofd:PageArea（ofdrw 未显式设置页面大小时省略该元素）。
+    pub page_area_present: bool,
 }
 
 impl Default for OfdMetadata {
@@ -65,6 +78,12 @@ impl Default for OfdMetadata {
             clip_box: None,
             bleed_box: None,
             trim_box: None,
+            signatures_path: None,
+            template_pages: Vec::new(),
+            annotations_path: None,
+            attachments_path: None,
+            custom_tags_path: None,
+            page_area_present: true,
         }
     }
 }
