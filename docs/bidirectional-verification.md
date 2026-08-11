@@ -16,7 +16,7 @@ The verification is organized into four layers of increasing strictness:
 |-------|---------------------|------------|-------------------------------------------------------|
 | L1    | Metadata Comparison | **Done**   | Compare page count, image count, path count, signature presence, text hash |
 | L2    | XML Structure       | **Done**   | Verify key XML elements and attributes against expected patterns |
-| L3    | Byte-level PDF      | Excluded  | PDF byte-identical output requires a full rendering engine rewrite (separate milestone, not an OFD fidelity gate) |
+| L3    | Byte-level PDF      | Excluded (user-confirmed) | PDF byte-identical output requires a full rendering engine rewrite; excluded as a separate milestone by explicit user decision (2026-08-11), not an OFD fidelity gate |
 | L4    | Byte-level OFD      | **Done**   | Read-ofdrw → write → compare XML elements + ZIP entries (roundtrip_diff, 60/60 zero deviations) |
 
 ## Current Verification Status (2026-08-11)
@@ -53,7 +53,7 @@ work item**, not part of the OFD roundtrip acceptance.
 ### Java type coverage: gap (ongoing)
 
 ofdrw has ~519 public types (strict name-match count); easyofd-rust matches
-~143 (27.6%). The gap is dominated by internal ofdrw details (exceptions,
+~149 (28.7%). The gap is dominated by internal ofdrw details (exceptions,
 utilities, layout internals). High-frequency public types are being ported
 in priority order by usage:
 
@@ -75,15 +75,26 @@ Each ported type ships unit tests (roundtrip DER encode/decode); type
 coverage is tracked separately from byte-level OFD fidelity (roundtrip is
 60/60).
 
-### L3 PDF output: excluded as a separate milestone
+### L3 PDF output: excluded as a separate milestone (user-confirmed)
 
 easyofd-rust's OFD→PDF exporter (`easyofd-convert::ofd_to_pdf`, backed by
 `printpdf`) and ofdrw's IText/PDFBox renderer produce fundamentally
 different byte streams (object layout, font embedding, compression,
 coordinates). Byte-identical PDF output would require a full rendering
 engine rewrite — a separate milestone, **explicitly excluded** from the
-OFD byte-level acceptance. The `byte_diff` PDF check stays a rough
-byte-length/object-count proxy and is not a gate.
+OFD byte-level acceptance **by explicit user decision (2026-08-11)**. The
+`byte_diff` PDF check stays a rough byte-length/object-count proxy and is
+not a gate.
+
+### Acceptance scope (user-confirmed)
+
+- **L4 OFD byte-level (roundtrip 60/60 zero deviations)** — the acceptance
+  gate for "byte-level fidelity".
+- **L3 PDF byte-identical** — separate milestone, out of scope by user
+  decision.
+- **Java type coverage** — ongoing priority-order porting of public
+  high-frequency types; internal ofdrw details are ported by engineering
+  value, not exhaustively.
 
 ## ofdrw Verification Pipeline
 
