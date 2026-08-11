@@ -53,7 +53,7 @@ work item**, not part of the OFD roundtrip acceptance.
 ### Java type coverage: gap (ongoing)
 
 ofdrw has ~519 public types (strict name-match count); easyofd-rust matches
-~136 (26%). The gap is dominated by internal ofdrw details (exceptions,
+~140 (27%). The gap is dominated by internal ofdrw details (exceptions,
 utilities, layout internals). High-frequency public types are being ported
 in priority order by usage:
 
@@ -62,6 +62,10 @@ in priority order by usage:
 - **Gm/SES deep structures** — `sm2_struct` ported to `easyofd-gm`
   (GB/T 35275 `SignedData` / `ContentInfo` / `SignerInfo` /
   `IssuerAndSerialNumber` / `Sm2Cipher` / `OIDs`) with DER encode/decode.
+- **Core value types** — `Weight` (text weight enum) and `Point`
+  (coordinates with edge flag) ported to `easyofd-core`.
+- **Layout types** — `Position` (Static/Relative/Absolute) and `Rectangle`
+  ported to `easyofd-layout`.
 - Tools (`Holder`, `STBase`) are low value in Rust (native alternatives
   exist) and are not ported.
 

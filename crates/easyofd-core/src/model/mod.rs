@@ -17,8 +17,10 @@ mod ofd_page;
 pub mod page_size;
 mod path_object;
 pub mod permissions;
+pub mod point;
 pub mod template_page;
 mod text_object;
+pub mod weight;
 
 pub use bookmark::Bookmark;
 pub use bookmarks::Bookmarks;
@@ -34,8 +36,10 @@ pub use ofd_metadata::OfdMetadata;
 pub use ofd_page::OfdPage;
 pub use path_object::PathObject;
 pub use permissions::Permissions;
+pub use point::Point;
 pub use template_page::TemplatePage;
 pub use text_object::TextObject;
+pub use weight::Weight;
 
 #[cfg(test)]
 mod tests {
