@@ -6,13 +6,24 @@ use crate::OfdWriter;
 use crate::helpers::xml_escape;
 use easyofd_core::{ContentObject, ImageFormat, OfdPage};
 
+/// Format a number as integer when it has no fractional part, otherwise as float.
+/// This matches ofdrw's convention: `210` not `210.00`, `3.175` stays as `3.175`.
+#[allow(clippy::cast_possible_truncation)]
+fn format_number(val: f64) -> String {
+    if (val - val.round()).abs() < f64::EPSILON && val >= f64::from(i32::MIN) && val <= f64::from(i32::MAX) {
+        format!("{}", val as i64)
+    } else {
+        format!("{val}")
+    }
+}
+
 impl OfdWriter {
     pub(crate) fn build_ofd_xml(&self) -> String {
         let mut xml = String::with_capacity(512);
         xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
         xml.push_str(&format!(
-            r#"<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="{}">"#,
+            r#"<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="{}" DocType="OFD">"#,
             self.options.metadata.version
         ));
         xml.push('\n');
@@ -80,18 +91,20 @@ impl OfdWriter {
             .pages
             .first()
             .map_or((210.0, 297.0), |p| (p.width, p.height));
+        let width_str = format_number(pw);
+        let height_str = format_number(ph);
         xml.push_str(&format!(
-            r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {pw:.2} {ph:.2}</ofd:PhysicalBox></ofd:PageArea>"
+            r"    <ofd:PageArea><ofd:PhysicalBox>0 0 {width_str} {height_str}</ofd:PhysicalBox></ofd:PageArea>"
         ));
         xml.push('\n');
 
         // Font declarations
-        xml.push_str(r"    <ofd:PublicRes>Doc_0/PublicRes.xml</ofd:PublicRes>");
+        xml.push_str(r"    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>");
         xml.push('\n');
 
         // Document resources
         if !image_resources.is_empty() {
-            xml.push_str(r"    <ofd:DocumentRes>Doc_0/DocumentRes.xml</ofd:DocumentRes>");
+            xml.push_str(r"    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>");
             xml.push('\n');
         }
 
@@ -103,7 +116,7 @@ impl OfdWriter {
         xml.push('\n');
         for i in 0..self.pages.len() {
             xml.push_str(&format!(
-                r#"    <ofd:Page ID="{id}" BaseLoc="Pages/Page_{i}.xml"/>"#,
+                r#"    <ofd:Page ID="{id}" BaseLoc="Pages/Page_{i}/Content.xml"/>"#,
                 id = i + 1
             ));
             xml.push('\n');
@@ -182,15 +195,18 @@ impl OfdWriter {
         ));
         xml.push('\n');
 
-        // Page area
+        // Page area (ofdrw uses integer format when value is whole number)
+        let width_fmt = format_number(page.width);
+        let height_fmt = format_number(page.height);
         xml.push_str(&format!(
-            r"  <ofd:Area><ofd:PhysicalBox>0 0 {:.2} {:.2}</ofd:PhysicalBox></ofd:Area>",
-            page.width, page.height
+            r"  <ofd:Area><ofd:PhysicalBox>0 0 {width_fmt} {height_fmt}</ofd:PhysicalBox></ofd:Area>"
         ));
         xml.push('\n');
 
-        // Content layer
+        // Content layer wrapped in Layer element (ofdrw pattern)
         xml.push_str(r"  <ofd:Content>");
+        xml.push('\n');
+        xml.push_str(r"    <ofd:Layer>");
         xml.push('\n');
 
         // Collect image indices for this page.
@@ -266,6 +282,8 @@ impl OfdWriter {
             }
         }
 
+        xml.push_str(r"    </ofd:Layer>");
+        xml.push('\n');
         xml.push_str(r"  </ofd:Content>");
         xml.push('\n');
         xml.push_str(r"</ofd:Page>");

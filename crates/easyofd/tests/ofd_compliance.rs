@@ -62,8 +62,8 @@ fn compliance_zip_contains_pages() {
     let cursor = Cursor::new(&data[..]);
     let mut archive = ZipArchive::new(cursor).expect("should be valid ZIP");
     assert!(
-        archive.by_name("Doc_0/Pages/Page_0.xml").is_ok(),
-        "Doc_0/Pages/Page_0.xml must exist"
+        archive.by_name("Doc_0/Pages/Page_0/Content.xml").is_ok(),
+        "Doc_0/Pages/Page_0/Content.xml must exist"
     );
 }
 
@@ -135,7 +135,7 @@ fn compliance_page_xml_has_content() {
     let data = build_simple_ofd();
     let cursor = Cursor::new(&data[..]);
     let mut archive = ZipArchive::new(cursor).unwrap();
-    let mut file = archive.by_name("Doc_0/Pages/Page_0.xml").unwrap();
+    let mut file = archive.by_name("Doc_0/Pages/Page_0/Content.xml").unwrap();
     let mut content = String::new();
     std::io::Read::read_to_string(&mut file, &mut content).unwrap();
     assert!(

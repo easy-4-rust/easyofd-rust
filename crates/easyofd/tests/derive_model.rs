@@ -353,8 +353,8 @@ fn test_easyofd_write_derive_model() {
     let names = zip_entry_names(&bytes);
     assert!(names.contains(&"OFD.xml".to_string()));
     assert!(names.contains(&"Doc_0/Document.xml".to_string()));
-    assert!(names.contains(&"Doc_0/Pages/Page_0.xml".to_string()));
-    assert!(names.contains(&"Doc_0/Pages/Page_1.xml".to_string()));
+    assert!(names.contains(&"Doc_0/Pages/Page_0/Content.xml".to_string()));
+    assert!(names.contains(&"Doc_0/Pages/Page_1/Content.xml".to_string()));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -406,8 +406,8 @@ fn test_multi_page_document() {
 
     for i in 0..5 {
         assert!(
-            names.contains(&format!("Doc_0/Pages/Page_{i}.xml")),
-            "missing Page_{i}.xml"
+            names.contains(&format!("Doc_0/Pages/Page_{i}/Content.xml")),
+            "missing Page_{i}/Content.xml"
         );
     }
 }

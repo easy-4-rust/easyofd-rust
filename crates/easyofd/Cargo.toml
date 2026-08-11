@@ -26,6 +26,7 @@ trybuild = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sm2 = { workspace = true }
+quick-xml = { workspace = true }
 
 [lints]
 workspace = true

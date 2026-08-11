@@ -129,7 +129,7 @@ impl OfdWriter {
         let mut page_image_start = 0;
         for (i, page) in self.pages.iter().enumerate() {
             let page_xml = self.build_page_xml(page, i, page_image_start);
-            zip.start_file(format!("Doc_0/Pages/Page_{i}.xml"), *options)
+            zip.start_file(format!("Doc_0/Pages/Page_{i}/Content.xml"), *options)
                 .map_err(zip_err)?;
             zip.write_all(page_xml.as_bytes()).map_err(io_err)?;
             page_image_start += page

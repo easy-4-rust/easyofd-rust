@@ -15,8 +15,9 @@
 //!     ├── Document.xml           ← document structure
 //!     ├── DocumentRes.xml        ← document resources (images, fonts)
 //!     ├── Pages/
-//!     │   ├── Page_0.xml         ← page content
-//!     │   ├── Page_1.xml
+//!     │   ├── Page_0/
+//!     │   │   └── Content.xml   ← page content
+//!     │   ├── Page_1/
 //!     │   └── ...
 //!     └── Res/                   ← embedded resources
 //!         ├── Image_0.jpeg
@@ -157,7 +158,7 @@ mod tests {
         let names = zip_entry_names(&bytes);
         assert!(names.contains(&"OFD.xml".to_string()));
         assert!(names.contains(&"Doc_0/Document.xml".to_string()));
-        assert!(names.contains(&"Doc_0/Pages/Page_0.xml".to_string()));
+        assert!(names.contains(&"Doc_0/Pages/Page_0/Content.xml".to_string()));
     }
 
     #[test]
@@ -170,9 +171,9 @@ mod tests {
         }
         let bytes = w.build().unwrap();
         let names = zip_entry_names(&bytes);
-        assert!(names.contains(&"Doc_0/Pages/Page_0.xml".to_string()));
-        assert!(names.contains(&"Doc_0/Pages/Page_1.xml".to_string()));
-        assert!(names.contains(&"Doc_0/Pages/Page_2.xml".to_string()));
+        assert!(names.contains(&"Doc_0/Pages/Page_0/Content.xml".to_string()));
+        assert!(names.contains(&"Doc_0/Pages/Page_1/Content.xml".to_string()));
+        assert!(names.contains(&"Doc_0/Pages/Page_2/Content.xml".to_string()));
     }
 
     // ── build_to_file ─────────────────────────────────────────────────────────
@@ -433,7 +434,7 @@ mod tests {
         let bytes = w.build().unwrap();
         let names = zip_entry_names(&bytes);
         assert!(names.contains(&"Doc_0/Res/Image_0.jpeg".to_string()));
-        assert!(names.contains(&"Doc_0/Pages/Page_0.xml".to_string()));
+        assert!(names.contains(&"Doc_0/Pages/Page_0/Content.xml".to_string()));
     }
 
     // ── Page dimensions ───────────────────────────────────────────────────────
