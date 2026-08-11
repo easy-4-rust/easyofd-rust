@@ -10,6 +10,7 @@ pub(crate) fn io_err(e: std::io::Error) -> easyofd_core::OfdError {
 }
 
 /// 转义 XML 特殊字符。
+#[cfg(test)]
 pub(crate) fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")

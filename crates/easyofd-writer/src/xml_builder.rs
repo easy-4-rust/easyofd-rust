@@ -3,7 +3,7 @@
 //! 包含 OfdWriter 的 XML 构建方法，用于生成 GB/T 33190-2016 标准的 XML 文件。
 
 use crate::OfdWriter;
-use crate::helpers::xml_escape;
+use easyofd_core::xml_element::XmlNode;
 use easyofd_core::{ContentObject, ImageFormat, OfdPage};
 
 /// Format a number as integer when it has no fractional part, otherwise as float.
@@ -37,123 +37,99 @@ fn strip_doc_dir_prefix<'a>(res_name: &'a str, doc_dir: &str) -> &'a str {
 
 impl OfdWriter {
     pub(crate) fn build_ofd_xml(&self) -> String {
-        let mut xml = String::with_capacity(512);
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(&format!(
-            r#"<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="{}" DocType="OFD">"#,
-            self.options.metadata.version
-        ));
-        xml.push('\n');
-        xml.push_str(r"  <ofd:DocBody>");
-        xml.push('\n');
-        xml.push_str(r"    <ofd:DocInfo>");
-        xml.push('\n');
+        // Helper: create a text child XmlNode with ofd: prefix.
+        fn ofd_text(name: &str, text: &str) -> XmlNode {
+            let mut node = XmlNode::element(format!("ofd:{name}"));
+            node.push_child(XmlNode::text_node(text));
+            node
+        }
+
+        // ── Build the entire OFD.xml as a single XmlNode tree ──
+        let mut ofd = XmlNode::element("ofd:OFD")
+            .attr("xmlns:ofd", "http://www.ofdspec.org/2016")
+            .attr("Version", &self.options.metadata.version)
+            .attr("DocType", "OFD");
+
+        // ── DocBody ──
+        let mut doc_body = XmlNode::element("ofd:DocBody");
+
+        // ── DocInfo ──
+        let mut doc_info = XmlNode::element("ofd:DocInfo");
 
         if let Some(ref doc_id) = self.options.metadata.doc_id {
-            xml.push_str(&format!(
-                "      <ofd:DocID>{}</ofd:DocID>",
-                xml_escape(doc_id)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("DocID", doc_id));
         }
         if let Some(ref title) = self.options.metadata.title {
-            xml.push_str(&format!(
-                "      <ofd:Title>{}</ofd:Title>",
-                xml_escape(title)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("Title", title));
         }
         if let Some(ref author) = self.options.metadata.author {
-            xml.push_str(&format!(
-                "      <ofd:Author>{}</ofd:Author>",
-                xml_escape(author)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("Author", author));
         }
         if let Some(ref creator) = self.options.metadata.creator {
-            xml.push_str(&format!(
-                "      <ofd:Creator>{}</ofd:Creator>",
-                xml_escape(creator)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("Creator", creator));
         }
         if let Some(ref creator_version) = self.options.metadata.creator_version {
-            xml.push_str(&format!(
-                "      <ofd:CreatorVersion>{}</ofd:CreatorVersion>",
-                xml_escape(creator_version)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("CreatorVersion", creator_version));
         }
         if let Some(dt) = self.options.metadata.creation_date {
-            xml.push_str(&format!(
-                "      <ofd:CreationDate>{}</ofd:CreationDate>",
-                dt.format("%Y-%m-%dT%H:%M:%S")
+            let mut node = XmlNode::element("ofd:CreationDate");
+            node.push_child(XmlNode::text_node(
+                dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
             ));
-            xml.push('\n');
+            doc_info.push_child(node);
         }
         if let Some(dt) = self.options.metadata.mod_date {
-            xml.push_str(&format!(
-                "      <ofd:ModDate>{}</ofd:ModDate>",
-                dt.format("%Y-%m-%dT%H:%M:%S")
+            let mut node = XmlNode::element("ofd:ModDate");
+            node.push_child(XmlNode::text_node(
+                dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
             ));
-            xml.push('\n');
+            doc_info.push_child(node);
         }
         if let Some(ref doc_usage) = self.options.metadata.doc_usage {
-            xml.push_str(&format!(
-                "      <ofd:DocUsage>{}</ofd:DocUsage>",
-                xml_escape(doc_usage)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("DocUsage", doc_usage));
         }
         if let Some(ref keywords) = self.options.metadata.keywords {
-            xml.push_str(&format!(
-                "      <ofd:Keywords>{}</ofd:Keywords>",
-                xml_escape(keywords)
-            ));
-            xml.push('\n');
+            doc_info.push_child(ofd_text("Keywords", keywords));
         }
 
         // CustomDatas
         if let Some(ref custom_datas) = self.options.metadata.custom_datas {
             if !custom_datas.is_empty() {
-                xml.push_str(r"      <ofd:CustomDatas>");
-                xml.push('\n');
+                let mut custom_datas_node = XmlNode::element("ofd:CustomDatas");
                 for item in &custom_datas.items {
-                    xml.push_str(&format!(
-                        r#"        <ofd:CustomData Name="{}">{}</ofd:CustomData>"#,
-                        xml_escape(&item.name),
-                        xml_escape(&item.value),
-                    ));
-                    xml.push('\n');
+                    let mut cd_node = XmlNode::element("ofd:CustomData").attr("Name", &item.name);
+                    cd_node.push_child(XmlNode::text_node(&item.value));
+                    custom_datas_node.push_child(cd_node);
                 }
-                xml.push_str(r"      </ofd:CustomDatas>");
-                xml.push('\n');
+                doc_info.push_child(custom_datas_node);
             }
         }
 
-        xml.push_str(r"    </ofd:DocInfo>");
-        xml.push('\n');
-        xml.push_str(&format!(
-            r"    <ofd:DocRoot>{doc_dir}/{doc_file}</ofd:DocRoot>",
-            doc_dir = self.options.metadata.doc_dir,
-            doc_file = self.options.metadata.document_file,
+        doc_body.push_child(doc_info);
+
+        // DocRoot
+        doc_body.push_child(ofd_text(
+            "DocRoot",
+            &format!(
+                "{doc_dir}/{doc_file}",
+                doc_dir = self.options.metadata.doc_dir,
+                doc_file = self.options.metadata.document_file,
+            ),
         ));
-        xml.push('\n');
 
         // Signatures container reference (ofdrw writes it inside DocBody,
         // after DocRoot, pointing at the signatures list).
         if let Some(ref signatures_path) = self.options.metadata.signatures_path {
-            xml.push_str(&format!(
-                "  <ofd:Signatures>{}</ofd:Signatures>",
-                xml_escape(signatures_path)
-            ));
-            xml.push('\n');
+            doc_body.push_child(ofd_text("Signatures", signatures_path));
         }
 
-        xml.push_str(r"  </ofd:DocBody>");
+        ofd.push_child(doc_body);
+
+        // ── Serialize the complete tree ──
+        let mut xml = String::with_capacity(512);
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
-        xml.push_str(r"</ofd:OFD>");
+        xml.push_str(&ofd.to_xml_string());
         xml.push('\n');
         xml
     }
@@ -395,13 +371,11 @@ impl OfdWriter {
         &self,
         image_resources: &[(String, &[u8], ImageFormat)],
     ) -> String {
-        let mut xml = String::with_capacity(512);
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(r#"<ofd:DocumentRes xmlns:ofd="http://www.ofdspec.org/2016">"#);
-        xml.push('\n');
-        xml.push_str(r"  <ofd:MultiMedias>");
-        xml.push('\n');
+        // ── Build DocumentRes as a XmlNode tree ──
+        let mut doc_res =
+            XmlNode::element("ofd:DocumentRes").attr("xmlns:ofd", "http://www.ofdspec.org/2016");
+
+        let mut multi_medias = XmlNode::element("ofd:MultiMedias");
 
         for (i, (res_name, _, fmt)) in image_resources.iter().enumerate() {
             let type_str = match fmt {
@@ -412,18 +386,22 @@ impl OfdWriter {
             };
             // The BaseLoc is relative to the doc directory.
             let relative = strip_doc_dir_prefix(res_name, &self.options.metadata.doc_dir);
-            xml.push_str(&format!(
-                r#"    <ofd:MultiMedia ID="{}" Type="{}"><ofd:MediaFile>{}</ofd:MediaFile></ofd:MultiMedia>"#,
-                100 + i,
-                type_str,
-                relative,
-            ));
-            xml.push('\n');
+            let mut media_node = XmlNode::element("ofd:MultiMedia")
+                .attr("ID", (100 + i).to_string())
+                .attr("Type", type_str);
+            let mut media_file = XmlNode::element("ofd:MediaFile");
+            media_file.push_child(XmlNode::text_node(relative));
+            media_node.push_child(media_file);
+            multi_medias.push_child(media_node);
         }
 
-        xml.push_str(r"  </ofd:MultiMedias>");
+        doc_res.push_child(multi_medias);
+
+        // ── Serialize the complete tree ──
+        let mut xml = String::with_capacity(512);
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
-        xml.push_str(r"</ofd:DocumentRes>");
+        xml.push_str(&doc_res.to_xml_string());
         xml.push('\n');
         xml
     }
@@ -445,30 +423,25 @@ impl OfdWriter {
             }
         }
 
-        let mut xml = String::with_capacity(256);
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">"#);
-        xml.push('\n');
+        // ── Build Res as a XmlNode tree ──
+        let mut res = XmlNode::element("ofd:Res")
+            .attr("xmlns:ofd", "http://www.ofdspec.org/2016")
+            .attr("BaseLoc", "Res");
 
         // Fonts container (always present, even if empty)
-        xml.push_str(r"  <ofd:Fonts>");
-        xml.push('\n');
+        let mut fonts_node = XmlNode::element("ofd:Fonts");
         for (i, font_name) in fonts.iter().enumerate() {
-            xml.push_str(&format!(
-                r#"    <ofd:Font ID="{id}" FontName="{name}"/>"#,
-                id = 400 + i,
-                name = xml_escape(font_name),
-            ));
-            xml.push('\n');
+            fonts_node.push_child(
+                XmlNode::element("ofd:Font")
+                    .attr("ID", (400 + i).to_string())
+                    .attr("FontName", font_name),
+            );
         }
-        xml.push_str(r"  </ofd:Fonts>");
-        xml.push('\n');
+        res.push_child(fonts_node);
 
         // MultiMedias container for image resources
         if !image_resources.is_empty() {
-            xml.push_str(r"  <ofd:MultiMedias>");
-            xml.push('\n');
+            let mut multi_medias = XmlNode::element("ofd:MultiMedias");
             for (i, (res_name, _, fmt)) in image_resources.iter().enumerate() {
                 let type_str = match fmt {
                     ImageFormat::Jpeg => "JPEG",
@@ -477,19 +450,22 @@ impl OfdWriter {
                     ImageFormat::Tiff => "TIFF",
                 };
                 let relative = strip_doc_dir_prefix(res_name, &self.options.metadata.doc_dir);
-                xml.push_str(&format!(
-                    r#"    <ofd:MultiMedia ID="{}" Type="{}"><ofd:MediaFile>{}</ofd:MediaFile></ofd:MultiMedia>"#,
-                    100 + i,
-                    type_str,
-                    relative,
-                ));
-                xml.push('\n');
+                let mut media_node = XmlNode::element("ofd:MultiMedia")
+                    .attr("ID", (100 + i).to_string())
+                    .attr("Type", type_str);
+                let mut media_file = XmlNode::element("ofd:MediaFile");
+                media_file.push_child(XmlNode::text_node(relative));
+                media_node.push_child(media_file);
+                multi_medias.push_child(media_node);
             }
-            xml.push_str(r"  </ofd:MultiMedias>");
-            xml.push('\n');
+            res.push_child(multi_medias);
         }
 
-        xml.push_str(r"</ofd:Res>");
+        // ── Serialize the complete tree ──
+        let mut xml = String::with_capacity(256);
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+        xml.push('\n');
+        xml.push_str(&res.to_xml_string());
         xml.push('\n');
         xml
     }
@@ -501,25 +477,22 @@ impl OfdWriter {
         page_index: usize,
         page_image_start: usize,
     ) -> String {
-        let mut xml = String::with_capacity(2048);
-        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
-        xml.push('\n');
-        xml.push_str(r#"<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">"#);
-        xml.push('\n');
+        // ── Build Page as a XmlNode tree ──
+        let mut page_node =
+            XmlNode::element("ofd:Page").attr("xmlns:ofd", "http://www.ofdspec.org/2016");
 
         // Page area (ofdrw uses integer format when value is whole number)
         let width_fmt = format_number(page.width);
         let height_fmt = format_number(page.height);
-        xml.push_str(&format!(
-            r"  <ofd:Area><ofd:PhysicalBox>0 0 {width_fmt} {height_fmt}</ofd:PhysicalBox></ofd:Area>"
-        ));
-        xml.push('\n');
+        let mut area = XmlNode::element("ofd:Area");
+        let mut physical_box = XmlNode::element("ofd:PhysicalBox");
+        physical_box.push_child(XmlNode::text_node(format!("0 0 {width_fmt} {height_fmt}")));
+        area.push_child(physical_box);
+        page_node.push_child(area);
 
         // Content layer wrapped in Layer element (ofdrw pattern)
-        xml.push_str(r"  <ofd:Content>");
-        xml.push('\n');
-        xml.push_str(r"    <ofd:Layer>");
-        xml.push('\n');
+        let mut content = XmlNode::element("ofd:Content");
+        let mut layer = XmlNode::element("ofd:Layer");
 
         // Collect image indices for this page.
         let mut image_counter = 0usize;
@@ -527,90 +500,99 @@ impl OfdWriter {
         for (object_index, obj) in page.content.iter().enumerate() {
             match obj {
                 ContentObject::Text(text) => {
-                    // mm to OFD units (1 mm = ~3.543307 pixels at 96dpi, but OFD uses mm directly)
                     let x = text.x;
                     let y = text.y;
-                    // Estimate text width: ~0.3mm per character for 12pt SimSun (rough heuristic)
                     let character_count =
                         f64::from(u32::try_from(text.text.chars().count()).unwrap_or(u32::MAX));
                     let est_width = text.width.unwrap_or(character_count * text.size * 0.06);
                     let est_height = text.height.unwrap_or(text.size * 0.4);
                     let fill_color = format!("{:06X}", text.color);
+                    let idx = page_index * 1000 + object_index;
 
-                    xml.push_str(&format!(
-                        r#"    <ofd:TextObject ID="t_{page_index}_{idx}" Boundary="{x:.2} {y:.2} {w:.2} {h:.2}" Font="{font}" Size="{size:.1}" FillColor="{fill_color}" Weight="{weight}""#,
-                        idx = page_index * 1000 + object_index,
-                        w = est_width,
-                        h = est_height,
-                        font = text.font,
-                        size = text.size,
-                        fill_color = fill_color,
-                        weight = text.weight,
-                    ));
+                    let mut text_obj = XmlNode::element("ofd:TextObject")
+                        .attr("ID", format!("t_{page_index}_{idx}"))
+                        .attr(
+                            "Boundary",
+                            format!("{x:.2} {y:.2} {est_width:.2} {est_height:.2}"),
+                        )
+                        .attr("Font", &text.font)
+                        .attr("Size", format!("{:.1}", text.size))
+                        .attr("FillColor", &fill_color)
+                        .attr("Weight", text.weight.to_string());
+
                     if text.italic {
-                        xml.push_str(r#" Italic="true">"#);
-                    } else {
-                        xml.push('>');
+                        text_obj
+                            .attrs
+                            .push(("Italic".to_string(), "true".to_string()));
                     }
-                    xml.push('\n');
 
-                    // TextCode
-                    xml.push_str(&format!(
-                        r#"      <ofd:TextCode X="0" Y="{y:.2}">{text}</ofd:TextCode>"#,
-                        y = text.size * 0.8,
-                        text = xml_escape(&text.text),
-                    ));
-                    xml.push('\n');
+                    // TextCode child
+                    let mut text_code = XmlNode::element("ofd:TextCode")
+                        .attr("X", "0")
+                        .attr("Y", format!("{:.2}", text.size * 0.8));
+                    text_code.push_child(XmlNode::text_node(&text.text));
+                    text_obj.push_child(text_code);
 
-                    xml.push_str(r"    </ofd:TextObject>");
-                    xml.push('\n');
+                    layer.push_child(text_obj);
                 }
                 ContentObject::Image(img) => {
-                    // Find the resource ID for this image.
                     let global_image_index = page_image_start + image_counter;
                     let res_id = 100 + global_image_index;
+                    let idx = page_index * 1000 + object_index;
 
-                    xml.push_str(&format!(
-                        r#"    <ofd:ImageObject ID="i_{page_index}_{idx}" Boundary="{x:.2} {y:.2} {w:.2} {h:.2}" ResourceID="{res_id}"/>"#,
-                        idx = page_index * 1000 + object_index,
-                        x = img.x,
-                        y = img.y,
-                        w = img.width,
-                        h = img.height,
-                    ));
-                    xml.push('\n');
+                    layer.push_child(
+                        XmlNode::element("ofd:ImageObject")
+                            .attr("ID", format!("i_{page_index}_{idx}"))
+                            .attr(
+                                "Boundary",
+                                format!(
+                                    "{x:.2} {y:.2} {w:.2} {h:.2}",
+                                    x = img.x,
+                                    y = img.y,
+                                    w = img.width,
+                                    h = img.height,
+                                ),
+                            )
+                            .attr("ResourceID", res_id.to_string()),
+                    );
                     image_counter += 1;
                 }
                 ContentObject::Path(path) => {
                     let stroke = format!("{:06X}", path.stroke_color);
-                    xml.push_str(&format!(
-                        r#"    <ofd:PathObject ID="p_{page_index}_{idx}" Boundary="{x:.2} {y:.2} 0 0" StrokeColor="{stroke}" LineWidth="{lw:.2}""#,
-                        idx = page_index * 1000 + object_index,
-                        x = path.x,
-                        y = path.y,
-                        lw = path.stroke_width,
-                    ));
+                    let idx = page_index * 1000 + object_index;
+
+                    let mut path_obj = XmlNode::element("ofd:PathObject")
+                        .attr("ID", format!("p_{page_index}_{idx}"))
+                        .attr(
+                            "Boundary",
+                            format!("{x:.2} {y:.2} 0 0", x = path.x, y = path.y),
+                        )
+                        .attr("StrokeColor", &stroke)
+                        .attr("LineWidth", format!("{:.2}", path.stroke_width));
+
                     if let Some(fc) = path.fill_color {
-                        xml.push_str(&format!(r#" FillColor="{fc:06X}""#));
+                        path_obj
+                            .attrs
+                            .push(("FillColor".to_string(), format!("{fc:06X}")));
                     }
-                    xml.push('>');
-                    xml.push('\n');
-                    xml.push_str(&format!(
-                        r"      <ofd:AbbreviatedData>{}</ofd:AbbreviatedData>",
-                        xml_escape(&path.path_data),
-                    ));
-                    xml.push('\n');
-                    xml.push_str(r"    </ofd:PathObject>");
-                    xml.push('\n');
+
+                    let mut abbreviated = XmlNode::element("ofd:AbbreviatedData");
+                    abbreviated.push_child(XmlNode::text_node(&path.path_data));
+                    path_obj.push_child(abbreviated);
+
+                    layer.push_child(path_obj);
                 }
             }
         }
 
-        xml.push_str(r"    </ofd:Layer>");
+        content.push_child(layer);
+        page_node.push_child(content);
+
+        // ── Serialize the complete tree ──
+        let mut xml = String::with_capacity(2048);
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
         xml.push('\n');
-        xml.push_str(r"  </ofd:Content>");
-        xml.push('\n');
-        xml.push_str(r"</ofd:Page>");
+        xml.push_str(&page_node.to_xml_string());
         xml.push('\n');
         xml
     }
