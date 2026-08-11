@@ -12,6 +12,9 @@ use crate::model::template_page::TemplatePage;
 /// OFD 文档元数据（OFD.xml 层级）。
 ///
 /// 对应 Java: ofdrw CT_DocInfo。
+// 多个布尔标志反映 GB/T 33190-2016 中同名元素的存在性（ofdrw 对不同场景
+// 会省略这些元素），聚合为一个结构体便于 roundtrip 保真。
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone)]
 pub struct OfdMetadata {
     /// 文档版本（默认: "1.0"）。
@@ -72,6 +75,9 @@ pub struct OfdMetadata {
     /// DocumentRes 引用（CommonData 中 `<ofd:DocumentRes>` 的文本，如
     /// "DocumentRes.xml" 或非标准的 "DocumentRes_0.xml"）。
     pub document_res: Option<String>,
+    /// CommonData 是否声明了 ofd:DocumentRes 元素（ofdrw 样本可能把
+    /// PublicRes 引用错误指向 DocumentRes.xml 而无 DocumentRes 元素）。
+    pub document_res_element_present: bool,
     /// 源文档是否包含 PublicRes.xml（ofdrw 在无字体资源时不写出该文件，
     /// 但 Document.xml 中的引用仍保留）。
     pub public_res_present: bool,
@@ -112,6 +118,7 @@ impl Default for OfdMetadata {
             doc_dir: "Doc_0".to_string(),
             document_file: "Document.xml".to_string(),
             document_res: None,
+            document_res_element_present: true,
             public_res_present: true,
             public_res_element_present: true,
             permissions: None,

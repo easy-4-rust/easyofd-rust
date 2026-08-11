@@ -250,7 +250,9 @@ impl OfdWriter {
             .as_deref()
             .filter(|s| !s.is_empty())
             .unwrap_or("DocumentRes.xml");
-        if !image_resources.is_empty() || self.options.metadata.document_res.is_some() {
+        if self.options.metadata.document_res_element_present
+            && (!image_resources.is_empty() || self.options.metadata.document_res.is_some())
+        {
             xml.push_str(&format!(
                 "    <ofd:DocumentRes>{}</ofd:DocumentRes>",
                 xml_escape(doc_res_ref)

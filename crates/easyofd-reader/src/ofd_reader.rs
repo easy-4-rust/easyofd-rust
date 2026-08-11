@@ -226,6 +226,7 @@ fn visit_archive<R: Read + Seek>(
         doc_dir: ofd_entry.doc_dir.clone(),
         document_file: ofd_entry.document_file,
         document_res: document_entry.document_res,
+        document_res_element_present: document_entry.document_res_element_present,
         permissions: document_entry.permissions,
         public_res_present: {
             let target = format!("{doc_dir}/PublicRes.xml");

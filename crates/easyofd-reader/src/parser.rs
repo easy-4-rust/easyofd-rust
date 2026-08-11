@@ -335,6 +335,8 @@ pub(crate) struct DocumentEntry {
     /// DocumentRes reference from CommonData (ofd:DocumentRes text, e.g.
     /// "DocumentRes.xml" or the non-standard "DocumentRes_0.xml").
     pub(crate) document_res: Option<String>,
+    /// Whether CommonData declared an ofd:DocumentRes element.
+    pub(crate) document_res_element_present: bool,
     /// Document permissions (ofd:Permissions), if present.
     pub(crate) permissions: Option<Permissions>,
     /// Whether CommonData declared an ofd:PublicRes reference.
@@ -393,6 +395,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
     let mut custom_tags_path = None;
     let mut page_area_present = false;
     let mut document_res: Option<String> = None;
+    let mut document_res_element_present = false;
     // Permissions state: current permission element name + collected text.
     let mut permissions: Option<Permissions> = None;
     let mut in_permissions = false;
@@ -477,6 +480,9 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
                         | b"ofd:DocumentRes"
                 ) =>
             {
+                if e.name().as_ref() == b"ofd:DocumentRes" {
+                    document_res_element_present = true;
+                }
                 container_path_tag = Some(e.name().as_ref().to_vec());
                 container_path_text.clear();
             }
@@ -747,6 +753,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
         custom_tags_path,
         page_area_present,
         document_res,
+        document_res_element_present,
         permissions,
         public_res_element_present,
     })
