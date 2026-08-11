@@ -1,153 +1,67 @@
 //! ofdrw Java 类名兼容别名。
 //!
 //! 将 ofdrw Java 项目中的类名映射到 easyofd-rust 中已有的等价类型。
-//! 这些 `pub type` 别名不引入新逻辑，仅用于降低从 Java 迁移时的认知负担。
+//! 这些 `pub use` 别名不引入新逻辑，仅用于降低从 Java 迁移时的认知负担。
+//!
+//! 每个别名单独一个 `.rs` 文件，对应一个 Java 类。
 
 // ── 页面对象 ──────────────────────────────────────────────────────────────
-
-/// 图层类型枚举。
-///
-/// 对应 Java: org.ofdrw.core.basicStructure.pageObj.layer.Type
-///
-/// 等价于 [`crate::page_obj::LayerType`]。
-pub use crate::page_obj::LayerType as Type;
-
-/// 模板页定义。
-///
-/// 对应 Java: org.ofdrw.core.basicStructure.pageObj.Template
-///
-/// 等价于 [`crate::page_obj::CT_TemplatePage`]。
-pub use crate::page_obj::CT_TemplatePage as Template;
+mod layer_type;
+mod template_page;
 
 // ── XML 元素 ──────────────────────────────────────────────────────────────
-
-/// OFD XML 元素 trait。
-///
-/// 对应 Java: org.ofdrw.core.OFDElement
-///
-/// 等价于 [`crate::xml_element::XmlElement`]。
-pub use crate::xml_element::XmlElement as OFDElement;
-
-/// OFD 简单类型元素 trait。
-///
-/// 对应 Java: org.ofdrw.core.OFDSimpleTypeElement
-///
-/// 等价于 [`crate::ofd_element::OfdSimpleTypeElement`]。
-pub use crate::ofd_element::OfdSimpleTypeElement as OFDSimpleTypeElement;
+mod ofd_element;
+mod ofd_simple_type_element;
 
 // ── 图形 ──────────────────────────────────────────────────────────────────
-
-/// 填充规则。
-///
-/// 对应 Java: org.ofdrw.core.graph.pathObj.Rule
-///
-/// 等价于 [`crate::graph::FillRule`]。
-pub use crate::graph::FillRule as Rule;
+mod fill_rule;
 
 // ── 加密 / 签名参数 ──────────────────────────────────────────────────────
-
-/// 加密参数。
-///
-/// 对应 Java: org.ofdrw.core.crypto.encryt.Parameter
-///
-/// 等价于 [`crate::crypto::CryptoParameter`]。
-pub use crate::crypto::CryptoParameter as Parameter;
-
-/// 签名参数列表。
-///
-/// 对应 Java: org.ofdrw.core.signatures.sig.Parameters
-///
-/// 等价于 [`crate::crypto::SigParameters`]。
-pub use crate::crypto::SigParameters as Parameters;
+mod crypto_parameter;
+mod sig_parameters;
 
 // ── 附件 ──────────────────────────────────────────────────────────────────
-
-/// 附件。
-///
-/// 对应 Java: org.ofdrw.core.attachment.CT_Attachment
-///
-/// 等价于 [`crate::attachment::CTAttachment`]。
-pub use crate::attachment::CTAttachment as CT_Attachment;
+mod ct_attachment;
 
 // ── 文档信息 ──────────────────────────────────────────────────────────────
-
-/// 文档元数据信息。
-///
-/// 对应 Java: org.ofdrw.core.basicStructure.ofd.docInfo.CT_DocInfo
-///
-/// 等价于 [`crate::doc::ct_doc_info::CtDocInfo`]。
-pub use crate::doc::ct_doc_info::CtDocInfo as CT_DocInfo;
+mod ct_doc_info;
 
 // ── 资源 ──────────────────────────────────────────────────────────────────
-
-/// 资源文件容器。
-///
-/// 对应 Java: org.ofdrw.core.basicStructure.res.OFDResource
-///
-/// 等价于 [`crate::doc::res::Res`]。
-pub use crate::doc::res::Res as OFDResource;
+mod ofd_resource;
 
 // ── 动作 ──────────────────────────────────────────────────────────────────
-
-/// 动作 trait。
-///
-/// 对应 Java: org.ofdrw.core.action.actionType.OFDAction
-///
-/// 等价于 [`crate::action::OfdAction`]。
-pub use crate::action::OfdAction as OFDAction;
-
-/// 跳转目标 trait。
-///
-/// 对应 Java: org.ofdrw.core.action.actionType.actionGoto.OFDGotoTarget
-///
-/// 等价于 [`crate::action::OfdGotoTarget`]。
-pub use crate::action::OfdGotoTarget as OFDGotoTarget;
-
-/// 目标位置。
-///
-/// 对应 Java: org.ofdrw.core.action.actionType.actionGoto.CT_Dest
-///
-/// 等价于 [`crate::action::CTDest`]。
-pub use crate::action::CTDest as CT_Dest;
-
-/// 动作基类。
-///
-/// 对应 Java: org.ofdrw.core.action.CT_Action
-///
-/// 等价于 [`crate::action::CTAction`]。
-pub use crate::action::CTAction as CT_Action;
+mod ct_action;
+mod ct_dest;
+mod ofd_action;
+mod ofd_goto_target;
 
 // ── 权限 / 视图首选项 / 扩展 ──────────────────────────────────────────────
-
-/// 权限容器。
-///
-/// 对应 Java: org.ofdrw.core.basicStructure.doc.permission.CT_Permission
-///
-/// 等价于 [`crate::doc::permission::CtPermission`]。
-pub use crate::doc::permission::CtPermission as CT_Permission;
-
-/// 视图首选项。
-///
-/// 对应 Java: org.ofdrw.core.basicStructure.doc.vpreferences.CT_VPreferences
-///
-/// 等价于 [`crate::doc::ct_v_preferences::CtVPreferences`]。
-pub use crate::doc::ct_v_preferences::CtVPreferences as CT_VPreferences;
-
-/// 单个扩展。
-///
-/// 对应 Java: org.ofdrw.core.extensions.CT_Extension
-///
-/// 等价于 [`crate::extensions::CtExtension`]。
-pub use crate::extensions::CtExtension as CT_Extension;
+mod ct_extension;
+mod ct_permission;
+mod ct_v_preferences;
 
 // ── 常量 ──────────────────────────────────────────────────────────────────
+mod ofd_const;
 
-/// OFD 标准常量。
-///
-/// 对应 Java: org.ofdrw.core.Const
-///
-/// 等价于 [`crate::consts`] 模块中的常量。
-pub use crate::consts as Const;
+// Re-export all aliases at `compat` module level.
+pub use crypto_parameter::Parameter;
+pub use ct_action::CT_Action;
+pub use ct_attachment::CT_Attachment;
+pub use ct_dest::CT_Dest;
+pub use ct_doc_info::CT_DocInfo;
+pub use ct_extension::CT_Extension;
+pub use ct_permission::CT_Permission;
+pub use ct_v_preferences::CT_VPreferences;
+pub use fill_rule::Rule;
+pub use layer_type::Type;
+pub use ofd_action::OFDAction;
+pub use ofd_const::Const;
+pub use ofd_element::OFDElement;
+pub use ofd_goto_target::OFDGotoTarget;
+pub use ofd_resource::OFDResource;
+pub use ofd_simple_type_element::OFDSimpleTypeElement;
+pub use sig_parameters::Parameters;
+pub use template_page::Template;
 
 #[cfg(test)]
 mod tests {
