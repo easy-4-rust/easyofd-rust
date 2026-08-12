@@ -156,7 +156,8 @@ pub fn pdf_to_ofd(
 fn extract_page_text(doc: &Document, page_id: lopdf::ObjectId) -> OfdResult<Vec<String>> {
     let mut lines = Vec::new();
 
-    if let Ok(content_stream) = doc.get_page_content(page_id) {
+    // 使用 get_page_content_with_limit 防止深度嵌套 PDF DoS（RUSTSEC-2026-0187）
+    if let Ok(content_stream) = doc.get_page_content_with_limit(page_id, 50_000_000) {
         let content = String::from_utf8_lossy(&content_stream);
         let mut current_line = String::new();
 

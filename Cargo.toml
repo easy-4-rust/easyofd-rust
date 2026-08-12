@@ -61,7 +61,7 @@ proc-macro2 = "1.0.107"
 quote = "1.0.47"
 syn = { version = "3.0.3", features = ["full"] }
 trybuild = "1.0.116"
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 # ═══ 国密算法 ═══
 sm2 = { version = "0.14.0-rc.15", features = ["dsa", "arithmetic", "getrandom"] }
 sm3 = "0.5.0"
@@ -69,13 +69,17 @@ sha2 = "0.10.9"
 der = "0.8.1"
 x509-cert = "0.3.0"
 pem = "4.0.0"
-lopdf = "0.35"
+lopdf = "0.44"
 printpdf = { version = "0.7", default-features = false, features = ["font_subsetting"] }
 # ═══ 转换渲染（AWTMaker/PDF 替换，纯 Rust）═══
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 fontdue = "0.9.4"
 tiny-skia = "0.12.0"
 # ═══ PKCS#12 解密（PBES2/PBKDF2，纯 Rust）═══
+# 注意：aes/cbc/cipher/hmac/sha1/pbkdf2 保持 cipher 0.4 / digest 0.10 系列，
+# 因 cipher 0.5 API breaking（BlockDecrypt→BlockCipherDecrypt + generic_array 移除）
+# 且 sm4 0.5 仍依赖 cipher 0.4，无法统一到 cipher 0.5。
+# Dependabot PR #8/#9/#10/#12/#14 因此关闭（见 commit message）。
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 cipher = "0.4"
@@ -83,8 +87,8 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
 sm4 = "0.5"
-ttf-parser = "0.21"
-rand = "0.8"
+ttf-parser = "0.25"
+rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
