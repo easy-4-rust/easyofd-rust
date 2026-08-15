@@ -1,0 +1,18 @@
+[package]
+name = "easyofd-async"
+description = "Async facade for easyofd — spawn_blocking bridge to sync OFD operations"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+easyofd = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

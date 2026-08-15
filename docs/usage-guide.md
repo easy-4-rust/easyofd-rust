@@ -481,3 +481,43 @@ fn process_ofd(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 | Validate page dimensions | Origin (0,0) is top-left; elements outside page may be clipped |
 | Use `page_size::A4` constants | Avoids magic numbers |
 | Always handle `OfdResult` | Proper error propagation for I/O, ZIP, and XML errors |
+
+---
+
+## 10. Example Index 示例索引
+
+所有示例位于 `crates/easyofd/examples/`，可直接运行：
+
+```bash
+cargo run -p easyofd --example <name>
+```
+
+| 示例 | 说明 | 运行命令 |
+|:---|:---|:---|
+| `01_hello_ofd` | 最小写入 + 读回 roundtrip | `cargo run -p easyofd --example 01_hello_ofd` |
+| `02_read_metadata` | 读取元数据、页数、页面尺寸与内容统计 | `cargo run -p easyofd --example 02_read_metadata` |
+| `03_text_image_page` | 图文混排：发票布局（文本+图片+路径） | `cargo run -p easyofd --example 03_text_image_page` |
+| `04_stream_writer` | 流式写入 100 页大文档，内存占用恒定 | `cargo run -p easyofd --example 04_stream_writer` |
+| `05_template_fill` | 模板占位符 `{key}` 批量填充，生成劳动合同 | `cargo run -p easyofd --example 05_template_fill` |
+| `06_to_markdown` | OFD 转 Markdown，含转换报告与流式输出 | `cargo run -p easyofd --example 06_to_markdown` |
+| `07_sign_verify` | SM2WithSM3 签名 + 验签 + 篡改检测 roundtrip | `cargo run -p easyofd --example 07_sign_verify` |
+| `08_merge_docs` | 多文档合并（读取页面 + 写入新文档） | `cargo run -p easyofd --example 08_merge_docs` |
+| `09_archive_check` | OFD-A 归档合规规则检查 + 完整性校验 | `cargo run -p easyofd --example 09_archive_check` |
+| `10_convert_pdf` | OFD 与 PDF 双向转换（全页/部分页） | `cargo run -p easyofd --example 10_convert_pdf` |
+| `11_keyword_search` | 关键字定位（含跨 TextCode 边界匹配） | `cargo run -p easyofd --example 11_keyword_search` |
+| `12_encrypt_decrypt` | SM4-CBC 加解密 roundtrip + 错误密钥测试 | `cargo run -p easyofd --example 12_encrypt_decrypt` |
+
+此外还有已有的专题示例：
+
+| 示例 | 说明 |
+|:---|:---|
+| `action_uri` | URI 超链接动作（GB/T 33190 第 15 章） |
+| `annotation` | 注释功能（文本/高亮/印章/链接/手写） |
+| `batch_sign` | 批量签章（多文档 + 多签章模式） |
+| `benchmark` | 读取与 Markdown 转换性能基准 |
+| `convert_pdf` | OFD/PDF 转换（旧版） |
+| `markdown_export` | Markdown 导出（旧版） |
+| `read_simple` | 简单读取示例 |
+| `read_with_visitor` | 逐页 visitor 模式读取 |
+| `signature_roundtrip` | 签名 roundtrip（旧版） |
+| `write_simple` | 简单写入示例 |

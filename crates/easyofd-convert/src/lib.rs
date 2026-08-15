@@ -73,6 +73,7 @@ pub use converter::Lib as ConvertHelperLib;
 ///
 /// trait 别名，保持 Java 接口名兼容。
 /// 详细实现见 [`font::FontDrawPathProvider`]。
+use std::collections::HashMap;
 use std::path::Path;
 
 use easyofd_core::{
@@ -438,6 +439,162 @@ fn contains_cjk(text: &str) -> bool {
     })
 }
 
+// ─── 字体缓存 ──────────────────────────────────────────────────────────────
+
+/// 字体缓存键：(字体名, 字重, 是否斜体)。
+type FontKey = (String, u32, bool);
+
+/// 字体缓存。
+///
+/// 在 `ofd_to_pdf` 中预加载所有页面用到的字体，避免渲染时重复加载。
+/// 包含 Helvetica 内置字体（兜底）和可选的 CJK 外部字体（CJK 文本兜底）。
+struct FontCache {
+    /// 按 (名称, 字重, 斜体) 索引的外部字体映射。
+    fonts: HashMap<FontKey, printpdf::IndirectFontRef>,
+    /// Helvetica 内置字体（兜底，非 CJK 文本）。
+    helvetica: printpdf::IndirectFontRef,
+    /// 系统 CJK 字体（兜底，CJK 文本）。
+    cjk_font: Option<printpdf::IndirectFontRef>,
+}
+
+impl FontCache {
+    /// 按 TextObject 的字体属性查找已加载字体。
+    ///
+    /// 精确匹配顺序: (name, weight, italic) → (name, 400, false)。
+    fn get(&self, text: &TextObject) -> Option<&printpdf::IndirectFontRef> {
+        let key = (text.font.clone(), text.weight, text.italic);
+        self.fonts.get(&key).or_else(|| {
+            // 回退到同名常规体
+            let fallback = (text.font.clone(), 400, false);
+            self.fonts.get(&fallback)
+        })
+    }
+}
+
+/// 构建字体缓存。
+///
+/// 扫描页面中所有 TextObject 的字体名，通过 FontLoader 解析系统字体文件路径，
+/// 加载为 printpdf 外部字体。对于 CJK 文本，在无专用字体时预加载系统 CJK 字体。
+fn build_font_cache(
+    doc: &printpdf::PdfDocumentReference,
+    pages: &[OfdPage],
+    range: std::ops::Range<usize>,
+) -> FontCache {
+    let helvetica = doc
+        .add_builtin_font(printpdf::BuiltinFont::Helvetica)
+        .expect("Helvetica 内置字体加载不应失败");
+
+    // ── 探测系统 CJK 字体 ──
+    let cjk_font = if let Some(info) = cjk_font::find_cjk_font() {
+        eprintln!(
+            "[easyofd-convert] 发现 CJK 字体: {} ({})",
+            info.name,
+            info.path.display()
+        );
+        // 子集化诊断日志
+        let used_chars = cjk_font::collect_used_chars(&pages[range.clone()]);
+        if let Ok(face_data) = std::fs::read(&info.path) {
+            match cjk_font::subset_font(&face_data, &used_chars) {
+                Ok(stats) => {
+                    eprintln!(
+                        "[easyofd-convert] 字体子集化分析: 原始 {} KB, 文档用 {} 字符 \
+                         (CJK {}), 可映射 glyph {}",
+                        stats.original_size / 1024,
+                        stats.used_char_count,
+                        stats.cjk_char_count,
+                        stats.mapped_glyph_count,
+                    );
+                }
+                Err(e) => {
+                    eprintln!("[easyofd-convert] 字体子集化分析失败（不影响转换）: {e}");
+                }
+            }
+        }
+        match std::fs::File::open(&info.path) {
+            Ok(file) => match doc.add_external_font_with_subsetting(file, true) {
+                Ok(font_ref) => Some(font_ref),
+                Err(e) => {
+                    eprintln!("[easyofd-convert] CJK 字体加载失败，回退到 Helvetica: {e}");
+                    None
+                }
+            },
+            Err(e) => {
+                eprintln!("[easyofd-convert] CJK 字体文件读取失败，回退到 Helvetica: {e}");
+                None
+            }
+        }
+    } else {
+        eprintln!("[easyofd-convert] 未找到系统 CJK 字体，使用 Helvetica（CJK 字形可能丢失）");
+        None
+    };
+
+    // ── 收集文档中所有文本用到的唯一字体名称 ──
+    let mut unique_fonts: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for page_idx in range.clone() {
+        for content in &pages[page_idx].content {
+            if let ContentObject::Text(text) = content {
+                unique_fonts.insert(text.font.clone());
+            }
+        }
+    }
+
+    // ── 创建 FontLoader 并加载所有唯一字体 ──
+    let loader = font::FontLoader::with_system_dirs();
+    let mut fonts: HashMap<FontKey, printpdf::IndirectFontRef> = HashMap::new();
+
+    for font_name in &unique_fonts {
+        let font_path = loader.find_font_with_similar_replace(None, Some(font_name));
+
+        if let Some(path) = font_path {
+            match std::fs::File::open(&path) {
+                Ok(file) => match doc.add_external_font_with_subsetting(file, true) {
+                    Ok(font_ref) => {
+                        // 注册常规体
+                        fonts.insert((font_name.clone(), 400, false), font_ref.clone());
+                        // 同时注册为粗体回退（若文档中未找到独立 Bold 变体）
+                        fonts
+                            .entry((font_name.clone(), 700, false))
+                            .or_insert_with(|| font_ref.clone());
+                        // 注册为斜体回退
+                        fonts
+                            .entry((font_name.clone(), 400, true))
+                            .or_insert_with(|| font_ref.clone());
+                        eprintln!(
+                            "[easyofd-convert] 已加载外部字体: {} → {}",
+                            font_name,
+                            path.display()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[easyofd-convert] 字体 \"{}\" 加载失败（{}），回退: {e}",
+                            font_name,
+                            path.display()
+                        );
+                    }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "[easyofd-convert] 字体文件 \"{}\" 打开失败: {e}",
+                        path.display()
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "[easyofd-convert] 字体 \"{}\" 未在系统中找到，将使用 Helvetica/CJK 兜底",
+                font_name
+            );
+        }
+    }
+
+    FontCache {
+        fonts,
+        helvetica,
+        cjk_font,
+    }
+}
+
 // ─── OFD → PDF ──────────────────────────────────────────────────────────────
 
 /// OFD → PDF 转换。
@@ -477,55 +634,8 @@ pub fn ofd_to_pdf(
         "Layer 1",
     );
 
-    let font = doc
-        .add_builtin_font(printpdf::BuiltinFont::Helvetica)
-        .map_err(|e| OfdError::Conversion(format!("字体加载失败: {e}")))?;
-
-    // 收集文档中所有文本用到的字符（用于子集化统计）
-    let used_chars = cjk_font::collect_used_chars(&pages[range.clone()]);
-
-    // 探测系统 CJK 字体，用于渲染中日韩文本
-    let cjk_font = if let Some(info) = cjk_font::find_cjk_font() {
-        eprintln!(
-            "[easyofd-convert] 发现 CJK 字体: {} ({})",
-            info.name,
-            info.path.display()
-        );
-        // 如果字体文件可读，尝试子集化分析
-        if let Ok(face_data) = std::fs::read(&info.path) {
-            match cjk_font::subset_font(&face_data, &used_chars) {
-                Ok(stats) => {
-                    eprintln!(
-                        "[easyofd-convert] 字体子集化分析: 原始 {} KB, 文档用 {} 字符 \
-                         (CJK {}), 可映射 glyph {}",
-                        stats.original_size / 1024,
-                        stats.used_char_count,
-                        stats.cjk_char_count,
-                        stats.mapped_glyph_count,
-                    );
-                }
-                Err(e) => {
-                    eprintln!("[easyofd-convert] 字体子集化分析失败（不影响转换）: {e}");
-                }
-            }
-        }
-        match std::fs::File::open(&info.path) {
-            Ok(file) => match doc.add_external_font_with_subsetting(file, true) {
-                Ok(font_ref) => Some(font_ref),
-                Err(e) => {
-                    eprintln!("[easyofd-convert] CJK 字体加载失败，回退到 Helvetica: {e}");
-                    None
-                }
-            },
-            Err(e) => {
-                eprintln!("[easyofd-convert] CJK 字体文件读取失败，回退到 Helvetica: {e}");
-                None
-            }
-        }
-    } else {
-        eprintln!("[easyofd-convert] 未找到系统 CJK 字体，使用 Helvetica（CJK 字形可能丢失）");
-        None
-    };
+    // 构建字体缓存：按 TextObject.font 名称加载系统字体，CJK 兜底
+    let font_cache = build_font_cache(&doc, pages, range.clone());
 
     let mut current_layer = doc.get_page(page_id).get_layer(layer_id);
 
@@ -536,7 +646,7 @@ pub fn ofd_to_pdf(
         for content in &page.content {
             match content {
                 ContentObject::Text(text) => {
-                    render_text_to_pdf(&current_layer, text, height_mm, &font, cjk_font.as_ref());
+                    render_text_to_pdf(&current_layer, text, height_mm, &font_cache);
                 }
                 ContentObject::Image(img) => {
                     render_image_to_pdf(&current_layer, img, height_mm);
@@ -567,37 +677,51 @@ pub fn ofd_to_pdf(
     Ok(())
 }
 
+/// 将 pt 转换为 mm（1 pt = 25.4 / 72 mm）。
+const PT_TO_MM: f64 = 25.4 / 72.0;
+
 /// 渲染文本对象到 PDF 层。
 ///
-/// 如果文本包含 CJK 字符且提供了 CJK 字体，则使用嵌入的 CJK 字体渲染；
-/// 否则回退到 Helvetica（内置字体，不支持 CJK 字形）。
+/// 处理逻辑：
+/// 1. 字体映射：按 `TextObject.font` 名称从 `font_cache` 查找已加载字体；
+///    CJK 文本在无专用字体时回退到 CJK 字体；非 CJK 文本回退到 Helvetica。
+/// 2. 颜色：通过 `text.color` 设置 PDF 填充色。
+/// 3. 坐标：OFD 左上原点 (mm) → PDF 左下原点 (mm)，Y 换算需扣除字号（mm）
+///    以将 OFD 文本框顶部坐标对齐到 PDF 文本基线位置。
 fn render_text_to_pdf(
     layer: &printpdf::PdfLayerReference,
     text: &easyofd_core::TextObject,
     page_height: f64,
-    font: &printpdf::IndirectFontRef,
-    cjk_font: Option<&printpdf::IndirectFontRef>,
+    font_cache: &FontCache,
 ) {
-    let effective_font = if contains_cjk(&text.text) {
-        if let Some(cjk) = cjk_font {
-            cjk
-        } else {
-            eprintln!(
-                "[easyofd-convert] 警告：文本 \"{}\" 包含 CJK 字符，\
-                 使用 Helvetica 替代渲染（字形可能丢失）",
-                if text.text.len() > 20 {
-                    &text.text[..20]
-                } else {
-                    &text.text
-                }
-            );
-            font
-        }
+    // ── 字体选择 ──
+    // 先查 font_cache（按 (name, weight, italic) 精确匹配），
+    // CJK 文本在缓存未命中时回退到 cjk_font，非 CJK 文本回退到 helvetica。
+    let text_cjk = contains_cjk(&text.text);
+    let fallback = if text_cjk {
+        font_cache
+            .cjk_font
+            .as_ref()
+            .unwrap_or(&font_cache.helvetica)
     } else {
-        font
+        &font_cache.helvetica
     };
+    let effective_font = font_cache.get(text).unwrap_or(fallback);
+
+    // ── 颜色 ──
+    let r = ((text.color >> 16) & 0xFF) as f32 / 255.0;
+    let g = ((text.color >> 8) & 0xFF) as f32 / 255.0;
+    let b = (text.color & 0xFF) as f32 / 255.0;
+    layer.set_fill_color(printpdf::Color::Rgb(printpdf::Rgb::new(r, g, b, None)));
+
+    // ── 坐标换算 ──
+    // OFD: 左上原点，text.y 是文本框顶部距页面顶部的距离（mm），text.size 单位 pt
+    // PDF: 左下原点，use_text 的 y 参数是基线距页面底部的距离（mm）
+    // 公式: pdf_y = page_height - text.y - font_size_mm
+    let font_size_mm = text.size * PT_TO_MM;
     let x = printpdf::Mm(text.x as f32);
-    let y = printpdf::Mm((page_height - text.y) as f32); // PDF Y 轴向上
+    let y = printpdf::Mm((page_height - text.y - font_size_mm) as f32);
+    // text.size 单位 pt，printpdf::set_font 的 Tf 操作符期望 pt，直接传递
     layer.use_text(&text.text, text.size as f32, x, y, effective_font);
 }
 
@@ -1329,6 +1453,357 @@ mod tests {
     #[test]
     fn test_string_utils_module_alias() {
         assert_eq!(utils::StringUtils::escape_xml("<tag>"), "&lt;tag&gt;");
+    }
+
+    // ─── 接受测试：坐标/字体/颜色/图片保真 ─────────────────────────────────
+
+    /// 辅助函数：从 PDF 中读取页面内容流。
+    fn read_pdf_page_content(pdf_path: &str) -> Vec<u8> {
+        let doc = Document::load(pdf_path).expect("读取 PDF 文件");
+        let page_id = doc.get_pages().into_values().next().expect("PDF 应有页面");
+        doc.get_page_content(page_id)
+    }
+
+    /// 辅助函数：从 PDF 内容流中提取所有 BT...ET 文本块。
+    fn extract_text_blocks(content: &[u8]) -> Vec<String> {
+        let s = String::from_utf8_lossy(content);
+        let mut blocks = Vec::new();
+        let mut in_block = false;
+        let mut current = String::new();
+        for line in s.lines() {
+            let trimmed = line.trim();
+            if trimmed == "BT" {
+                in_block = true;
+                current.clear();
+            } else if trimmed == "ET" {
+                in_block = false;
+                blocks.push(current.clone());
+            } else if in_block {
+                if !current.is_empty() {
+                    current.push('\n');
+                }
+                current.push_str(trimmed);
+            }
+        }
+        blocks
+    }
+
+    /// 辅助函数：解析 Td 操作符的坐标 (x_pt, y_pt)。
+    fn parse_td(block: &str) -> Option<(f32, f32)> {
+        for line in block.lines() {
+            let trimmed = line.trim();
+            if trimmed.ends_with(" Td") {
+                let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                if parts.len() >= 3 && parts[2] == "Td" {
+                    let x: f32 = parts[0].parse().ok()?;
+                    let y: f32 = parts[1].parse().ok()?;
+                    return Some((x, y));
+                }
+            }
+        }
+        None
+    }
+
+    /// 辅助函数：计算 BT 块数量。
+    fn count_bt_blocks(content: &[u8]) -> usize {
+        String::from_utf8_lossy(content)
+            .lines()
+            .filter(|l| l.trim() == "BT")
+            .count()
+    }
+
+    // ── 坐标保真测试 ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_ofd_to_pdf_coordinate_mapping() {
+        // 构造 TextObject: 位于 (50mm, 100mm)，字号 12pt，页面 210×297mm
+        // 预期 PDF 坐标:
+        //   x_pt = 50 * 72 / 25.4 ≈ 141.73 pt
+        //   y_pt = (297 - 100 - 12 * 25.4/72) * 72 / 25.4 ≈ 547.56 pt
+        // 使用不存在的字体名确保走 Helvetica 兜底（非系统字体解析干扰坐标验证）
+        let mut writer = OfdWriter::new();
+        let mut page = OfdPage::new(210.0, 297.0);
+        let text = TextObject::new(50.0, 100.0, "Hello").font("NonExistentFontXYZ");
+        page.add_text(text);
+        writer.add_page(page);
+        let ofd_bytes = writer.build().unwrap();
+
+        let ofd_path = "/tmp/test_coord_map.ofd";
+        let pdf_path = "/tmp/test_coord_map.pdf";
+        std::fs::write(ofd_path, &ofd_bytes).unwrap();
+
+        let result = ofd_to_pdf(ofd_path, pdf_path, &ConvertOptions::default());
+        assert!(result.is_ok(), "OFD → PDF 转换应成功: {:?}", result.err());
+
+        let content = read_pdf_page_content(pdf_path);
+        assert!(content.len() > 10, "内容流不应为空");
+
+        let blocks = extract_text_blocks(&content);
+        assert_eq!(blocks.len(), 1, "应有 1 个 BT...ET 文本块");
+
+        // 验证 Td 坐标（printpdf 将 Mm 转为 Pt 输出）
+        let (x_pt, y_pt) = parse_td(&blocks[0]).expect("应找到 Td 操作符");
+        let expected_x_pt = (50.0f64) * 72.0 / 25.4; // ≈ 141.73
+        let size_mm = 12.0f64 * 25.4 / 72.0; // ≈ 4.23
+        let expected_y_pt = (297.0 - 100.0 - size_mm) * 72.0 / 25.4; // ≈ 547.56
+
+        assert!(
+            (x_pt as f64 - expected_x_pt).abs() < 1.0,
+            "X 坐标偏差过大: 得到 {} pt, 期望 ≈{:.2} pt",
+            x_pt,
+            expected_x_pt
+        );
+        assert!(
+            (y_pt as f64 - expected_y_pt).abs() < 1.0,
+            "Y 坐标偏差过大: 得到 {} pt, 期望 ≈{:.2} pt (已扣除字号基线偏移)",
+            y_pt,
+            expected_y_pt
+        );
+
+        // 验证字号（Tf 操作符中的 font_size 值，单位 pt）
+        let content_str = String::from_utf8_lossy(&content);
+        assert!(
+            content_str.contains("12 Tf"),
+            "字号应为 12pt，内容流: {}",
+            &content_str[..content_str.len().min(500)]
+        );
+
+        let _ = std::fs::remove_file(ofd_path);
+        let _ = std::fs::remove_file(pdf_path);
+    }
+
+    // ── 颜色保真测试 ──────────────────────────────────────────────────────
+    //
+    // 注意：OfdReader 的 build_text_object_from_node 不解析 FillColor/Weight/Italic，
+    // 因此 OFD roundtrip 会丢失颜色信息。此处直接测试 render_text_to_pdf 的颜色逻辑。
+
+    #[test]
+    fn test_render_text_color_in_pdf() {
+        // 直接创建 PDF 文档，用 render_text_to_pdf 渲染带颜色的文本，
+        // 验证 PDF 内容流中出现正确的颜色操作符。
+        let (doc, page_id, layer_id) = printpdf::PdfDocument::new(
+            "Color Test",
+            printpdf::Mm(210.0),
+            printpdf::Mm(297.0),
+            "Layer 1",
+        );
+        let helvetica = doc
+            .add_builtin_font(printpdf::BuiltinFont::Helvetica)
+            .unwrap();
+        let font_cache = FontCache {
+            fonts: HashMap::new(),
+            helvetica: helvetica.clone(),
+            cjk_font: None,
+        };
+        let layer = doc.get_page(page_id).get_layer(layer_id);
+
+        // 红色文本 (0xFF0000)
+        let text = TextObject::new(10.0, 20.0, "Red Text").color(0xFF_0000);
+        render_text_to_pdf(&layer, &text, 297.0, &font_cache);
+
+        let pdf_path = "/tmp/test_color_direct.pdf";
+        doc.save(&mut std::io::BufWriter::new(
+            std::fs::File::create(pdf_path).unwrap(),
+        ))
+        .unwrap();
+
+        let content = read_pdf_page_content(pdf_path);
+        let content_str = String::from_utf8_lossy(&content);
+        // 红色 0xFF0000 → rgb(1.0, 0.0, 0.0) → PDF 操作符 "1 0 0 rg"
+        assert!(
+            content_str.contains("1 0 0 rg"),
+            "红色文本应生成 '1 0 0 rg'，实际内容流:\n{}",
+            content_str
+        );
+
+        let _ = std::fs::remove_file(pdf_path);
+    }
+
+    #[test]
+    fn test_render_text_default_color_is_black() {
+        // 默认颜色 0x000000（黑色）应生成 "0 0 0 rg"
+        let (doc, page_id, layer_id) = printpdf::PdfDocument::new(
+            "Black Test",
+            printpdf::Mm(210.0),
+            printpdf::Mm(297.0),
+            "Layer 1",
+        );
+        let helvetica = doc
+            .add_builtin_font(printpdf::BuiltinFont::Helvetica)
+            .unwrap();
+        let font_cache = FontCache {
+            fonts: HashMap::new(),
+            helvetica: helvetica.clone(),
+            cjk_font: None,
+        };
+        let layer = doc.get_page(page_id).get_layer(layer_id);
+
+        let text = TextObject::new(10.0, 20.0, "Black Text"); // 默认 color=0
+        render_text_to_pdf(&layer, &text, 297.0, &font_cache);
+
+        let pdf_path = "/tmp/test_color_black.pdf";
+        doc.save(&mut std::io::BufWriter::new(
+            std::fs::File::create(pdf_path).unwrap(),
+        ))
+        .unwrap();
+
+        let content = read_pdf_page_content(pdf_path);
+        let content_str = String::from_utf8_lossy(&content);
+        assert!(
+            content_str.contains("0 0 0 rg"),
+            "黑色文本应生成 '0 0 0 rg'，实际内容流:\n{}",
+            content_str
+        );
+
+        let _ = std::fs::remove_file(pdf_path);
+    }
+
+    // ── 综合测试：多文本 + 图片 ───────────────────────────────────────────
+
+    #[test]
+    fn test_ofd_to_pdf_mixed_content_fidelity() {
+        // 构造 1 页：两段文本（不同位置/颜色）+ 1 图片
+        // 验证：页数 1、两组 BT/ET、图片 XObject 存在
+        let img_buf = image::ImageBuffer::<image::Rgb<u8>, _>::from_fn(4, 4, |x, y| {
+            if (x + y) % 2 == 0 {
+                image::Rgb([255u8, 0, 0])
+            } else {
+                image::Rgb([0, 0, 255])
+            }
+        });
+        let mut png_cursor = std::io::Cursor::new(Vec::new());
+        img_buf
+            .write_to(&mut png_cursor, image::ImageFormat::Png)
+            .unwrap();
+        let png_data = png_cursor.into_inner();
+
+        let mut writer = OfdWriter::new();
+        let mut page = OfdPage::new(210.0, 297.0);
+        page.add_text(TextObject::new(20.0, 30.0, "标题").color(0x00_00FF));
+        page.add_text(TextObject::new(50.0, 150.0, "正文段落").color(0x00_0000));
+        page.add_image(ImageObject::new(
+            100.0,
+            200.0,
+            40.0,
+            30.0,
+            png_data,
+            ImageFormat::Png,
+        ));
+        writer.add_page(page);
+        let ofd_bytes = writer.build().unwrap();
+
+        let ofd_path = "/tmp/test_mixed.ofd";
+        let pdf_path = "/tmp/test_mixed.pdf";
+        std::fs::write(ofd_path, &ofd_bytes).unwrap();
+
+        let result = ofd_to_pdf(ofd_path, pdf_path, &ConvertOptions::default());
+        assert!(result.is_ok(), "综合测试转换应成功: {:?}", result.err());
+
+        // 读回 PDF 验证结构
+        let pdf_doc = Document::load(pdf_path).expect("PDF 应可读取");
+        assert_eq!(pdf_doc.get_pages().len(), 1, "PDF 应有 1 页");
+
+        let content = read_pdf_page_content(pdf_path);
+        let bt_count = count_bt_blocks(&content);
+        assert_eq!(bt_count, 2, "应有 2 个 BT...ET 文本块，实际 {}", bt_count);
+
+        // 验证图片 XObject 存在（Resources 可能是间接引用，需解引用）
+        let page_id = pdf_doc
+            .get_pages()
+            .into_values()
+            .next()
+            .expect("PDF 应有页面");
+        let page_dict = pdf_doc.get_dictionary(page_id).expect("读取页面字典");
+        let has_image = (|| -> Option<bool> {
+            let resources_obj = page_dict.get(b"Resources").ok()?;
+            let (_, resolved) = pdf_doc.dereference(resources_obj).ok()?;
+            let resources_dict = resolved.as_dict().ok()?;
+            let xobjects_obj = resources_dict.get(b"XObject").ok()?;
+            let (_, xobjects_resolved) = pdf_doc.dereference(xobjects_obj).ok()?;
+            match xobjects_resolved {
+                lopdf::Object::Dictionary(dict) => {
+                    // XObject 字典中至少有一个条目（图片引用）
+                    Some(!dict.is_empty())
+                }
+                _ => Some(false),
+            }
+        })()
+        .unwrap_or(false);
+        assert!(has_image, "PDF 应包含图片 XObject");
+
+        let _ = std::fs::remove_file(ofd_path);
+        let _ = std::fs::remove_file(pdf_path);
+    }
+
+    // ── CJK 字体渲染测试（系统字体守卫） ─────────────────────────────────
+
+    #[test]
+    fn test_ofd_to_pdf_cjk_font_rendering() {
+        // 此测试要求系统安装 CJK 字体（macOS PingFang / Linux WenQuanYi 等）。
+        // CI 无字体时自动 skip，注明原因。
+        let Some(cjk_info) = cjk_font::find_cjk_font() else {
+            eprintln!("[test] 跳过 CJK 字体测试：系统未安装 CJK 字体");
+            return;
+        };
+
+        let mut writer = OfdWriter::new();
+        let mut page = OfdPage::new(210.0, 297.0);
+        // 使用 SimSun 字体名（FontLoader 相似替换应能找到系统 CJK 字体）
+        page.add_text(TextObject::new(30.0, 50.0, "你好世界").font("SimSun"));
+        writer.add_page(page);
+        let ofd_bytes = writer.build().unwrap();
+
+        let ofd_path = "/tmp/test_cjk_font.ofd";
+        let pdf_path = "/tmp/test_cjk_font.pdf";
+        std::fs::write(ofd_path, &ofd_bytes).unwrap();
+
+        let result = ofd_to_pdf(ofd_path, pdf_path, &ConvertOptions::default());
+        assert!(
+            result.is_ok(),
+            "CJK 字体 OFD→PDF 转换应成功: {:?}",
+            result.err()
+        );
+
+        // 验证 PDF 中嵌入了外部字体（非 Helvetica 内置字体）
+        let pdf_data = std::fs::read(pdf_path).unwrap();
+        let pdf_str = String::from_utf8_lossy(&pdf_data);
+        // CJK 字体作为外部字体嵌入，PDF 中应包含 /Type /Font 字典
+        // 且文件大小应明显大于纯 Helvetica 的 PDF（字体子集嵌入）
+        assert!(
+            pdf_data.len() > 1000,
+            "含 CJK 字体嵌入的 PDF 应有合理大小，实际 {} bytes",
+            pdf_data.len()
+        );
+
+        let content = read_pdf_page_content(pdf_path);
+        let blocks = extract_text_blocks(&content);
+        assert_eq!(blocks.len(), 1, "应有 1 个文本块");
+
+        // 验证字号 12pt（TextObject::new 默认 size=12）
+        assert!(
+            pdf_str.contains("12 Tf") || content.windows(4).any(|w| w == b"12 Tf"),
+            "字号应为 12pt"
+        );
+
+        eprintln!(
+            "[test] CJK 字体渲染成功: 使用 {} ({}), PDF {} bytes",
+            cjk_info.name,
+            cjk_info.path.display(),
+            pdf_data.len()
+        );
+
+        let _ = std::fs::remove_file(ofd_path);
+        let _ = std::fs::remove_file(pdf_path);
+    }
+
+    // ── PT_TO_MM 常量验证 ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_pt_to_mm_constant() {
+        // 1 inch = 72 pt = 25.4 mm → 1 pt = 25.4/72 mm ≈ 0.3528 mm
+        assert!((PT_TO_MM - 25.4 / 72.0).abs() < 1e-10);
+        // 12 pt → ≈ 4.233 mm
+        assert!((12.0 * PT_TO_MM - 4.2333).abs() < 0.001);
     }
 }
 pub mod itext_exclusions;

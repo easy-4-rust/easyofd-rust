@@ -20,6 +20,10 @@ members = [
     "crates/easyofd-graphics2d",
     "crates/easyofd-font",
     "crates/easyofd-tool",
+    # ── v2.0 切片：FFI + async 门面 ──
+    "crates/easyofd-ffi",
+    "crates/easyofd-async",
+    "crates/easyofd-wasm",
 ]
 
 [workspace.package]
@@ -87,10 +91,15 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
 sm4 = "0.5"
+des = "0.8"
 ttf-parser = "0.25"
 rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# ═══ WASM ═══
+wasm-bindgen = "0.2"
+# ═══ 异步运行时（easyofd-async 门面）═══
+tokio = { version = "1", features = ["rt"] }
 
 [workspace.lints.rust]
 # 门禁：禁止 unsafe；文档缺失暂不强制（历史行为保持 allow）

@@ -3,18 +3,22 @@
 //! 对应 Java: org.ofdrw.gm.cert.PKCS12Tools
 //!
 //! 提供 PKCS#12 (PFX) 格式密钥库的解析功能。
-//! 支持解析无加密 KeyBag 和 PBES2 加密的 ShroudedKeyBag，提取 SM2 私钥。
+//! 支持解析无加密 KeyBag、PBES2 加密和 PKCS#12 传统 PBE 加密的 ShroudedKeyBag，
+//! 提取 SM2 私钥。
 //!
 //! ## 已支持
 //! - 无加密 KeyBag（bagId = 1.2.840.113549.1.12.10.1.1）
 //!   直接从 PrivateKeyInfo 结构中提取 EC 私钥标量字节
 //! - ShroudedKeyBag（加密私钥袋，bagId = 1.2.840.113549.1.12.10.1.2）
-//!   支持 PBES2 + PBKDF2 解密，PRF 支持 HMAC-SHA1 / HMAC-SHA256 / HMAC-SM3，
-//!   加密算法支持 AES-128-CBC / SM4-CBC
+//!   - PBES2 + PBKDF2 解密，PRF 支持 HMAC-SHA1 / HMAC-SHA256 / HMAC-SM3，
+//!     加密算法支持 AES-128-CBC / SM4-CBC
+//!   - PKCS#12 传统 PBE: pbeWithSHAAnd3-KeyTripleDES-CBC
+//!     （OID 1.2.840.113549.1.12.1.3，BouncyCastle 老式 PKCS12 KeyStore 常用）
+//!     使用 PKCS#12 专用 KDF（RFC 7292 B.2）+ 3DES-CBC 解密
 //!
 //! ## 不支持（返回 None 并记录原因）
-//! - PKCS#12 传统 PBE（OID 1.2.840.113549.1.12.1.x，3DES/SHA1 链式）
-//!   需要 PKCS#12 专用 KDF，与 Java(BC) 的 BouncyCastle 实现差异较大
+//! - PKCS#12 传统 PBE 的其他 OID（RC2-128/RC2-40/RC4-128/RC4-40）
+//!   无纯 Rust rc2/rc4 crate，仅支持 3DES-CBC
 //! - EncryptedData 类型的 ContentInfo
 //!   需要 PKCS#7 解密，当前无纯 Rust 实现
 //! - 带 MAC 校验的 PFX（macData 字段）
@@ -60,6 +64,15 @@ const OID_SM4_CBC: &str = "1.2.156.10197.1.104.2";
 /// AES/SM4 分组大小（均为128位 = 16字节）
 const BLOCK_SIZE: usize = 16;
 
+/// 3DES 分组大小（64位 = 8字节）
+const TDES_BLOCK_SIZE: usize = 8;
+
+// ── PKCS#12 传统 PBE OID 常量 ────────────────────────────────────────────
+
+/// pbeWithSHAAnd3-KeyTripleDES-CBC OID: 1.2.840.113549.1.12.1.3
+/// 对应 Java: BC PKCS12 KeyStore 老式加密 ShroudedKeyBag 最常见 OID
+const OID_PBE_SHA1_3DES: &str = "1.2.840.113549.1.12.1.3";
+
 /// HMAC-SM3 输出大小（SM3 摘要长度 = 32字节）
 const SM3_OUTPUT_SIZE: usize = 32;
 
@@ -81,18 +94,17 @@ impl Pkcs12Tools {
     /// 解析 PKCS#12 (PFX) 结构，提取第一个私钥。
     /// 返回 SM2 私钥的原始标量字节（32 字节）。
     ///
-    /// 支持无加密 KeyBag 和 PBES2 加密的 ShroudedKeyBag。
-    /// 对于 PBES2，password 传入 PBKDF2 参与密钥派生。
+    /// 支持无加密 KeyBag、PBES2 加密和 PKCS#12 传统 PBE（3DES-CBC）加密的 ShroudedKeyBag。
     ///
     /// # 参数
     /// - `p12_data`: PKCS#12 格式的 DER 编码数据
-    /// - `password`: 解密密码，用于 ShroudedKeyBag 的 PBES2 解密
+    /// - `password`: 解密密码，用于 ShroudedKeyBag 的 PBES2/PBE 解密
     ///
     /// # 返回
     /// SM2 私钥原始字节（32 字节标量），如果解析失败返回 `None`。
     ///
     /// # 不支持的格式
-    /// - PKCS#12 传统 PBE（OID 1.2.840.113549.1.12.1.x）
+    /// - PKCS#12 传统 PBE 的非 3DES OID（RC2/RC4）
     /// - EncryptedData ContentInfo
     #[must_use]
     pub fn read_private_key(p12_data: &[u8], password: &str) -> Option<Vec<u8>> {
@@ -226,20 +238,29 @@ fn decrypt_shrouded_key_bag(encrypted_pk_info_der: &[u8], password: &str) -> Opt
     }
     let alg_oid = parse_oid_string(&alg_fields[0])?;
 
-    if alg_oid != OID_PBES2 {
-        // 老式 PKCS#12 PBE（OID 1.2.840.113549.1.12.1.x，3DES/SHA1 链式）
-        // 无法纯 Rust 解则返回 None
-        return None;
-    }
-
-    // PBES2-params 是 AlgorithmIdentifier 的第二个字段
-    if alg_fields.len() < 2 {
-        return None;
-    }
-    let pbes2_params_der = alg_fields[1].to_der().ok()?;
     let encrypted_data = fields[1].value();
 
-    pbes2_decrypt(&pbes2_params_der, encrypted_data, password)
+    match alg_oid.as_str() {
+        OID_PBES2 => {
+            // PBES2-params 是 AlgorithmIdentifier 的第二个字段
+            if alg_fields.len() < 2 {
+                return None;
+            }
+            let pbes2_params_der = alg_fields[1].to_der().ok()?;
+            pbes2_decrypt(&pbes2_params_der, encrypted_data, password)
+        }
+        OID_PBE_SHA1_3DES => {
+            // PKCS#12 传统 PBE: pbeWithSHAAnd3-KeyTripleDES-CBC
+            // 对应 Java: BC PKCS12 KeyStore + org.ofdrw.gm.cert.PKCS12Tools#ReadPrvKey
+            // AlgorithmIdentifier 参数: SEQUENCE { salt OCTET STRING, iterations INTEGER }
+            pbe_sha1_3des_decrypt(&alg_fields, encrypted_data, password)
+        }
+        _ => {
+            // 其他 PKCS#12 传统 PBE OID（RC2-128/RC2-40/RC4-128/RC4-40）
+            // 无纯 Rust rc2/rc4 crate，返回 None
+            None
+        }
+    }
 }
 
 /// PBES2 解密入口。
@@ -490,7 +511,7 @@ fn decrypt_aes_128_cbc(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Option<Vec<u
         prev = chunk;
     }
 
-    pkcs7_unpad(&plaintext)
+    pkcs7_unpad(&plaintext, BLOCK_SIZE)
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -526,7 +547,227 @@ fn decrypt_sm4_cbc(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> 
         prev = chunk;
     }
 
-    pkcs7_unpad(&plaintext)
+    pkcs7_unpad(&plaintext, BLOCK_SIZE)
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PKCS#12 传统 PBE: pbeWithSHAAnd3-KeyTripleDES-CBC
+// ══════════════════════════════════════════════════════════════════════════
+
+/// PKCS#12 传统 PBE 解密（pbeWithSHAAnd3-KeyTripleDES-CBC）。
+///
+/// 对应 Java: BC PKCS12 KeyStore + org.ofdrw.gm.cert.PKCS12Tools#ReadPrvKey
+///
+/// AlgorithmIdentifier 参数结构:
+/// ```asn1
+/// pbeWithSHAAnd3-KeyTripleDES-CBC ::= SEQUENCE {
+///     salt OCTET STRING,
+///     iterations INTEGER
+/// }
+/// ```
+fn pbe_sha1_3des_decrypt(
+    alg_fields: &[Any],
+    encrypted_data: &[u8],
+    password: &str,
+) -> Option<Vec<u8>> {
+    // 解析 PBE 参数: SEQUENCE { salt OCTET STRING, iterations INTEGER }
+    if alg_fields.len() < 2 {
+        return None;
+    }
+    let params_fields = parse_der_fields(alg_fields[1].value())?;
+    if params_fields.len() < 2 {
+        return None;
+    }
+
+    let salt = params_fields[0].value();
+    let iterations = parse_integer_u32(&params_fields[1])?;
+    if iterations == 0 {
+        return None;
+    }
+
+    // 密码 → BMPString 编码（RFC 7292 B.1）
+    // 对应 Java: PKCS12PasswordToBytes — 每字符后补 0x00，末尾加 0x00 0x00
+    let bmp_password = pkcs12_password_to_bmp(password);
+
+    // PKCS#12 KDF（RFC 7292 B.2）: 密钥 id=1, IV id=2
+    let key = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 1, 24)?; // 24 字节 3DES 密钥
+    let iv = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 2, TDES_BLOCK_SIZE)?; // 8 字节 IV
+
+    // 3DES-CBC 解密
+    let plaintext = decrypt_tdes_cbc(&key, &iv, encrypted_data)?;
+
+    // 明文是 PKCS#8 PrivateKeyInfo，提取 EC 私钥标量
+    extract_private_key_from_pkcs8(&plaintext)
+}
+
+/// PKCS#12 密码 → BMPString 字节编码（RFC 7292 B.1）。
+///
+/// BMPString: 每字符以 2 字节大端编码（ASCII: 0x00 + byte），
+/// 末尾加 2 字节空终止符 0x00 0x00。
+///
+/// 对应 Java: `PKCS12PasswordToBytes` — BouncyCastle 默认 BMPString 变体。
+///
+/// 空密码返回空切片（RFC 7292 约定）。
+fn pkcs12_password_to_bmp(password: &str) -> Vec<u8> {
+    if password.is_empty() {
+        return Vec::new();
+    }
+    // 每字节前补 0x00 + 末尾 2 字节空终止
+    let mut bmp = Vec::with_capacity((password.len() + 1) * 2);
+    for b in password.bytes() {
+        bmp.push(0x00);
+        bmp.push(b);
+    }
+    bmp.push(0x00);
+    bmp.push(0x00);
+    bmp
+}
+
+/// PKCS#12 密钥派生函数（RFC 7292 附录 B.2）。
+///
+/// 基于 SHA-1 的 PKCS#12 专用 KDF，与 PBKDF2 完全不同。
+/// 使用 ID 字节区分密钥（id=1）和 IV（id=2）的派生。
+///
+/// # 算法概要
+/// 1. D = id_byte 重复 v 次（v = SHA-1 分组大小 64）
+/// 2. S = salt 填充到 v 的整数倍
+/// 3. P = password 填充到 v 的整数倍
+/// 4. I = S || P
+/// 5. 对每个输出块：A = SHA-1(D || I)，再迭代 iterations-1 次 A = SHA-1(A)
+/// 6. 修改 I（I_j = I_j + B + 1，大端进位加法）
+/// 7. 拼接所有 A 截取 out_len 字节
+fn pkcs12_kdf_sha1(
+    password: &[u8],
+    salt: &[u8],
+    iterations: u32,
+    id_byte: u8,
+    out_len: usize,
+) -> Option<Vec<u8>> {
+    use sha1::Digest;
+
+    if iterations == 0 || out_len == 0 {
+        return None;
+    }
+
+    let hash_out = 20usize; // SHA-1 输出大小 (u)
+    let block = 64usize; // SHA-1 分组大小 (v)
+
+    // 1. D = id_byte 重复 block 次
+    let diversifier = vec![id_byte; block];
+
+    // 2. S = salt 重复填充到 block 的整数倍
+    let salt_pad_len = if salt.is_empty() {
+        0
+    } else {
+        block * salt.len().div_ceil(block)
+    };
+    let mut salt_padded = Vec::with_capacity(salt_pad_len);
+    while salt_padded.len() < salt_pad_len {
+        salt_padded.extend_from_slice(salt);
+    }
+
+    // 3. P = password 重复填充到 block 的整数倍
+    let pass_pad_len = if password.is_empty() {
+        0
+    } else {
+        block * password.len().div_ceil(block)
+    };
+    let mut pass_padded = Vec::with_capacity(pass_pad_len);
+    while pass_padded.len() < pass_pad_len {
+        pass_padded.extend_from_slice(password);
+    }
+
+    // 4. I = S || P
+    let mut i_data = Vec::with_capacity(salt_pad_len + pass_pad_len);
+    i_data.extend_from_slice(&salt_padded);
+    i_data.extend_from_slice(&pass_padded);
+
+    let i_len = i_data.len();
+    let num_blocks = i_len / block; // I 中 block 字节块的数量
+
+    // 5. block_count = ceil(out_len / hash_out)
+    let block_count = out_len.div_ceil(hash_out);
+
+    let mut out = Vec::with_capacity(block_count * hash_out);
+
+    // 6. 对每个输出块
+    for idx in 0..block_count {
+        // A. hash_val = H^iterations(D || I)
+        //    第一次哈希: SHA-1(D || I)
+        let mut hasher = sha1::Sha1::new();
+        hasher.update(&diversifier);
+        hasher.update(&i_data);
+        let mut hash_val = hasher.finalize();
+
+        // 后续 iterations-1 次: hash_val = SHA-1(hash_val)
+        for _ in 1..iterations {
+            let mut hasher = sha1::Sha1::new();
+            hasher.update(hash_val);
+            hash_val = hasher.finalize();
+        }
+
+        // B. pad_block = hash_val 重复填充到 block 字节
+        let mut pad_block = vec![0u8; block];
+        for pos in 0..block {
+            pad_block[pos] = hash_val[pos % hash_out];
+        }
+
+        // 复制 hash_val 到输出（最后一块可能不满 hash_out 字节）
+        let copy_len = std::cmp::min(hash_out, out_len - idx * hash_out);
+        out.extend_from_slice(&hash_val[..copy_len]);
+
+        // C. 修改 I（除最后一块外）
+        //    I_j = I_j + pad_block + 1 (mod 2^block)，大端进位加法
+        if idx < block_count - 1 {
+            for blk in 0..num_blocks {
+                let offset = blk * block;
+                let mut carry: u32 = 1; // +1
+                #[allow(clippy::cast_possible_truncation)]
+                for bi in (0..block).rev() {
+                    carry += u32::from(i_data[offset + bi]) + u32::from(pad_block[bi]);
+                    i_data[offset + bi] = carry as u8; // 进位后低 8 位不会溢出
+                    carry >>= 8;
+                }
+            }
+        }
+    }
+
+    Some(out)
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3DES-CBC 解密（手动 CBC + des crate）
+// ══════════════════════════════════════════════════════════════════════════
+
+/// 3DES-CBC 解密 + PKCS#7 unpad（8 字节分组）。
+///
+/// 使用 des crate 的 TdesEde3（cipher 0.4 BlockDecrypt）手动实现 CBC 模式。
+fn decrypt_tdes_cbc(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> {
+    use cipher::{BlockDecrypt, KeyInit};
+    use des::TdesEde3;
+
+    if key.len() != 24 || iv.len() != TDES_BLOCK_SIZE {
+        return None;
+    }
+    if ciphertext.is_empty() || !ciphertext.len().is_multiple_of(TDES_BLOCK_SIZE) {
+        return None;
+    }
+
+    let cipher = TdesEde3::new(cipher::generic_array::GenericArray::from_slice(key));
+
+    let mut plaintext = Vec::with_capacity(ciphertext.len());
+    let mut prev = iv;
+
+    for chunk in ciphertext.chunks(TDES_BLOCK_SIZE) {
+        let mut block = cipher::generic_array::GenericArray::clone_from_slice(chunk);
+        cipher.decrypt_block(&mut block);
+        for i in 0..TDES_BLOCK_SIZE {
+            plaintext.push(block[i] ^ prev[i]);
+        }
+        prev = chunk;
+    }
+
+    pkcs7_unpad(&plaintext, TDES_BLOCK_SIZE)
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -535,14 +776,15 @@ fn decrypt_sm4_cbc(key: &[u8], iv: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> 
 
 /// 移除 PKCS#7 padding。
 ///
-/// PKCS#7: 最后一个字节 N (1..=BLOCK_SIZE) 表示 padding 长度，
+/// PKCS#7: 最后一个字节 N (1..=block_size) 表示 padding 长度，
 /// 最后 N 个字节都必须等于 N。
-fn pkcs7_unpad(data: &[u8]) -> Option<Vec<u8>> {
+/// block_size: 分组大小（AES/SM4 = 16，3DES = 8）
+fn pkcs7_unpad(data: &[u8], block_size: usize) -> Option<Vec<u8>> {
     if data.is_empty() {
         return None;
     }
     let pad_len = *data.last()? as usize;
-    if pad_len == 0 || pad_len > BLOCK_SIZE || pad_len > data.len() {
+    if pad_len == 0 || pad_len > block_size || pad_len > data.len() {
         return None;
     }
     // 验证所有 padding 字节
@@ -930,6 +1172,68 @@ mod tests {
         ciphertext
     }
 
+    /// 3DES-CBC 加密 + PKCS#7 pad（8 字节分组）。
+    ///
+    /// 对应 Java: BC PKCS12 KeyStore 加密 ShroudedKeyBag
+    fn tdes_cbc_encrypt(key: &[u8], iv: &[u8], plaintext: &[u8]) -> Vec<u8> {
+        use cipher::{BlockEncrypt, KeyInit};
+        use des::TdesEde3;
+
+        let pad_len = TDES_BLOCK_SIZE - (plaintext.len() % TDES_BLOCK_SIZE);
+        let mut padded = plaintext.to_vec();
+        #[allow(clippy::cast_possible_truncation)]
+        let pad_byte = pad_len as u8;
+        padded.extend(std::iter::repeat_n(pad_byte, pad_len));
+
+        let cipher = TdesEde3::new(cipher::generic_array::GenericArray::from_slice(key));
+        let mut ciphertext = Vec::with_capacity(padded.len());
+        let mut prev = iv;
+
+        for chunk in padded.chunks(TDES_BLOCK_SIZE) {
+            let mut block = cipher::generic_array::GenericArray::clone_from_slice(chunk);
+            for i in 0..TDES_BLOCK_SIZE {
+                block[i] ^= prev[i];
+            }
+            cipher.encrypt_block(&mut block);
+            ciphertext.extend_from_slice(&block);
+            prev = &ciphertext[ciphertext.len() - TDES_BLOCK_SIZE..];
+        }
+
+        ciphertext
+    }
+
+    /// 构造 EncryptedPrivateKeyInfo DER（PKCS#12 传统 PBE 加密）。
+    ///
+    /// AlgorithmIdentifier ::= SEQUENCE {
+    ///     PBE OID,
+    ///     SEQUENCE { salt OCTET STRING, iterations INTEGER }
+    /// }
+    fn make_encrypted_private_key_info_pbe(
+        salt: &[u8],
+        iterations: u32,
+        pbe_oid_der: &[u8],
+        encrypted_data: &[u8],
+    ) -> Vec<u8> {
+        // PBE-params ::= SEQUENCE { salt OCTET STRING, iterations INTEGER }
+        let pbe_params = der_seq_raw(&concat(&[
+            &der_octet_string(salt),
+            &der_integer(&iterations.to_be_bytes()),
+        ]));
+
+        // AlgorithmIdentifier ::= SEQUENCE { PBE OID, PBE-params }
+        let alg_id = der_seq_raw(&concat(&[pbe_oid_der, &pbe_params]));
+
+        // EncryptedPrivateKeyInfo ::= SEQUENCE { AlgorithmIdentifier, OCTET STRING }
+        der_seq_raw(&concat(&[&alg_id, &der_octet_string(encrypted_data)]))
+    }
+
+    // ── 3DES PBE OID DER 编码 ───────────────────────────────────────
+
+    /// pbeWithSHAAnd3-KeyTripleDES-CBC OID DER: 1.2.840.113549.1.12.1.3
+    const DER_OID_PBE_SHA1_3DES: &[u8] = &[
+        0x06, 0x0A, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x0C, 0x01, 0x03,
+    ];
+
     // ── 原有负向测试 ────────────────────────────────────────────────
 
     #[test]
@@ -1036,23 +1340,31 @@ mod tests {
     #[test]
     fn test_pkcs7_unpad_valid() {
         let data = vec![0x01, 0x02, 0x03, 0x04, 0x04, 0x04, 0x04, 0x04];
-        let result = pkcs7_unpad(&data).unwrap();
+        let result = pkcs7_unpad(&data, 16).unwrap();
         assert_eq!(result, vec![0x01, 0x02, 0x03, 0x04]);
     }
 
     #[test]
     fn test_pkcs7_unpad_full_block() {
         let data = vec![0x10u8; 16]; // 16 bytes of 0x10
-        let result = pkcs7_unpad(&data).unwrap();
+        let result = pkcs7_unpad(&data, 16).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_pkcs7_unpad_full_block_8byte() {
+        // 3DES 分组大小 8 字节
+        let data = vec![0x08u8; 8]; // 8 bytes of 0x08
+        let result = pkcs7_unpad(&data, 8).unwrap();
         assert!(result.is_empty());
     }
 
     #[test]
     fn test_pkcs7_unpad_invalid() {
         // 最后一个字节为 0（无效 padding）
-        assert!(pkcs7_unpad(&[0x00]).is_none());
+        assert!(pkcs7_unpad(&[0x00], 16).is_none());
         // padding 字节不一致
-        assert!(pkcs7_unpad(&[0x01, 0x02]).is_none());
+        assert!(pkcs7_unpad(&[0x01, 0x02], 16).is_none());
     }
 
     // ── parse_integer 测试 ─────────────────────────────────────────
@@ -1278,17 +1590,212 @@ mod tests {
     // ── 不支持的旧式 PBE 算法返回 None ────────────────────────────
 
     #[test]
-    fn test_unsupported_old_pbe_returns_none() {
-        // 模拟一个使用旧式 PKCS#12 PBE 的 ShroudedKeyBag
-        // OID 1.2.840.113549.1.12.1.3 (pbeWithSHAAnd3-KeyTripleDES-CBC)
-        let old_pbe_oid: &[u8] = &[
-            0x06, 0x0A, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x0C, 0x01, 0x03,
+    fn test_unsupported_rc4_pbe_returns_none() {
+        // OID 1.2.840.113549.1.12.1.6 (pbeWithSHAAnd40BitRC4) —— 无 rc4 crate，返回 None
+        let rc4_pbe_oid: &[u8] = &[
+            0x06, 0x0A, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x0C, 0x01, 0x06,
         ];
-        let alg = der_seq_raw(&concat(&[old_pbe_oid, &der_octet_string(&[0x00; 8])]));
+        let pbe_params = der_seq_raw(&concat(&[
+            &der_octet_string(&[0x00; 8]),
+            &der_integer(&1000u32.to_be_bytes()),
+        ]));
+        let alg = der_seq_raw(&concat(&[rc4_pbe_oid, &pbe_params]));
         let epki = der_seq_raw(&concat(&[&alg, &der_octet_string(&[0x00; 16])]));
         let pfx = make_pfx_with_shrouded_bag(&epki);
 
         assert!(Pkcs12Tools::read_private_key(&pfx, "password").is_none());
+    }
+
+    #[test]
+    fn test_3des_pbe_malformed_params_returns_none() {
+        // 3DES OID 但参数不是合法 SEQUENCE → 解析失败返回 None
+        let tdes_pbe_oid: &[u8] = &[
+            0x06, 0x0A, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x0C, 0x01, 0x03,
+        ];
+        let alg = der_seq_raw(&concat(&[tdes_pbe_oid, &der_octet_string(&[0x00; 8])]));
+        let epki = der_seq_raw(&concat(&[&alg, &der_octet_string(&[0x00; 16])]));
+        let pfx = make_pfx_with_shrouded_bag(&epki);
+
+        assert!(Pkcs12Tools::read_private_key(&pfx, "password").is_none());
+    }
+
+    // ── 3DES-CBC + PKCS#12 PBE 完整 round-trip 测试 ───────────────
+
+    #[test]
+    fn test_tdes_cbc_pbe_shrouded_key_bag_roundtrip() {
+        // 闭环: 用 PKCS#12 KDF + 3DES-CBC 加密 → read_private_key 正确解出
+        let password = "test3des";
+        let salt = b"8bytesal";
+        let iterations: u32 = 1000u32;
+        let private_key_scalar = [0x42u8; 32];
+
+        // 1. 构造 PKCS#8 PrivateKeyInfo
+        let pk_info = make_pkcs8_private_key_info(&private_key_scalar);
+
+        // 2. 密码 → BMPString 编码
+        let bmp_password = pkcs12_password_to_bmp(password);
+
+        // 3. PKCS#12 KDF 派生 key(24) + iv(8)
+        let key = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 1, 24).unwrap();
+        let iv = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 2, TDES_BLOCK_SIZE).unwrap();
+
+        // 4. 3DES-CBC 加密
+        let encrypted = tdes_cbc_encrypt(&key, &iv, &pk_info);
+
+        // 5. 构造 EncryptedPrivateKeyInfo DER（PKCS#12 传统 PBE 格式）
+        let epki = make_encrypted_private_key_info_pbe(
+            salt,
+            iterations,
+            DER_OID_PBE_SHA1_3DES,
+            &encrypted,
+        );
+
+        // 6. 构造完整 PFX
+        let pfx = make_pfx_with_shrouded_bag(&epki);
+
+        // 7. 用正确密码提取私钥
+        let result = Pkcs12Tools::read_private_key(&pfx, "test3des").unwrap();
+        assert_eq!(result, private_key_scalar);
+    }
+
+    #[test]
+    fn test_tdes_cbc_pbe_wrong_password() {
+        let password = "correct";
+        let salt = b"saltsalt";
+        let iterations: u32 = 100u32;
+        let private_key_scalar = [0x11u8; 32];
+
+        let pk_info = make_pkcs8_private_key_info(&private_key_scalar);
+        let bmp_password = pkcs12_password_to_bmp(password);
+        let key = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 1, 24).unwrap();
+        let iv = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 2, TDES_BLOCK_SIZE).unwrap();
+        let encrypted = tdes_cbc_encrypt(&key, &iv, &pk_info);
+        let epki = make_encrypted_private_key_info_pbe(
+            salt,
+            iterations,
+            DER_OID_PBE_SHA1_3DES,
+            &encrypted,
+        );
+        let pfx = make_pfx_with_shrouded_bag(&epki);
+
+        // 错误密码应返回 None，不 panic
+        assert!(Pkcs12Tools::read_private_key(&pfx, "wrong").is_none());
+    }
+
+    #[test]
+    fn test_tdes_cbc_pbe_corrupted_ciphertext() {
+        let password = "pass";
+        let salt = b"salt1234";
+        let iterations: u32 = 100u32;
+        let private_key_scalar = [0x33u8; 32];
+
+        let pk_info = make_pkcs8_private_key_info(&private_key_scalar);
+        let bmp_password = pkcs12_password_to_bmp(password);
+        let key = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 1, 24).unwrap();
+        let iv = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 2, TDES_BLOCK_SIZE).unwrap();
+        let mut encrypted = tdes_cbc_encrypt(&key, &iv, &pk_info);
+        // 损坏密文的最后一个字节
+        let last = encrypted.len() - 1;
+        encrypted[last] ^= 0xFF;
+        let epki = make_encrypted_private_key_info_pbe(
+            salt,
+            iterations,
+            DER_OID_PBE_SHA1_3DES,
+            &encrypted,
+        );
+        let pfx = make_pfx_with_shrouded_bag(&epki);
+
+        // 损坏密文应返回 None（PKCS#7 padding 验证失败），不 panic
+        assert!(Pkcs12Tools::read_private_key(&pfx, "pass").is_none());
+    }
+
+    #[test]
+    fn test_tdes_cbc_pbe_different_iterations() {
+        // 不同迭代次数产生不同密钥，验证 KDF 正确绑定 iterations
+        let bmp_password = pkcs12_password_to_bmp("iter_test");
+
+        let key1 = pkcs12_kdf_sha1(&bmp_password, b"saltsalt", 100, 1, 24).unwrap();
+        let key2 = pkcs12_kdf_sha1(&bmp_password, b"saltsalt", 200, 1, 24).unwrap();
+        assert_ne!(key1, key2, "不同迭代次数应产生不同密钥");
+    }
+
+    // ── PKCS#12 KDF 单元测试 ──────────────────────────────────────
+
+    #[test]
+    fn test_pkcs12_kdf_sha1_key_and_iv_differ() {
+        // id=1(key) 和 id=2(iv) 应产生不同输出
+        let bmp = pkcs12_password_to_bmp("test");
+        let key = pkcs12_kdf_sha1(&bmp, b"salt", 100, 1, 24).unwrap();
+        let iv = pkcs12_kdf_sha1(&bmp, b"salt", 100, 2, 8).unwrap();
+        assert_ne!(key[..8], iv[..], "key 和 iv 不应相同");
+    }
+
+    #[test]
+    fn test_pkcs12_kdf_sha1_output_length() {
+        let bmp = pkcs12_password_to_bmp("test");
+        let out = pkcs12_kdf_sha1(&bmp, b"salt", 100, 1, 24).unwrap();
+        assert_eq!(out.len(), 24);
+    }
+
+    #[test]
+    fn test_pkcs12_kdf_sha1_empty_password() {
+        // 空密码（BMPString = 空）也能派生
+        let out = pkcs12_kdf_sha1(&[], b"salt", 100, 1, 24);
+        assert!(out.is_some());
+    }
+
+    #[test]
+    fn test_pkcs12_kdf_sha1_zero_iterations() {
+        let bmp = pkcs12_password_to_bmp("test");
+        assert!(pkcs12_kdf_sha1(&bmp, b"salt", 0, 1, 24).is_none());
+    }
+
+    #[test]
+    fn test_pkcs12_kdf_sha1_deterministic() {
+        let bmp = pkcs12_password_to_bmp("password");
+        let a = pkcs12_kdf_sha1(&bmp, b"saltsalt", 500, 1, 24).unwrap();
+        let b = pkcs12_kdf_sha1(&bmp, b"saltsalt", 500, 1, 24).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_pkcs12_password_to_bmp_ascii() {
+        // "abc" → [0x00,'a', 0x00,'b', 0x00,'c', 0x00,0x00]
+        let bmp = pkcs12_password_to_bmp("abc");
+        assert_eq!(bmp, vec![0x00, 0x61, 0x00, 0x62, 0x00, 0x63, 0x00, 0x00]);
+        assert_eq!(bmp.len(), 8); // (3+1)*2
+    }
+
+    #[test]
+    fn test_pkcs12_password_to_bmp_empty() {
+        let bmp = pkcs12_password_to_bmp("");
+        assert!(bmp.is_empty());
+    }
+
+    // ── 3DES-CBC 解密函数直接测试 ─────────────────────────────────
+
+    #[test]
+    fn test_decrypt_tdes_cbc_basic() {
+        let key = [0x2Bu8; 24];
+        let iv = [0x01u8; 8];
+        let plaintext = b"hello!!"; // 7 bytes, pad to 8
+
+        let ciphertext = tdes_cbc_encrypt(&key, &iv, plaintext);
+        let decrypted = decrypt_tdes_cbc(&key, &iv, &ciphertext).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_decrypt_tdes_cbc_wrong_key() {
+        let key = [0x2Bu8; 24];
+        let iv = [0x01u8; 8];
+        let plaintext = b"test 8b"; // 7 bytes, pad to 8
+
+        let ciphertext = tdes_cbc_encrypt(&key, &iv, plaintext);
+        let wrong_key = [0x3Cu8; 24];
+        // 错误密钥 -> padding 验证大概率失败 -> None
+        let result = decrypt_tdes_cbc(&wrong_key, &iv, &ciphertext);
+        assert!(result.is_none());
     }
 
     // ── AES-CBC 解密函数直接测试 ──────────────────────────────────

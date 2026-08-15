@@ -103,15 +103,23 @@ jobs:
         run: |
           CRATES=(
             easyofd-core
+            easyofd-derive-impl
+            easyofd-derive
+            easyofd-font
             easyofd-package
             easyofd-reader
+            easyofd-gm
+            easyofd-crypto
             easyofd-writer
-            easyofd-markdown
-            easyofd-template
             easyofd-signature
             easyofd-layout
             easyofd-convert
+            easyofd-markdown
+            easyofd-template
+            easyofd-archive
+            easyofd-graphics2d
             easyofd
+            easyofd-tool
           )
           for crate in "${CRATES[@]}"; do
             echo "::group::Publishing $crate"

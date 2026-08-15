@@ -148,3 +148,13 @@ CI 回归对比：`cargo bench` 输出 HTML 报告到 `target/criterion/report/i
 | `.ofdrw-gen/PerfBenchmark.java` | Java 基准源码 |
 
 **CI 回归对比方法**: 运行 `cargo bench --workspace`，criterion 自动与上次基线对比，检测性能回归（>5% 标记为变化）。
+
+### 4.1 语义变更记录（不影响基线）
+
+2026-08-16: `easyofd-convert` 的 `ofd_to_pdf` 路径进行坐标/字体/颜色保真升级：
+- 坐标换算修正：`page_height - text.y` → `page_height - text.y - font_size_mm`（pt→mm 基线偏移）
+- 字体映射：从单一 Helvetica/CJK 升级为 FontLoader 系统字体查找 + 相似替换 + CJK 兜底
+- 文本颜色：新增 `set_fill_color` 支持（OFD reader 侧尚未解析 FillColor，roundtrip 场景颜色仍丢失）
+- 图片渲染：已验证 DPI/scale 公式正确，未变更
+
+上述变更仅影响 `ofd_to_pdf` 路径，不影响 reader/writer 基线场景（读/写/roundtrip），无需重跑。

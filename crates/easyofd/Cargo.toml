@@ -27,6 +27,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sm2 = { workspace = true }
 quick-xml = { workspace = true }
+# 子 crate 直接访问（archive 合规检查、SM4 加解密、关键字搜索、ST_Box）
+easyofd-archive = { workspace = true }
+easyofd-core = { workspace = true }
+easyofd-crypto = { workspace = true }
+easyofd-reader = { workspace = true }
 
 [lints]
 workspace = true

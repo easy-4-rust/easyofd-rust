@@ -1,0 +1,43 @@
+[package]
+name = "easyofd-ffi"
+description = "C ABI bindings for easyofd — OFD document operations via FFI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+easyofd = { workspace = true }
+
+# 不继承 workspace lints：FFI 边界需要 unsafe，且必须显式声明原因。
+# workspace lints 设了 unsafe_code = "forbid"，而 forbid 不可被下游覆盖，
+# 因此本 crate 自定义 lints 允许 unsafe，同时要求所有 unsafe 块带 SAFETY 注释。
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+unnecessary_wraps = "allow"
+redundant_closure_for_method_calls = "allow"
+manual_let_else = "allow"
+too_many_lines = "allow"
+semicolon_if_nothing_returned = "allow"
+collapsible_if = "allow"
+needless_pass_by_value = "allow"
+missing_panics_doc = "allow"
+unnecessary_map_or = "allow"
+missing_errors_doc = "allow"
+items_after_statements = "allow"
+manual_string_new = "allow"
+format_collect = "allow"
+format_push_string = "allow"
+needless_range_loop = "allow"
+uninlined_format_args = "allow"

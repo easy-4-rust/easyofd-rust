@@ -1,0 +1,27 @@
+[package]
+name = "easyofd-wasm"
+description = "WASM bindings for browser-side OFD reading, metadata extraction and Markdown conversion"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# ── 仅依赖读路径子 crate，不引入 easyofd facade（会拉入 printpdf/fontdue/tiny-skia 等非 WASM 兼容依赖）
+# ── 不引入 easyofd-markdown（其 MarkdownConverter 仅接受文件路径，WASM 无文件系统）
+easyofd-core = { workspace = true }
+easyofd-reader = { workspace = true }
+serde_json = { workspace = true }
+zip = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+easyofd-writer = { workspace = true }
+wasm-bindgen-test = "0.3"
+
+[lints]
+workspace = true
