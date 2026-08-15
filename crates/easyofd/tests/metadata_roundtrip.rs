@@ -333,7 +333,7 @@ fn metadata_roundtrip_subject_synthetic() {
 /// ofdrw_n.ofd 含 `<ofd:Keywords/>`（空自闭合标签）。
 ///
 /// `find_optional_text_deep` 对空标签返回 `Some("")`，
-/// writer 输出时应保留该字段（输出为 `<ofd:Keywords></ofd:Keywords>`）。
+/// writer 输出时应保留该字段（输出为 `<ofd:Keywords/>`）。
 ///
 /// 本测试断言 roundtrip 后 Keywords 仍为 `Some("")` 而非 `None`。
 #[test]
@@ -354,5 +354,152 @@ fn metadata_roundtrip_empty_keywords_not_lost() {
         rt.keywords.as_deref(),
         Some(""),
         "roundtrip 后 Keywords 应仍为 Some(\"\")，不被丢弃为 None"
+    );
+}
+
+// ─── 测试 9: 日期 raw 文本字节级保留 ───
+
+/// ofdrw_n.ofd 的 CreationDate/ModDate 原始值为 `"2020-01-25"`（纯日期）。
+///
+/// 验证 roundtrip 后原始文本被精确保留，不被强加为 `"2020-01-25T00:00:00"`。
+#[test]
+fn metadata_roundtrip_date_raw_byte_exact() {
+    let path = fixture_path("ofdrw_n.ofd");
+    let bytes = std::fs::read(&path).unwrap();
+    let reader = OfdReader::from_bytes(&bytes).unwrap();
+
+    // 原始 raw 应被保留
+    assert_eq!(
+        reader.metadata().creation_date_raw.as_deref(),
+        Some("2020-01-25"),
+        "原始 CreationDate raw 应为 \"2020-01-25\""
+    );
+    assert_eq!(
+        reader.metadata().mod_date_raw.as_deref(),
+        Some("2020-01-25"),
+        "原始 ModDate raw 应为 \"2020-01-25\""
+    );
+
+    // roundtrip 后 raw 应被精确保留
+    let rt = roundtrip_metadata("ofdrw_n.ofd");
+    assert_eq!(
+        rt.creation_date_raw.as_deref(),
+        Some("2020-01-25"),
+        "roundtrip 后 CreationDate raw 应字节级一致"
+    );
+    assert_eq!(
+        rt.mod_date_raw.as_deref(),
+        Some("2020-01-25"),
+        "roundtrip 后 ModDate raw 应字节级一致"
+    );
+}
+
+// ─── 测试 10: 日期 raw 字节级保留（多 fixture） ───
+
+/// 对多个含日期的 fixture 做 roundtrip，断言日期 raw 文本全部保留。
+#[test]
+fn metadata_roundtrip_date_raw_multi_fixture() {
+    let fixtures = [
+        ("ofdrw_z.ofd", "2012-06-05"),
+        ("ofdrw_发票监制章-数科.ofd", "2020-10-29"),
+    ];
+
+    for (name, expected_date) in &fixtures {
+        let rt = roundtrip_metadata(name);
+        assert_eq!(
+            rt.mod_date_raw.as_deref(),
+            Some(*expected_date),
+            "{name}: ModDate raw 应字节级保留 \"{expected_date}\""
+        );
+    }
+}
+
+// ─── 测试 11: 空 Keywords 自闭合标签字节级验证 ───
+
+/// ofdrw_n.ofd 的 `<ofd:Keywords/>` 在 roundtrip 产物 ZIP 内的 XML 中
+/// 应为自闭合标签（匹配 ofdrw/dom4j 默认行为）。
+#[test]
+fn metadata_roundtrip_keywords_self_closing_in_zip() {
+    use std::io::Read as _;
+
+    let path = fixture_path("ofdrw_n.ofd");
+    let bytes = std::fs::read(&path).unwrap();
+    let reader = OfdReader::from_bytes(&bytes).unwrap();
+    let mut writer = OfdWriter::new();
+    writer.set_metadata(reader.metadata().clone());
+    writer.preserve_entries(reader.raw_entries().to_vec());
+    for page in reader.pages() {
+        writer.add_page(page.clone());
+    }
+    let output = writer.build().unwrap();
+
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&output)).unwrap();
+    let mut ofd_xml = String::new();
+    archive
+        .by_name("OFD.xml")
+        .unwrap()
+        .read_to_string(&mut ofd_xml)
+        .unwrap();
+
+    // 自闭合：`<ofd:Keywords/>`
+    assert!(
+        ofd_xml.contains("<ofd:Keywords/>"),
+        "OFD.xml 应含自闭合 `<ofd:Keywords/>`，实际内容:\n{ofd_xml}"
+    );
+    // 不应出现显式闭合 `<ofd:Keywords></ofd:Keywords>`
+    assert!(
+        !ofd_xml.contains("<ofd:Keywords></ofd:Keywords>"),
+        "OFD.xml 不应含显式闭合 `<ofd:Keywords></ofd:Keywords>`"
+    );
+}
+
+// ─── 测试 12: 日期在 roundtrip XML 中字节级一致 ───
+
+/// 验证 roundtrip 产物 ZIP 内 OFD.xml 中日期格式与原始一致。
+#[test]
+fn metadata_roundtrip_date_format_in_zip_xml() {
+    use std::io::Read as _;
+
+    let path = fixture_path("ofdrw_n.ofd");
+    let orig_bytes = std::fs::read(&path).unwrap();
+
+    let mut orig_archive = zip::ZipArchive::new(std::io::Cursor::new(&orig_bytes)).unwrap();
+    let mut orig_xml = String::new();
+    orig_archive
+        .by_name("OFD.xml")
+        .unwrap()
+        .read_to_string(&mut orig_xml)
+        .unwrap();
+
+    let reader = OfdReader::from_bytes(&orig_bytes).unwrap();
+    let mut writer = OfdWriter::new();
+    writer.set_metadata(reader.metadata().clone());
+    writer.preserve_entries(reader.raw_entries().to_vec());
+    for page in reader.pages() {
+        writer.add_page(page.clone());
+    }
+    let output = writer.build().unwrap();
+
+    let mut rt_archive = zip::ZipArchive::new(std::io::Cursor::new(&output)).unwrap();
+    let mut rt_xml = String::new();
+    rt_archive
+        .by_name("OFD.xml")
+        .unwrap()
+        .read_to_string(&mut rt_xml)
+        .unwrap();
+
+    // 日期应为纯日期格式 "2020-01-25" 而非 "2020-01-25T00:00:00"
+    assert!(
+        rt_xml.contains("<ofd:CreationDate>2020-01-25</ofd:CreationDate>"),
+        "CreationDate 应保留原始格式，实际:\n{rt_xml}"
+    );
+    assert!(
+        rt_xml.contains("<ofd:ModDate>2020-01-25</ofd:ModDate>"),
+        "ModDate 应保留原始格式，实际:\n{rt_xml}"
+    );
+    // 不应出现带时间的格式
+    assert!(
+        !rt_xml.contains("2020-01-25T00:00:00"),
+        "不应出现强加时间格式 2020-01-25T00:00:00"
     );
 }

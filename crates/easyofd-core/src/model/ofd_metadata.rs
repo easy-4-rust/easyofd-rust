@@ -31,8 +31,17 @@ pub struct OfdMetadata {
     pub creator_version: Option<String>,
     /// 创建日期（ofd:CreationDate）。
     pub creation_date: Option<NaiveDateTime>,
+    /// 创建日期原始文本（ofd:CreationDate），roundtrip 保真用。
+    ///
+    /// 保留 OFD 文件中 `<ofd:CreationDate>` 的原始字符串（如 `"2020-01-25"`），
+    /// writer 优先使用此值原样输出，避免强加日期格式（如追加 `T00:00:00`）。
+    pub creation_date_raw: Option<String>,
     /// 最后修改日期（ofd:ModDate）。
     pub mod_date: Option<NaiveDateTime>,
+    /// 最后修改日期原始文本（ofd:ModDate），roundtrip 保真用。
+    ///
+    /// 保留 OFD 文件中 `<ofd:ModDate>` 的原始字符串，writer 优先使用此值原样输出。
+    pub mod_date_raw: Option<String>,
     /// 最大单元标识符（ofd:MaxUnitID），默认 0。
     pub max_unit_id: u32,
     /// 书签集合（ofd:Bookmarks）。
@@ -99,7 +108,9 @@ impl Default for OfdMetadata {
             creator: None,
             creator_version: None,
             creation_date: None,
+            creation_date_raw: None,
             mod_date: None,
+            mod_date_raw: None,
             max_unit_id: 0,
             bookmarks: None,
             outlines: None,

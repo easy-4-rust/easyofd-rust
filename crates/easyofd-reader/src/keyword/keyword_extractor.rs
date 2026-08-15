@@ -49,6 +49,14 @@ pub struct TextCodeEntry {
     pub boundary: ST_Box,
     /// 字号（mm，对应 OFD CT_Text 的 Size 属性）。
     pub font_size: f64,
+    /// 仿射变换矩阵（可选），对应 OFD CT_Text 的 CTM 属性。
+    ///
+    /// 6 元素 `[a, b, c, d, e, f]`，变换公式：
+    /// - `x' = a * x + c * y + e`
+    /// - `y' = b * x + d * y + f`
+    ///
+    /// 对应 Java: `CT_Text.getCTM()` + `KeywordExtractor#getCtmKeywordPosition`
+    pub ctm: Option<[f64; 6]>,
 }
 
 impl TextCodeEntry {
@@ -64,6 +72,7 @@ impl TextCodeEntry {
             page,
             boundary,
             font_size,
+            ctm: None,
         }
     }
 
@@ -86,6 +95,19 @@ impl TextCodeEntry {
     #[must_use]
     pub fn delta_y(mut self, deltas: Vec<f64>) -> Self {
         self.delta_y = deltas;
+        self
+    }
+
+    /// 设置仿射变换矩阵（CTM）。
+    ///
+    /// 对应 Java: `CT_Text.getCTM()` 在 `KeywordExtractor#getCtmKeywordPosition` 中的使用。
+    ///
+    /// 6 元素 `[a, b, c, d, e, f]`，变换公式：
+    /// - `x' = a * x + c * y + e`
+    /// - `y' = b * x + d * y + f`
+    #[must_use]
+    pub fn ctm(mut self, ctm: [f64; 6]) -> Self {
+        self.ctm = Some(ctm);
         self
     }
 }
@@ -265,31 +287,111 @@ fn merge_boxes(boxes: &[ST_Box]) -> ST_Box {
     ST_Box::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
+/// 对坐标应用 CTM 仿射变换。
+///
+/// 对应 Java: `KeywordExtractor#transform`
+///
+/// 变换公式（OFD CTM 语义，行优先仿射矩阵 `[a b c d e f]`）：
+/// - `x' = a * sx + c * sy + e`
+/// - `y' = b * sx + d * sy + f`
+///
+/// 与 Java 版 `transform` 方法保持一致的乘法顺序。
+fn ctm_transform(matrix: &[f64; 6], sx: f64, sy: f64) -> (f64, f64) {
+    let x = matrix[0] * sx + matrix[2] * sy + matrix[4];
+    let y = matrix[1] * sx + matrix[3] * sy + matrix[5];
+    (x, y)
+}
+
+/// 合并多个坐标点为最小外接矩形。
+///
+/// 对应 Java: `KeywordExtractor#mergePos`
+fn merge_positions(positions: &[(f64, f64)]) -> ST_Box {
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    for &(px, py) in positions {
+        min_x = min_x.min(px);
+        min_y = min_y.min(py);
+        max_x = max_x.max(px);
+        max_y = max_y.max(py);
+    }
+
+    ST_Box::new(min_x, min_y, max_x - min_x, max_y - min_y)
+}
+
 /// 计算单个 TextCode 中关键字的边界框。
 ///
-/// 对应 Java: `KeywordExtractor#getKeywordPosition`（非 CTM 版本）
+/// 对应 Java: `KeywordExtractor#getKeywordPosition` / `KeywordExtractor#getCtmKeywordPosition`
 ///
 /// 从 TextCode 基准位置开始，沿 DeltaX/DeltaY 逐字符行走，记录关键字
 /// 字符区间内的最小/最大坐标，最终生成包含所有关键字字符的外接矩形。
+///
+/// 当 [`TextCodeEntry::ctm`] 存在时，对关键字区域的四个角应用仿射变换，
+/// 再合并为外接矩形——对应 Java 版 `getCtmKeywordPosition` 的行为。
 fn compute_keyword_box(
     entry: &TextCodeEntry,
     content_chars: &[char],
     text_index: usize,
     keyword_len: usize,
 ) -> ST_Box {
-    let base_x = entry.boundary.top_left_x + entry.x.unwrap_or(0.0);
-    let base_y = entry.boundary.top_left_y + entry.y.unwrap_or(0.0);
+    let base_x = entry.x.unwrap_or(0.0);
+    let base_y = entry.y.unwrap_or(0.0);
     let font_size = entry.font_size;
 
     if keyword_len == 0 || content_chars.is_empty() || text_index >= content_chars.len() {
-        return ST_Box::new(base_x, base_y - font_size, font_size, font_size);
+        return ST_Box::new(
+            entry.boundary.top_left_x + base_x,
+            entry.boundary.top_left_y + base_y - font_size,
+            font_size,
+            font_size,
+        );
     }
 
     let delta_x = pad_delta(&entry.delta_x, content_chars.len());
     let delta_y = pad_delta(&entry.delta_y, content_chars.len());
 
-    let mut x = base_x;
-    let mut y = base_y;
+    // ── CTM 分支：对应 Java `KeywordExtractor#getCtmKeywordPosition` ──
+    if let Some(matrix) = entry.ctm {
+        // 步骤 1：沿 Delta 行走到关键字起始位置（TextCode 局部坐标）
+        let mut x = base_x;
+        let mut y = base_y;
+        for i in 0..text_index {
+            if i < delta_x.len() {
+                x += delta_x[i];
+            }
+            if i < delta_y.len() {
+                y += delta_y[i];
+            }
+        }
+
+        // 步骤 2：计算关键字宽度
+        let string_width = get_string_width(text_index, keyword_len, &delta_x, font_size);
+        // 高度：用 font_size 近似（Java 用 strHeight 即 AWT FontRenderContext，
+        // Rust 无 AWT，用 font_size 作为合理近似）
+        let height = font_size;
+
+        // 步骤 3：对关键字区域的四个角应用 CTM 仿射变换
+        // 对应 Java: transform(matrix, x, y - height) 等
+        let left_top = ctm_transform(&matrix, x, y - height);
+        let left_bottom = ctm_transform(&matrix, x, y);
+        let right_top = ctm_transform(&matrix, x + string_width, y - height);
+        let right_bottom = ctm_transform(&matrix, x + string_width, y);
+
+        // 步骤 4：合并四个变换后的点为外接矩形
+        let mut ctm_box = merge_positions(&[left_top, left_bottom, right_top, right_bottom]);
+
+        // 步骤 5：偏移到 boundary 左上角（Java: ctmBox += ctText.getBoundary().getTopLeftPos()）
+        ctm_box.top_left_x += entry.boundary.top_left_x;
+        ctm_box.top_left_y += entry.boundary.top_left_y;
+
+        return ctm_box;
+    }
+
+    // ── 非 CTM 分支：对应 Java `KeywordExtractor#getKeywordPosition` ──
+    let mut x = entry.boundary.top_left_x + base_x;
+    let mut y = entry.boundary.top_left_y + base_y;
 
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
@@ -320,10 +422,13 @@ fn compute_keyword_box(
 
 /// 计算跨多个 TextCode 的关键字合并边界框。
 ///
-/// 对应 Java: `KeywordExtractor#mergeKeywordPosition`（非 CTM 版本）
+/// 对应 Java: `KeywordExtractor#mergeKeywordPosition`
 ///
 /// 对合并列表中的每个 TextCode 计算其贡献的字符区间和边界框，
 /// 然后合并所有框为一个外接矩形。
+///
+/// 当 [`TextCodeEntry::ctm`] 存在时，对每个 TextCode 贡献的左下/右上角
+/// 应用仿射变换再合并——对应 Java 版 CTM 分支。
 fn compute_merged_box(
     entries: &[TextCodeEntry],
     merge_indices: &[usize],
@@ -352,9 +457,6 @@ fn compute_merged_box(
             (content_len, 0)
         };
 
-        // 对应 Java: getLeftBottomPos + 偏移到 firstStartIndex
-        let (base_x, base_y) = get_base_xy(entry, &delta_x, &delta_y, start_char);
-
         // 对应 Java: getStringWidth
         let start_for_width = if idx == 0 && first_start_index > 0 {
             first_start_index
@@ -367,8 +469,35 @@ fn compute_merged_box(
         }
 
         let height = entry.font_size;
-        let box_ = ST_Box::new(base_x, base_y - height, width, height);
-        boxes.push(box_);
+
+        // ── CTM 分支：对应 Java `mergeKeywordPosition` 中 CTM 处理 ──
+        if let Some(matrix) = entry.ctm {
+            // TextCode 局部坐标
+            let mut x = entry.x.unwrap_or(0.0);
+            let mut y = entry.y.unwrap_or(0.0);
+            if idx == 0 && first_start_index > 0 {
+                for j in 0..first_start_index {
+                    if j < delta_x.len() {
+                        x += delta_x[j];
+                    }
+                    if j < delta_y.len() {
+                        y += delta_y[j];
+                    }
+                }
+            }
+            let left_bottom = ctm_transform(&matrix, x, y);
+            let right_top = ctm_transform(&matrix, x + width, y - height);
+
+            let mut ctm_box = merge_positions(&[left_bottom, right_top]);
+            ctm_box.top_left_x += entry.boundary.top_left_x;
+            ctm_box.top_left_y += entry.boundary.top_left_y;
+            boxes.push(ctm_box);
+        } else {
+            // ── 非 CTM 分支 ──
+            let (base_x, base_y) = get_base_xy(entry, &delta_x, &delta_y, start_char);
+            let box_ = ST_Box::new(base_x, base_y - height, width, height);
+            boxes.push(box_);
+        }
     }
 
     merge_boxes(&boxes)
@@ -939,5 +1068,112 @@ mod tests {
         assert!((positions[0].rect.top_left_x - 10.0).abs() < 0.01);
         // top_left_y = minY - font_size = 20 - 3 = 17
         assert!((positions[0].rect.top_left_y - 17.0).abs() < 0.01);
+    }
+
+    // ── CTM 仿射变换测试 ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_ctm_transform_identity() {
+        // 单位矩阵：变换后坐标不变
+        let matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let (x, y) = ctm_transform(&matrix, 10.0, 20.0);
+        assert!((x - 10.0).abs() < f64::EPSILON);
+        assert!((y - 20.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_ctm_transform_translation() {
+        // 平移矩阵 [1 0 0 1 5 10]：x'=x+5, y'=y+10
+        let matrix = [1.0, 0.0, 0.0, 1.0, 5.0, 10.0];
+        let (x, y) = ctm_transform(&matrix, 0.0, 0.0);
+        assert!((x - 5.0).abs() < f64::EPSILON);
+        assert!((y - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_ctm_transform_90_rotation() {
+        // 90 度逆时针旋转矩阵 [0 1 -1 0 0 0]
+        // x' = 0*x + (-1)*y + 0 = -y
+        // y' = 1*x + 0*y + 0 = x
+        let matrix = [0.0, 1.0, -1.0, 0.0, 0.0, 0.0];
+        let (x, y) = ctm_transform(&matrix, 3.0, 4.0);
+        assert!((x - (-4.0)).abs() < f64::EPSILON);
+        assert!((y - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_ctm_keyword_single_match() {
+        // 对应 Java: KeywordExtractor#getCtmKeywordPosition
+        // 单 TextCode 带 CTM（单位矩阵），结果应与无 CTM 一致
+        let entries = vec![
+            TextCodeEntry::new("OFD", 1, ST_Box::new(0.0, 0.0, 210.0, 297.0), 3.0)
+                .coordinate(10.0, 20.0)
+                .ctm([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+        ];
+        let positions = KeywordExtractor::get_keyword_positions_from_text_codes(&entries, "OFD");
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].keyword.as_deref(), Some("OFD"));
+    }
+
+    #[test]
+    fn test_ctm_keyword_90_rotation() {
+        // 90 度旋转文本，关键字 "AB" 的边界框应反映旋转变换
+        // CTM = [0 1 -1 0 0 0]（90 度逆时针）
+        // 原始: x=10, y=20, width=font_size(3.0), height=font_size(3.0)
+        // 变换后:
+        //   leftTop(10, 20-3)    -> (-(17), 10) = (-17, 10)
+        //   leftBottom(10, 20)   -> (-20, 10)
+        //   rightTop(13, 20-3)   -> (-17, 13)
+        //   rightBottom(13, 20)  -> (-20, 13)
+        // 合并: minX=-20, minY=10, maxX=-17, maxY=13
+        // 最终: (-20, 10, 3, 3)
+        let entries = vec![
+            TextCodeEntry::new("AB", 1, ST_Box::new(0.0, 0.0, 210.0, 297.0), 3.0)
+                .coordinate(10.0, 20.0)
+                .ctm([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]),
+        ];
+        let positions = KeywordExtractor::get_keyword_positions_from_text_codes(&entries, "AB");
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].keyword.as_deref(), Some("AB"));
+        // 旋转后框尺寸: width=3, height=3
+        assert!((positions[0].rect.width - 3.0).abs() < 0.01);
+        assert!((positions[0].rect.height - 3.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_ctm_keyword_with_translation() {
+        // CTM 平移 [1 0 0 1 50 100]：所有坐标偏移 (+50, +100)
+        // 原始: x=10, y=20, boundary(0,0)
+        // 非 CTM 结果: top_left = (10, 20-3) = (10, 17)
+        // CTM 结果: transform(10, 20) = (60, 120), transform(10, 17) = (60, 117)
+        //   加 boundary 偏移后: (60, 117)
+        let entries = vec![
+            TextCodeEntry::new("AB", 1, ST_Box::new(0.0, 0.0, 210.0, 297.0), 3.0)
+                .coordinate(10.0, 20.0)
+                .ctm([1.0, 0.0, 0.0, 1.0, 50.0, 100.0]),
+        ];
+        let positions = KeywordExtractor::get_keyword_positions_from_text_codes(&entries, "AB");
+        assert_eq!(positions.len(), 1);
+        // 验证平移效果：框整体偏移了 (50, 100)
+        assert!((positions[0].rect.top_left_x - 60.0).abs() < 0.01);
+        assert!((positions[0].rect.top_left_y - 117.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_ctm_keyword_cross_text_codes() {
+        // 跨 TextCode 带 CTM（单位矩阵），验证合并框正常工作
+        let entries = vec![
+            TextCodeEntry::new("电", 1, ST_Box::new(0.0, 0.0, 210.0, 297.0), 3.0)
+                .coordinate(10.0, 20.0)
+                .ctm([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+            TextCodeEntry::new("子", 1, ST_Box::new(0.0, 0.0, 210.0, 297.0), 3.0)
+                .coordinate(20.0, 20.0)
+                .ctm([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+        ];
+        let positions = KeywordExtractor::get_keyword_positions_from_text_codes(&entries, "电子");
+        assert_eq!(positions.len(), 1);
+        assert_eq!(positions[0].keyword.as_deref(), Some("电子"));
+        // 单位矩阵下，合并框应与无 CTM 行为一致
+        assert!(positions[0].rect.width > 3.0);
     }
 }

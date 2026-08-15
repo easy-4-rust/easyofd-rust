@@ -51,6 +51,8 @@ pub(crate) struct OfdEntry {
     /// Document subject (ofd:Subject), if present.
     /// 对应 ofdrw CT_DocInfo.Subject。
     pub(crate) subject: Option<String>,
+    /// 原始 OFD.xml 完整 XML 文本（roundtrip 保真用）。
+    pub(crate) raw_xml: String,
 }
 
 /// Parse OFD.xml using the [`easyofd_core::XmlNode`] tree (via
@@ -127,6 +129,7 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         doc_usage,
         keywords,
         subject,
+        raw_xml: xml_str.to_string(),
     })
 }
 
@@ -168,6 +171,8 @@ pub(crate) struct DocumentEntry {
     pub(crate) permissions: Option<Permissions>,
     /// Whether CommonData declared an ofd:PublicRes reference.
     pub(crate) public_res_element_present: bool,
+    /// 原始 Document.xml 完整 XML 文本（roundtrip 保真用）。
+    pub(crate) raw_xml: String,
 }
 
 /// Parse Document.xml → page BaseLoc paths, the bookmark collection
@@ -343,6 +348,7 @@ pub(crate) fn parse_document_entry<R: Read + std::io::Seek>(
         document_res_element_present,
         permissions,
         public_res_element_present,
+        raw_xml: xml_str.to_string(),
     })
 }
 

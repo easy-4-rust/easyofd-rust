@@ -135,7 +135,7 @@ pub trait XmlElement {
         }
         let children = self.child_nodes();
         let text = self.text_content();
-        if children.is_empty() && text.is_none() {
+        if children.is_empty() && text.is_none_or(|s| s.is_empty()) {
             out.push_str("/>");
             return;
         }
@@ -175,6 +175,9 @@ impl std::error::Error for XmlElementError {}
 
 impl XmlNode {
     /// 递归写 XML 片段。
+    ///
+    /// 空元素自闭合：无子节点或仅有空文本子节点时输出 `<Tag/>`，
+    /// 匹配 ofdrw/dom4j 默认行为（如 `<ofd:Keywords/>`）。
     fn write_self_xml(&self, out: &mut String) {
         if let Some(text) = &self.text {
             out.push_str(&xml_escape(text));
@@ -184,7 +187,12 @@ impl XmlNode {
         for (k, v) in &self.attrs {
             let _ = write!(out, " {k}=\"{}\"", xml_escape(v));
         }
-        if self.children.is_empty() {
+        // 判断是否为空内容：无子节点，或唯一子节点是空文本
+        let is_empty = self.children.is_empty()
+            || (self.children.len() == 1
+                && self.children[0].name.is_empty()
+                && self.children[0].text.as_deref().is_some_and(str::is_empty));
+        if is_empty {
             out.push_str("/>");
             return;
         }

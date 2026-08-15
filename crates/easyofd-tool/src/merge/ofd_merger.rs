@@ -18,8 +18,8 @@
 //!
 //! | Java 功能             | Rust 状态     | 说明                                     |
 //! |-----------------------|---------------|------------------------------------------|
-//! | 模板页迁移            | 未覆盖        | 模型层无 TemplatePage 对应物             |
-//! | 注释迁移              | 未覆盖        | 模型层无 Annotations 对应物              |
+//! | 模板页迁移            | 部分覆盖      | 原样复制 Templates/ 文件，ID 重映射未做  |
+//! | 注释迁移              | 部分覆盖      | 原始字节复制 + 索引重建，资源迁移未做    |
 //! | DrawParam 迁移        | 未覆盖        | 模型层无 DrawParam 对应物                |
 //! | Font 文件迁移         | 部分覆盖      | 字体名保留，字体文件需 writer 嵌入       |
 //! | DOM 对象 ID 重分配    | 不需要        | writer 重新生成所有 ID                   |
@@ -31,6 +31,7 @@ use std::fs;
 
 use super::resource_dedup::ResourceDedup;
 use super::{BareOFDDoc, DocContext, DocPage, PageEntry};
+use easyofd_core::model::template_page::TemplatePage;
 use easyofd_core::{ContentObject, ImageObject, OfdPage};
 use easyofd_reader::OfdReader;
 use easyofd_writer::OfdWriter;
@@ -137,9 +138,9 @@ impl OfdMerger {
             .map(|p| (p.source_index, p.page_index))
             .collect();
 
-        // ── 预提取 PageEntry 描述（含 tb_mix_pages）──
+        // ── 预提取 PageEntry 描述（含 tb_mix_pages 和 copy 标志）──
         #[allow(clippy::type_complexity)]
-        let entry_descs: Vec<(usize, usize, Vec<(usize, usize)>)> = self
+        let entry_descs: Vec<(usize, usize, Vec<(usize, usize)>, bool, bool)> = self
             .page_entries
             .iter()
             .map(|e| {
@@ -148,7 +149,13 @@ impl OfdMerger {
                     .iter()
                     .map(|m| (m.doc_ctx_index, m.page_index))
                     .collect();
-                (e.doc_ctx_index, e.page_index, mix)
+                (
+                    e.doc_ctx_index,
+                    e.page_index,
+                    mix,
+                    e.copy_annotations,
+                    e.copy_template,
+                )
             })
             .collect();
 
@@ -158,14 +165,28 @@ impl OfdMerger {
         // ── 收集合并后的页面 ──
         let mut merged_pages: Vec<OfdPage> = Vec::new();
 
+        // ── 跟踪合并页面到源页面的映射（用于注解/模板迁移）──
+        //
+        // merged_page_map[merged_index] = (source_doc_ctx_index, source_page_index_0based)
+        let mut merged_page_map: Vec<(usize, usize)> = Vec::new();
+
+        // ── 跟踪 PageEntry 的 copy_annotations / copy_template 开关 ──
+        // merged_page_flags[merged_index] = (copy_annotations, copy_template)
+        let mut merged_page_flags: Vec<(bool, bool)> = Vec::new();
+
         // ── 处理 DocPage 列表（page_index 从 0 开始）──
         for (source_index, page_index) in page_descs {
             let page_data = self.load_source_page(source_index, page_index, &mut source_cache)?;
             merged_pages.push(page_data);
+            merged_page_map.push((source_index, page_index));
+            // DocPage 路径默认复制模板和注解
+            merged_page_flags.push((true, true));
         }
 
         // ── 处理 PageEntry 列表（page_index 从 1 开始）──
-        for (doc_ctx_index, page_index, mix_pages) in entry_descs {
+        for (doc_ctx_index, page_index, mix_pages, copy_annotations, copy_template) in
+            entry_descs.clone()
+        {
             // PageEntry.page_index 从 1 开始，转换为 0-based 索引
             let zero_based = page_index.checked_sub(1).ok_or_else(|| {
                 let src = self.context.source_path(doc_ctx_index).unwrap_or("未知");
@@ -196,13 +217,25 @@ impl OfdMerger {
             }
 
             merged_pages.push(page_data);
+            merged_page_map.push((doc_ctx_index, zero_based));
+            merged_page_flags.push((copy_annotations, copy_template));
         }
+
+        // ── 迁移注解和模板 ──
+        //
+        // 对应 Java: `OFDMerger#pageAnnotationMigrate` + `OFDMerger#pageTplMigrate`
+        //
+        // 从源 ZIP 中提取注解/模板原始条目，注入产物 ZIP。
+        let (extra_entries, annotations_path, template_pages) =
+            migrate_extras(&source_cache, &merged_page_map, &merged_page_flags);
 
         // ── 生成新文档元数据 ──
         //
         // 对应 Java: `BareOFDDoc` 构造时生成新 DocID（UUID.randomUUID()）
         let metadata = easyofd_core::OfdMetadata {
             doc_id: Some(generate_doc_id()),
+            annotations_path,
+            template_pages,
             ..easyofd_core::OfdMetadata::default()
         };
 
@@ -210,6 +243,9 @@ impl OfdMerger {
         let mut writer = OfdWriter::new();
         writer.set_metadata(metadata);
         writer.add_pages(merged_pages);
+        if !extra_entries.is_empty() {
+            writer.preserve_entries(extra_entries);
+        }
 
         let bytes = writer.build().map_err(|e| format!("构建 OFD 失败: {e}"))?;
 
@@ -363,6 +399,299 @@ fn generate_doc_id() -> String {
     let clock_seq = (nanos >> 48) as u16;
     let node = nanos & 0x0000_FFFF_FFFF_FFFF;
     format!("{time_low:08x}-{time_mid:04x}-{time_hi:04x}-{clock_seq:04x}-{node:012x}")
+}
+
+// ── 注解/模板迁移 ──────────────────────────────────────────────────────────
+
+/// 迁移结果：(preserve_entries, annotations_path, template_pages)。
+type MigrateResult = (Vec<(String, Vec<u8>)>, Option<String>, Vec<TemplatePage>);
+
+/// 从 OFD ZIP 中读取指定路径的原始字节。
+fn read_zip_entry_bytes<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    path: &str,
+) -> Option<Vec<u8>> {
+    let mut file = archive.by_name(path).ok()?;
+    let mut buf = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut buf).ok()?;
+    Some(buf)
+}
+
+/// 从 OFD.xml 中提取文档目录名（如 "Doc_0"）。
+///
+/// 解析 `<ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>` 获取文档目录。
+fn extract_doc_dir(xml_bytes: &[u8]) -> Option<String> {
+    let xml = std::str::from_utf8(xml_bytes).ok()?;
+    let start = xml.find("<ofd:DocRoot>")? + 13;
+    let end = xml[start..].find("</ofd:DocRoot>")?;
+    let doc_root = xml[start..start + end].trim_start_matches('/');
+    doc_root.rfind('/').map(|idx| doc_root[..idx].to_string())
+}
+
+/// 从 Document.xml 中提取页面 ID 列表（按页面顺序，0-based 索引对应）。
+///
+/// 解析 `<ofd:Page ID="..." BaseLoc="..."/>` 的 ID 属性。
+fn extract_page_ids(xml_bytes: &[u8]) -> Vec<String> {
+    let xml = String::from_utf8_lossy(xml_bytes);
+    let mut page_ids = Vec::new();
+    let mut search_from = 0;
+    let pattern = "<ofd:Page ";
+    while let Some(rel_start) = xml[search_from..].find(pattern) {
+        let abs_start = search_from + rel_start;
+        let after = &xml[abs_start + pattern.len()..];
+        if let Some(id_rel) = after.find("ID=\"") {
+            let v_start = id_rel + 4;
+            if let Some(id_end) = after[v_start..].find('"') {
+                page_ids.push(after[v_start..v_start + id_end].to_string());
+            }
+        }
+        search_from = abs_start + pattern.len();
+    }
+    page_ids
+}
+
+/// 从 Annotations.xml 中提取 (PageID, FileLoc) 映射。
+///
+/// 解析 `<ofd:Page PageID="..."><ofd:FileLoc>...</ofd:FileLoc></ofd:Page>`。
+fn extract_annot_index(xml_bytes: &[u8]) -> Vec<(String, String)> {
+    let xml = String::from_utf8_lossy(xml_bytes);
+    let mut entries = Vec::new();
+    let mut search_from = 0;
+    while let Some(rel_start) = xml[search_from..].find("<ofd:Page ") {
+        let abs_start = search_from + rel_start;
+        let after = &xml[abs_start + 10..];
+        let page_id = after.find("PageID=\"").and_then(|s| {
+            let v = s + 8;
+            after[v..].find('"').map(|e| after[v..v + e].to_string())
+        });
+        let file_loc = after.find("<ofd:FileLoc>").and_then(|s| {
+            let v = s + 13;
+            after[v..]
+                .find("</ofd:FileLoc>")
+                .map(|e| after[v..v + e].trim().to_string())
+        });
+        if let (Some(pid), Some(loc)) = (page_id, file_loc) {
+            entries.push((pid, loc));
+        }
+        search_from = abs_start + 10;
+    }
+    entries
+}
+
+/// 从 Document.xml 中提取模板页 (ID, BaseLoc) 列表。
+///
+/// 解析 CommonData 中的 `<ofd:TemplatePage ID="..." BaseLoc="..."/>`。
+fn extract_template_pages(xml_bytes: &[u8]) -> Vec<(String, String)> {
+    let xml = String::from_utf8_lossy(xml_bytes);
+    let mut entries = Vec::new();
+    let mut search_from = 0;
+    let pattern = "<ofd:TemplatePage ";
+    while let Some(rel_start) = xml[search_from..].find(pattern) {
+        let abs_start = search_from + rel_start;
+        let after = &xml[abs_start + pattern.len()..];
+        let id = after.find("ID=\"").and_then(|s| {
+            let v = s + 4;
+            after[v..].find('"').map(|e| after[v..v + e].to_string())
+        });
+        let base_loc = after.find("BaseLoc=\"").and_then(|s| {
+            let v = s + 9;
+            after[v..].find('"').map(|e| after[v..v + e].to_string())
+        });
+        if let (Some(i), Some(bl)) = (id, base_loc) {
+            entries.push((i, bl));
+        }
+        search_from = abs_start + pattern.len();
+    }
+    entries
+}
+
+/// 构建合并后的 Annotations.xml 索引。
+///
+/// 为每个有注解的合并页生成 `<ofd:Page PageID="..."><ofd:FileLoc>...</ofd:FileLoc></ofd:Page>` 条目。
+fn build_annotations_index_xml(
+    doc_dir: &str,
+    pages: &[(usize, usize)],
+    page_ids: &[String],
+    annot_index: &[(String, String)],
+) -> String {
+    let mut entries_xml = String::new();
+    for &(src_page_idx, merged_idx) in pages {
+        let Some(src_page_id) = page_ids.get(src_page_idx) else {
+            continue;
+        };
+        if annot_index.iter().any(|(pid, _)| pid == src_page_id) {
+            let new_page_id = merged_idx + 1; // 合并后页面 ID = 索引 + 1（1-based）
+            let file_loc = format!("/{doc_dir}/Annots/Page_{merged_idx}/Annot_0.xml");
+            entries_xml.push_str(&format!(
+                r#"<ofd:Page PageID="{new_page_id}"><ofd:FileLoc>{file_loc}</ofd:FileLoc></ofd:Page>"#
+            ));
+        }
+    }
+
+    if entries_xml.is_empty() {
+        return String::new();
+    }
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><ofd:Annotations xmlns:ofd="http://www.ofdspec.org/2016">{entries_xml}</ofd:Annotations>"#
+    )
+}
+
+/// 迁移注解和模板到合并产物。
+///
+/// 对应 Java: `OFDMerger#pageAnnotationMigrate` + `OFDMerger#pageTplMigrate`
+///
+/// # 返回
+///
+/// - `preserve_entries`: 需要注入产物 ZIP 的原始条目（路径, 字节）
+/// - `annotations_path`: Document.xml 中 `<ofd:Annotations>` 的路径值
+/// - `template_pages`: 合并后的模板页引用列表
+///
+/// # 注解迁移策略
+///
+/// 1. 按源文档分组，打开源 ZIP。
+/// 2. 从 Document.xml 提取页面 ID 列表（0-based 索引 → PageID）。
+/// 3. 从 Annotations.xml 提取 (PageID, FileLoc) 映射。
+/// 4. 对每个 `copy_annotations=true` 的合并页，复制源注解文件原始字节。
+/// 5. 构建合并后的 Annotations.xml 索引（PageID 使用合并后 1-based 索引）。
+///
+/// # 模板迁移策略
+///
+/// 从源 ZIP 的 Templates/ 目录提取模板页文件，原样复制到产物。
+/// 模板 ID 重映射未实现（模型层无 Template 引用），注解中已标注。
+fn migrate_extras(
+    source_cache: &HashMap<usize, Vec<u8>>,
+    merged_page_map: &[(usize, usize)],
+    merged_page_flags: &[(bool, bool)],
+) -> MigrateResult {
+    let mut preserve_entries: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut has_annotations = false;
+    let mut template_pages: Vec<TemplatePage> = Vec::new();
+
+    // 按源文档分组：需要迁移注解的页面
+    let mut annot_pages: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    // 需要迁移模板的源文档
+    let mut tpl_needed: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+    for (merged_idx, &(src_doc, src_page)) in merged_page_map.iter().enumerate() {
+        let (copy_annots, copy_tpl) = merged_page_flags[merged_idx];
+        if copy_annots {
+            annot_pages
+                .entry(src_doc)
+                .or_default()
+                .push((src_page, merged_idx));
+        }
+        if copy_tpl {
+            tpl_needed.insert(src_doc);
+        }
+    }
+
+    // ── 注解迁移 ──
+    for (src_doc, pages) in &annot_pages {
+        let Some(src_bytes) = source_cache.get(src_doc) else {
+            continue;
+        };
+        let cursor = std::io::Cursor::new(src_bytes);
+        let Ok(mut archive) = zip::ZipArchive::new(cursor) else {
+            continue;
+        };
+
+        // 1. 提取 doc_dir
+        let doc_dir = read_zip_entry_bytes(&mut archive, "OFD.xml")
+            .and_then(|b| extract_doc_dir(&b))
+            .unwrap_or_else(|| "Doc_0".to_string());
+
+        // 2. 提取页面 ID 列表
+        let doc_xml_path = format!("{doc_dir}/Document.xml");
+        let page_ids = read_zip_entry_bytes(&mut archive, &doc_xml_path)
+            .map(|b| extract_page_ids(&b))
+            .unwrap_or_default();
+
+        // 3. 读取 Annotations.xml
+        let annot_xml_path = format!("{doc_dir}/Annots/Annotations.xml");
+        let annot_index = match read_zip_entry_bytes(&mut archive, &annot_xml_path) {
+            Some(bytes) => extract_annot_index(&bytes),
+            None => continue,
+        };
+
+        // 4. 为每个需要迁移注解的页面复制注解文件
+        for &(src_page_idx, merged_idx) in pages {
+            let Some(src_page_id) = page_ids.get(src_page_idx) else {
+                continue;
+            };
+            // 在 Annotations.xml 中查找该页面的注解文件
+            let annot_file_loc = annot_index
+                .iter()
+                .find(|(pid, _)| pid == src_page_id)
+                .map(|(_, loc)| loc.clone());
+            let Some(file_loc) = annot_file_loc else {
+                continue;
+            };
+
+            // 读取注解文件原始字节（去掉路径开头的 '/'）
+            let zip_path = file_loc.trim_start_matches('/');
+            let annot_bytes = match read_zip_entry_bytes(&mut archive, zip_path) {
+                Some(bytes) => bytes,
+                None => continue,
+            };
+
+            // 注解文件路径：使用合并后的页索引命名目录
+            // 对应 Java: pageAnnotDirName = "Page_" + mergedIndex
+            let target_path = format!("{doc_dir}/Annots/Page_{merged_idx}/Annot_0.xml");
+            preserve_entries.push((target_path, annot_bytes));
+            has_annotations = true;
+        }
+
+        // 5. 构建合并后的 Annotations.xml 索引
+        let index_xml = build_annotations_index_xml(&doc_dir, pages, &page_ids, &annot_index);
+        if !index_xml.is_empty() {
+            let index_path = format!("{doc_dir}/Annots/Annotations.xml");
+            preserve_entries.push((index_path, index_xml.into_bytes()));
+        }
+    }
+
+    // ── 模板迁移 ──
+    //
+    // 对应 Java: `OFDMerger#pageTplMigrate`
+    //
+    // 策略：从源 ZIP 中提取 Templates/ 目录下的原始文件，原样复制到产物。
+    // 模板 ID 重映射未实现（模型层无 Template 引用），诚实在注释中标注。
+    for src_doc in &tpl_needed {
+        let Some(src_bytes) = source_cache.get(src_doc) else {
+            continue;
+        };
+        let cursor = std::io::Cursor::new(src_bytes);
+        let Ok(mut archive) = zip::ZipArchive::new(cursor) else {
+            continue;
+        };
+
+        let doc_dir = read_zip_entry_bytes(&mut archive, "OFD.xml")
+            .and_then(|b| extract_doc_dir(&b))
+            .unwrap_or_else(|| "Doc_0".to_string());
+
+        // 提取模板页引用
+        let doc_xml_path = format!("{doc_dir}/Document.xml");
+        if let Some(doc_bytes) = read_zip_entry_bytes(&mut archive, &doc_xml_path) {
+            let tpl_entries = extract_template_pages(&doc_bytes);
+            for (id, base_loc) in &tpl_entries {
+                // 复制模板页文件
+                let tpl_zip_path = format!("{doc_dir}/{base_loc}");
+                if let Some(tpl_bytes) = read_zip_entry_bytes(&mut archive, &tpl_zip_path) {
+                    let target_path = format!("{doc_dir}/{base_loc}");
+                    preserve_entries.push((target_path, tpl_bytes));
+                }
+                template_pages.push(TemplatePage::new(id, base_loc));
+            }
+        }
+    }
+
+    let annotations_path = if has_annotations {
+        Some("Annots/Annotations.xml".to_string())
+    } else {
+        None
+    };
+
+    (preserve_entries, annotations_path, template_pages)
 }
 
 #[cfg(test)]
@@ -683,5 +1012,219 @@ mod tests {
         let texts = reader.extract_text();
         assert!(texts[0].contains("A2"));
         assert!(texts[1].contains("B1"));
+    }
+
+    // ── 注解迁移测试 ──────────────────────────────────────────────────────
+
+    #[test]
+    fn merge_with_annotation_migration() {
+        // 合并含注解的 OFD（gen_08_annotations.ofd）→ 产物应包含注解条目
+        let annot_ofd = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("tests/fixtures/ofdrw_gen/gen_08_annotations.ofd");
+        if !annot_ofd.exists() {
+            eprintln!("跳过：fixture 不存在 {}", annot_ofd.display());
+            return;
+        }
+        let annot_path = annot_ofd.to_str().unwrap();
+
+        let plain = create_test_ofd(vec![text_page("普通页", 210.0, 297.0)]);
+
+        let mut merger = OfdMerger::new("/tmp/merge_annot.ofd");
+        merger.add_source(annot_path, 1);
+        merger.add_source(plain.to_str().unwrap(), 1);
+        // DocPage 路径：默认 copy_annotations=true, copy_template=true
+        merger.add_page(DocPage::new(0, 0, 210.0, 297.0)); // 注解源页
+        merger.add_page(DocPage::new(1, 0, 210.0, 297.0)); // 普通页
+
+        let bytes = merger.merge().unwrap();
+        assert!(!bytes.is_empty());
+
+        // 解包产物 ZIP 检查注解条目
+        let cursor = std::io::Cursor::new(&bytes);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let entry_names: Vec<String> = (0..archive.len())
+            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .collect();
+
+        // 应包含 Annotations.xml 索引
+        assert!(
+            entry_names
+                .iter()
+                .any(|n| n.ends_with("Annots/Annotations.xml")),
+            "产物应包含 Annotations.xml，实际条目: {:?}",
+            entry_names,
+        );
+
+        // 应包含第一个合并页（merged_idx=0）的注解文件
+        assert!(
+            entry_names.iter().any(|n| n.contains("Annots/Page_0/")),
+            "产物应包含 Page_0 注解目录，实际条目: {:?}",
+            entry_names,
+        );
+
+        // 注解文件内容应非空
+        let annot_path_in_zip = entry_names
+            .iter()
+            .find(|n| {
+                n.contains("Annots/Page_0/")
+                    && std::path::Path::new(n)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("xml"))
+            })
+            .unwrap()
+            .clone();
+        let mut annot_file = archive.by_name(&annot_path_in_zip).unwrap();
+        let mut annot_content = String::new();
+        std::io::Read::read_to_string(&mut annot_file, &mut annot_content).unwrap();
+        assert!(
+            annot_content.contains("PageAnnot") || annot_content.contains("Annot"),
+            "注解文件应包含注解内容: {}",
+            annot_content,
+        );
+    }
+
+    #[test]
+    fn merge_copy_annotations_false() {
+        // copy_annotations=false 时不迁移注解
+        let annot_ofd = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("tests/fixtures/ofdrw_gen/gen_08_annotations.ofd");
+        if !annot_ofd.exists() {
+            eprintln!("跳过：fixture 不存在 {}", annot_ofd.display());
+            return;
+        }
+        let annot_path = annot_ofd.to_str().unwrap();
+
+        let plain = create_test_ofd(vec![text_page("普通页", 210.0, 297.0)]);
+
+        let mut merger = OfdMerger::new("/tmp/merge_no_annot.ofd");
+        merger.add_source(annot_path, 1);
+        merger.add_source(plain.to_str().unwrap(), 1);
+        // PageEntry 路径：显式关闭 copy_annotations
+        let entry = PageEntry::new(1, 0).copy_annotations(false);
+        merger.add_page_entry(entry);
+        merger.add_page(DocPage::new(1, 0, 210.0, 297.0));
+
+        let bytes = merger.merge().unwrap();
+
+        // 解包产物 ZIP 检查：不应包含注解条目
+        let cursor = std::io::Cursor::new(&bytes);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let entry_names: Vec<String> = (0..archive.len())
+            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .collect();
+
+        assert!(
+            !entry_names.iter().any(|n| n.contains("Annots/")),
+            "copy_annotations=false 时不应迁移注解，实际条目: {:?}",
+            entry_names,
+        );
+    }
+
+    #[test]
+    fn merge_annotation_migrates_per_page_flag() {
+        // 混合场景：第 1 页迁移注解，第 2 页不迁移
+        let annot_ofd = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("tests/fixtures/ofdrw_gen/gen_08_annotations.ofd");
+        if !annot_ofd.exists() {
+            eprintln!("跳过：fixture 不存在 {}", annot_ofd.display());
+            return;
+        }
+        let annot_path = annot_ofd.to_str().unwrap();
+
+        let mut merger = OfdMerger::new("/tmp/merge_mixed_annot.ofd");
+        merger.add_source(annot_path, 1);
+        // DocPage 路径：默认 copy_annotations=true
+        merger.add_page(DocPage::new(0, 0, 210.0, 297.0));
+
+        let bytes = merger.merge().unwrap();
+
+        // 解包产物 ZIP 检查注解条目
+        let cursor = std::io::Cursor::new(&bytes);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let entry_names: Vec<String> = (0..archive.len())
+            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .collect();
+
+        // 应包含 Annotations.xml 索引
+        assert!(
+            entry_names
+                .iter()
+                .any(|n| n.ends_with("Annots/Annotations.xml")),
+            "产物应包含 Annotations.xml",
+        );
+    }
+
+    // ── XML 解析辅助函数测试 ───────────────────────────────────────────────
+
+    #[test]
+    fn test_extract_doc_dir() {
+        let xml = br#"<?xml version="1.0"?><ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016"><ofd:DocBody><ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot></ofd:DocBody></ofd:OFD>"#;
+        assert_eq!(extract_doc_dir(xml), Some("Doc_0".to_string()));
+    }
+
+    #[test]
+    fn test_extract_doc_dir_with_leading_slash() {
+        let xml = b"<ofd:DocRoot>/Doc_0/Document.xml</ofd:DocRoot>";
+        assert_eq!(extract_doc_dir(xml), Some("Doc_0".to_string()));
+    }
+
+    #[test]
+    fn test_extract_page_ids() {
+        let xml = br#"<ofd:Pages><ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/><ofd:Page ID="49" BaseLoc="Pages/Page_1/Content.xml"/></ofd:Pages>"#;
+        let ids = extract_page_ids(xml);
+        assert_eq!(ids, vec!["1".to_string(), "49".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_annot_index() {
+        let xml = br#"<ofd:Annotations><ofd:Page PageID="1"><ofd:FileLoc>/Doc_0/Annots/Page_0/Annot_0.xml</ofd:FileLoc></ofd:Page></ofd:Annotations>"#;
+        let entries = extract_annot_index(xml);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "1");
+        assert_eq!(entries[0].1, "/Doc_0/Annots/Page_0/Annot_0.xml");
+    }
+
+    #[test]
+    fn test_extract_template_pages() {
+        let xml = br#"<ofd:CommonData><ofd:TemplatePage ID="100" BaseLoc="Templates/Tpl_0.xml"/></ofd:CommonData>"#;
+        let entries = extract_template_pages(xml);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "100");
+        assert_eq!(entries[0].1, "Templates/Tpl_0.xml");
+    }
+
+    #[test]
+    fn test_build_annotations_index_xml() {
+        let pages = vec![(0, 0)]; // src_page_idx=0 → merged_idx=0
+        let page_ids = vec!["1".to_string()];
+        let annot_index = vec![(
+            "1".to_string(),
+            "/Doc_0/Annots/Page_0/Annot_0.xml".to_string(),
+        )];
+        let xml = build_annotations_index_xml("Doc_0", &pages, &page_ids, &annot_index);
+        assert!(xml.contains("PageID=\"1\""));
+        assert!(xml.contains("Annots/Page_0/Annot_0.xml"));
+    }
+
+    #[test]
+    fn test_build_annotations_index_xml_empty() {
+        // 无注解页面 → 空字符串
+        let pages = vec![(0, 0)];
+        let page_ids = vec!["1".to_string()];
+        let annot_index: Vec<(String, String)> = vec![];
+        let xml = build_annotations_index_xml("Doc_0", &pages, &page_ids, &annot_index);
+        assert!(xml.is_empty());
     }
 }

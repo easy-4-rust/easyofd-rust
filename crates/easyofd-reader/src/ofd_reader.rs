@@ -18,6 +18,10 @@ pub struct OfdReader {
     /// 原始 ZIP 中不由写入器重新生成的条目（模板页、注释、附件、
     /// 签名、自定义标签等容器内容），用于无损 roundtrip。
     raw_entries: Vec<(String, Vec<u8>)>,
+    /// 原始 OFD.xml 完整 XML 文本（roundtrip 保真用）。
+    raw_ofd_xml: Option<String>,
+    /// 原始 Document.xml 完整 XML 文本（roundtrip 保真用）。
+    raw_document_xml: Option<String>,
 }
 
 impl OfdReader {
@@ -60,7 +64,7 @@ impl OfdReader {
     pub fn from_seek<R: Read + Seek>(source: R, options: ReadOptions) -> OfdResult<Self> {
         let mut pages = Vec::new();
         let mut raw_entries = Vec::new();
-        let metadata = visit_archive(
+        let (metadata, raw_ofd_xml, raw_document_xml) = visit_archive(
             source,
             options,
             |_, page| {
@@ -73,6 +77,8 @@ impl OfdReader {
             pages,
             metadata,
             raw_entries,
+            raw_ofd_xml,
+            raw_document_xml,
         })
     }
 
@@ -90,7 +96,7 @@ impl OfdReader {
     ) -> OfdResult<usize> {
         let mut count = 0usize;
         let mut raw_entries = Vec::new();
-        visit_archive(
+        let _ = visit_archive(
             File::open(path)?,
             options,
             |page_number, page| {
@@ -130,6 +136,26 @@ impl OfdReader {
         &self.raw_entries
     }
 
+    /// 原始 OFD.xml 完整 XML 文本（roundtrip 保真用）。
+    ///
+    /// 传给 [`OfdWriter::set_raw_ofd_xml`] 可让 writer 原样输出 OFD.xml，
+    /// 从而保证 Version、xmlns URI、DocType、DocInfo 子元素顺序等
+    /// 全部与原始一致。
+    #[must_use]
+    pub fn raw_ofd_xml(&self) -> Option<&str> {
+        self.raw_ofd_xml.as_deref()
+    }
+
+    /// 原始 Document.xml 完整 XML 文本（roundtrip 保真用）。
+    ///
+    /// 传给 [`OfdWriter::set_raw_document_xml`] 可让 writer 原样输出
+    /// Document.xml，从而保证 CommonData 子元素顺序、Page ID、MaxUnitID、
+    /// PhysicalBox 原始文本、命名空间 URI 等全部与原始一致。
+    #[must_use]
+    pub fn raw_document_xml(&self) -> Option<&str> {
+        self.raw_document_xml.as_deref()
+    }
+
     /// 从所有页面提取文本，每页一个 `String`。
     #[must_use]
     pub fn extract_text(&self) -> Vec<String> {
@@ -148,7 +174,7 @@ fn visit_archive<R: Read + Seek>(
     options: ReadOptions,
     mut visitor: impl FnMut(usize, OfdPage) -> OfdResult<()>,
     raw_entries: &mut Vec<(String, Vec<u8>)>,
-) -> OfdResult<OfdMetadata> {
+) -> OfdResult<(OfdMetadata, Option<String>, Option<String>)> {
     let mut archive = zip::ZipArchive::new(source).map_err(|e| OfdError::Zip(e.to_string()))?;
     validate_archive(&mut archive, options.package_limits)?;
 
@@ -195,17 +221,22 @@ fn visit_archive<R: Read + Seek>(
     // Parse date strings into NaiveDateTime if present.  Accepts ISO formats
     // ("2024-05-31", "2024-05-31T00:00:00") and PDF-style dates
     // ("D:20220708103442+02'34'") that WPS-generated OFD files use.
+    // 原始文本保留：roundtrip 时 writer 优先使用 raw 原样输出，避免格式偏差。
+    let creation_date_raw = ofd_entry.creation_date.clone();
+    let mod_date_raw = ofd_entry.mod_date.clone();
     let mod_date = ofd_entry.mod_date.as_deref().and_then(parse_ofd_date);
     let creation_date = ofd_entry.creation_date.as_deref().and_then(parse_ofd_date);
 
-    Ok(OfdMetadata {
+    let metadata = OfdMetadata {
         doc_id: ofd_entry.doc_id,
         title: ofd_entry.title,
         author: ofd_entry.author,
         creator: ofd_entry.creator,
         creator_version: ofd_entry.creator_version,
         mod_date,
+        mod_date_raw,
         creation_date,
+        creation_date_raw,
         max_unit_id: ofd_entry.max_unit_id,
         bookmarks: document_entry.bookmarks,
         outlines: document_entry.outlines,
@@ -235,7 +266,13 @@ fn visit_archive<R: Read + Seek>(
         },
         public_res_element_present: document_entry.public_res_element_present,
         ..OfdMetadata::default()
-    })
+    };
+
+    Ok((
+        metadata,
+        Some(ofd_entry.raw_xml),
+        Some(document_entry.raw_xml),
+    ))
 }
 
 /// 判断某 ZIP 条目是否由 `OfdWriter` 在写出时重新生成。

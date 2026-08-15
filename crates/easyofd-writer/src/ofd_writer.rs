@@ -14,6 +14,10 @@ pub struct OfdWriter {
     pub(crate) options: WriteOptions,
     /// 原样保留的 ZIP 条目（roundtrip 时从 `OfdReader::raw_entries()` 复制）。
     pub(crate) preserved_entries: Vec<(String, Vec<u8>)>,
+    /// 原始 OFD.xml XML 文本（roundtrip 保真用，有此值时 writer 原样输出）。
+    pub(crate) raw_ofd_xml: Option<String>,
+    /// 原始 Document.xml XML 文本（roundtrip 保真用，有此值时 writer 原样输出）。
+    pub(crate) raw_document_xml: Option<String>,
 }
 
 impl OfdWriter {
@@ -24,6 +28,8 @@ impl OfdWriter {
             pages: Vec::new(),
             options: WriteOptions::default(),
             preserved_entries: Vec::new(),
+            raw_ofd_xml: None,
+            raw_document_xml: None,
         }
     }
 
@@ -34,6 +40,8 @@ impl OfdWriter {
             pages: Vec::new(),
             options,
             preserved_entries: Vec::new(),
+            raw_ofd_xml: None,
+            raw_document_xml: None,
         }
     }
 
@@ -58,6 +66,28 @@ impl OfdWriter {
     /// 写入器会在写出时将这些条目按原字节复制，跳过已由写入器生成的条目。
     pub fn preserve_entries(&mut self, entries: Vec<(String, Vec<u8>)>) {
         self.preserved_entries.extend(entries);
+    }
+
+    /// 设置原始 OFD.xml XML 文本（roundtrip 保真用）。
+    ///
+    /// 有此值时 writer 原样输出 OFD.xml，不再从元数据重建——
+    /// 从而保证 Version、xmlns URI、DocType、DocInfo 子元素顺序等
+    /// 全部与原始一致。
+    ///
+    /// 从 [`OfdReader::raw_ofd_xml()`] 获取。
+    pub fn set_raw_ofd_xml(&mut self, xml: String) {
+        self.raw_ofd_xml = Some(xml);
+    }
+
+    /// 设置原始 Document.xml XML 文本（roundtrip 保真用）。
+    ///
+    /// 有此值时 writer 原样输出 Document.xml，不再从元数据重建——
+    /// 从而保证 CommonData 子元素顺序、Page ID、MaxUnitID、
+    /// PhysicalBox 原始文本、命名空间 URI 等全部与原始一致。
+    ///
+    /// 从 [`OfdReader::raw_document_xml()`] 获取。
+    pub fn set_raw_document_xml(&mut self, xml: String) {
+        self.raw_document_xml = Some(xml);
     }
 
     /// 构建 OFD 文件并返回原始字节。

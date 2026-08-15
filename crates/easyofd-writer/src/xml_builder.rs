@@ -37,6 +37,11 @@ fn strip_doc_dir_prefix<'a>(res_name: &'a str, doc_dir: &str) -> &'a str {
 
 impl OfdWriter {
     pub(crate) fn build_ofd_xml(&self) -> String {
+        // roundtrip 保真：原始 XML 存在时原样输出，不重建。
+        if let Some(ref raw) = self.raw_ofd_xml {
+            return raw.clone();
+        }
+
         // Helper: create a text child XmlNode with ofd: prefix.
         fn ofd_text(name: &str, text: &str) -> XmlNode {
             let mut node = XmlNode::element(format!("ofd:{name}"));
@@ -71,18 +76,47 @@ impl OfdWriter {
         if let Some(ref creator_version) = self.options.metadata.creator_version {
             doc_info.push_child(ofd_text("CreatorVersion", creator_version));
         }
-        if let Some(dt) = self.options.metadata.creation_date {
+        // CT_DocInfo 日期字段：优先使用原始文本原样输出（roundtrip 保真），
+        // 无 raw 时格式化 NaiveDateTime（新建文档场景）。
+        if self.options.metadata.creation_date_raw.is_some()
+            || self.options.metadata.creation_date.is_some()
+        {
             let mut node = XmlNode::element("ofd:CreationDate");
-            node.push_child(XmlNode::text_node(
-                dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
-            ));
+            let date_text = self
+                .options
+                .metadata
+                .creation_date_raw
+                .as_deref()
+                .map(String::from)
+                .or_else(|| {
+                    self.options
+                        .metadata
+                        .creation_date
+                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                });
+            if let Some(text) = date_text {
+                node.push_child(XmlNode::text_node(text));
+            }
             doc_info.push_child(node);
         }
-        if let Some(dt) = self.options.metadata.mod_date {
+        if self.options.metadata.mod_date_raw.is_some() || self.options.metadata.mod_date.is_some()
+        {
             let mut node = XmlNode::element("ofd:ModDate");
-            node.push_child(XmlNode::text_node(
-                dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
-            ));
+            let date_text = self
+                .options
+                .metadata
+                .mod_date_raw
+                .as_deref()
+                .map(String::from)
+                .or_else(|| {
+                    self.options
+                        .metadata
+                        .mod_date
+                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                });
+            if let Some(text) = date_text {
+                node.push_child(XmlNode::text_node(text));
+            }
             doc_info.push_child(node);
         }
         if let Some(ref doc_usage) = self.options.metadata.doc_usage {
@@ -142,6 +176,11 @@ impl OfdWriter {
         &self,
         image_resources: &[(String, &[u8], ImageFormat)],
     ) -> String {
+        // roundtrip 保真：原始 XML 存在时原样输出，不重建。
+        if let Some(ref raw) = self.raw_document_xml {
+            return raw.clone();
+        }
+
         use easyofd_core::doc::pages::{PageEntry, Pages};
         use easyofd_core::xml_element::{XmlElement, XmlNode};
         use easyofd_core::{CT_TemplatePage, CTDest, DestType};

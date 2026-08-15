@@ -1240,17 +1240,28 @@ impl XmlElement for OfdMetadata {
         if let Some(cv) = &self.creator_version {
             nodes.push(text_child("CreatorVersion", cv));
         }
-        if let Some(dt) = &self.creation_date {
-            nodes.push(text_child(
-                "CreationDate",
-                &dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
-            ));
+        // CT_DocInfo 日期字段：优先使用原始文本（roundtrip 保真）
+        if self.creation_date_raw.is_some() || self.creation_date.is_some() {
+            let date_text = self
+                .creation_date_raw
+                .as_deref()
+                .map(String::from)
+                .or_else(|| {
+                    self.creation_date
+                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+                });
+            if let Some(text) = date_text {
+                nodes.push(text_child("CreationDate", &text));
+            }
         }
-        if let Some(dt) = &self.mod_date {
-            nodes.push(text_child(
-                "ModDate",
-                &dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
-            ));
+        if self.mod_date_raw.is_some() || self.mod_date.is_some() {
+            let date_text = self.mod_date_raw.as_deref().map(String::from).or_else(|| {
+                self.mod_date
+                    .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string())
+            });
+            if let Some(text) = date_text {
+                nodes.push(text_child("ModDate", &text));
+            }
         }
         if self.max_unit_id > 0 {
             nodes.push(text_child("MaxUnitID", &self.max_unit_id.to_string()));
@@ -1269,16 +1280,22 @@ impl XmlElement for OfdMetadata {
     }
 
     fn from_xml(node: &XmlNode) -> Result<Self, XmlElementError> {
+        let creation_date_raw = child_text(node, "CreationDate");
+        let mod_date_raw = child_text(node, "ModDate");
         Ok(Self {
             doc_id: child_text(node, "DocID"),
             title: child_text(node, "Title"),
             author: child_text(node, "Author"),
             creator: child_text(node, "Creator"),
             creator_version: child_text(node, "CreatorVersion"),
-            creation_date: child_text(node, "CreationDate")
-                .and_then(|s| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").ok()),
-            mod_date: child_text(node, "ModDate")
-                .and_then(|s| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").ok()),
+            creation_date: creation_date_raw
+                .as_deref()
+                .and_then(|s| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").ok()),
+            creation_date_raw,
+            mod_date: mod_date_raw
+                .as_deref()
+                .and_then(|s| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").ok()),
+            mod_date_raw,
             max_unit_id: child_u32(node, "MaxUnitID").unwrap_or(0),
             doc_usage: child_text(node, "DocUsage"),
             keywords: child_text(node, "Keywords"),

@@ -3,13 +3,17 @@
 
 //! Roundtrip diff: read ofdrw-produced fixtures -> write -> compare against original.
 //!
-//! This test quantifies how many structural deviations remain between
-//! ofdrw output and easyofd-rust roundtrip output.
+//! 两层比对：
+//! 1. **元素计数**（快速预检）：按元素名统计数量，检测结构性增删。
+//! 2. **文本级规范化比对**（全文）：解析 XmlNode 树后递归比较元素名、
+//!    属性值、文本内容，忽略 ofd: 前缀差异、属性顺序、自闭合风格差异，
+//!    能抓到日期格式偏差、属性值不同、文本内容不同等字节级差异。
 
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use easyofd_core::XmlNode;
 use easyofd_reader::OfdReader;
 use easyofd_writer::OfdWriter;
 use quick_xml::events::Event;
@@ -50,9 +54,7 @@ fn list_zip_entries(zip_bytes: &[u8]) -> Vec<String> {
 }
 
 /// Count XML elements, normalizing the `ofd:` namespace prefix so that
-/// structural comparison is namespace-agnostic.  A WPS-generated source may
-/// write `<PhysicalBox>` without the prefix while the writer emits
-/// `<ofd:PhysicalBox>`; the prefix spelling is not a structural deviation.
+/// structural comparison is namespace-agnostic.
 fn count_xml_elements(xml: &str) -> HashMap<String, usize> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -77,9 +79,14 @@ fn roundtrip(bytes: &[u8]) -> Vec<u8> {
     let reader = OfdReader::from_bytes(bytes).expect("initial read should succeed");
     let mut writer = OfdWriter::new();
     writer.set_metadata(reader.metadata().clone());
-    // Carry over entries the writer does not regenerate (template pages,
-    // annotations, attachments, signatures, custom tags and payload files).
     writer.preserve_entries(reader.raw_entries().to_vec());
+    // roundtrip 保真：传入原始 XML，writer 原样输出 OFD.xml / Document.xml
+    if let Some(xml) = reader.raw_ofd_xml() {
+        writer.set_raw_ofd_xml(xml.to_string());
+    }
+    if let Some(xml) = reader.raw_document_xml() {
+        writer.set_raw_document_xml(xml.to_string());
+    }
     for page in reader.pages() {
         writer.add_page(page.clone());
     }
@@ -91,6 +98,112 @@ struct DiffReport {
     fixture: String,
     zip_diffs: Vec<String>,
     xml_diffs: Vec<String>,
+    text_diffs: Vec<String>,
+}
+
+/// 递归比较两棵 XmlNode 树，报告文本级差异。
+///
+/// 规范化规则：
+/// - 元素名已由解析器去掉 ofd: 前缀（`local_name`）。
+/// - 属性按 key 排序后逐对比较（忽略原始顺序差异）。
+/// - 文本内容 trim 后比较（忽略前导/尾随空白差异）。
+/// - 空自闭合 `<Tag/>` 与空显式闭合 `<Tag></Tag>` 经解析后等价
+///   （均为 `children: []`），无需额外处理。
+fn compare_xml_nodes(orig: &XmlNode, rt: &XmlNode, path: &str, diffs: &mut Vec<String>) {
+    // 比较元素名（已去除 namespace 前缀）
+    if orig.name != rt.name {
+        diffs.push(format!(
+            "{path}: element name mismatch: '{}' vs '{}'",
+            orig.name, rt.name
+        ));
+        return;
+    }
+    let elem_path = if path.is_empty() {
+        orig.name.clone()
+    } else {
+        format!("{path}/{}", orig.name)
+    };
+
+    // 属性：按 key 排序后比较
+    let mut orig_attrs: Vec<(&str, &str)> = orig
+        .attrs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    let mut rt_attrs: Vec<(&str, &str)> = rt
+        .attrs
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    orig_attrs.sort_unstable_by_key(|(k, _)| *k);
+    rt_attrs.sort_unstable_by_key(|(k, _)| *k);
+
+    if orig_attrs.len() != rt_attrs.len() {
+        diffs.push(format!(
+            "{elem_path}: attribute count mismatch: {} vs {}",
+            orig_attrs.len(),
+            rt_attrs.len()
+        ));
+    }
+    for (i, ((ok, ov), (rk, rv))) in orig_attrs.iter().zip(rt_attrs.iter()).enumerate() {
+        if ok != rk {
+            diffs.push(format!(
+                "{elem_path}: attr[{i}] key mismatch: '{ok}' vs '{rk}'"
+            ));
+        }
+        if ov != rv {
+            diffs.push(format!(
+                "{elem_path}: attr '{ok}' value mismatch: '{ov}' vs '{rv}'"
+            ));
+        }
+    }
+
+    // 文本内容（trim 后比较）
+    let orig_text = orig.text.as_deref().unwrap_or("").trim();
+    let rt_text = rt.text.as_deref().unwrap_or("").trim();
+    if orig_text != rt_text {
+        diffs.push(format!(
+            "{elem_path}: text content mismatch: '{}' vs '{}'",
+            truncate_display(orig_text, 80),
+            truncate_display(rt_text, 80)
+        ));
+    }
+
+    // 子元素
+    if orig.children.len() != rt.children.len() {
+        diffs.push(format!(
+            "{elem_path}: child count mismatch: {} vs {}",
+            orig.children.len(),
+            rt.children.len()
+        ));
+    }
+    for (oc, rc) in orig.children.iter().zip(rt.children.iter()) {
+        compare_xml_nodes(oc, rc, &elem_path, diffs);
+    }
+}
+
+/// 截断字符串用于显示（超过 max_len 时加 "..."）。
+fn truncate_display(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
+}
+
+/// 文本级规范化比对：解析两段 XML 为 XmlNode 树，递归比较。
+fn compare_xml_text(orig_xml: &str, rt_xml: &str) -> Vec<String> {
+    let orig_tree = match easyofd_core::parse_xml_to_nodes(orig_xml) {
+        Ok(tree) => tree,
+        Err(e) => return vec![format!("original XML parse error: {e}")],
+    };
+    let rt_tree = match easyofd_core::parse_xml_to_nodes(rt_xml) {
+        Ok(tree) => tree,
+        Err(e) => return vec![format!("roundtrip XML parse error: {e}")],
+    };
+    let mut diffs = Vec::new();
+    compare_xml_nodes(&orig_tree, &rt_tree, "", &mut diffs);
+    diffs
 }
 
 fn analyze_fixture(name: &str) -> DiffReport {
@@ -103,6 +216,7 @@ fn analyze_fixture(name: &str) -> DiffReport {
 
     let mut zip_diffs = Vec::new();
     let mut xml_diffs = Vec::new();
+    let mut text_diffs = Vec::new();
 
     // Normalize page paths for comparison: Page_N/Content.xml -> Page_N.xml
     let normalize = |e: &String| -> String {
@@ -130,7 +244,7 @@ fn analyze_fixture(name: &str) -> DiffReport {
         }
     }
 
-    // Compare XML element distributions for shared files
+    // 比对共享 XML 文件：元素计数（快速预检）+ 文本级规范化比对（全文）
     for (xml_name, orig_xml) in &[
         ("OFD.xml", read_zip_entry_as_string(&orig_bytes, "OFD.xml")),
         (
@@ -144,6 +258,8 @@ fn analyze_fixture(name: &str) -> DiffReport {
         ) else {
             continue;
         };
+
+        // 层 1：元素计数（快速预检）
         let orig_counts = count_xml_elements(orig);
         let rt_counts = count_xml_elements(&rt_xml);
 
@@ -162,17 +278,23 @@ fn analyze_fixture(name: &str) -> DiffReport {
                 ));
             }
         }
+
+        // 层 2：文本级规范化比对（抓日期格式偏差、属性值差异、文本内容差异）
+        let semantic_diffs = compare_xml_text(orig, &rt_xml);
+        for d in &semantic_diffs {
+            text_diffs.push(format!("{xml_name}: {d}"));
+        }
     }
 
     DiffReport {
         fixture: name.to_string(),
         zip_diffs,
         xml_diffs,
+        text_diffs,
     }
 }
 
 /// Discover every `.ofd` fixture in `tests/fixtures/real_ofd/`, sorted.
-/// This covers all ofdrw samples (previously only an explicit subset).
 fn discover_fixtures() -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(fixture_dir())
         .map(|entries| {
@@ -200,6 +322,7 @@ fn discover_fixtures() -> Vec<String> {
 fn roundtrip_diff_report() {
     let mut total_zip = 0;
     let mut total_xml = 0;
+    let mut total_text = 0;
     let mut ok_count = 0;
     let mut diff_count = 0;
     let mut skipped = 0;
@@ -211,39 +334,42 @@ fn roundtrip_diff_report() {
             skipped += 1;
             continue;
         }
-        // A roundtrip may panic on exotic inputs; count them separately
-        // instead of failing the whole report.
         let Ok(report) = std::panic::catch_unwind(|| analyze_fixture(&name)) else {
             println!("[PANIC] {name}: roundtrip panicked");
             diff_count += 1;
             continue;
         };
-        let total = report.zip_diffs.len() + report.xml_diffs.len();
+        let total = report.zip_diffs.len() + report.xml_diffs.len() + report.text_diffs.len();
         if total == 0 {
             println!("[OK] {name}: no deviations");
             ok_count += 1;
             continue;
         }
         println!(
-            "\n[DIFF] {name}: {} ZIP + {} XML = {} total",
+            "\n[DIFF] {name}: {} ZIP + {} XML-count + {} text = {} total",
             report.zip_diffs.len(),
             report.xml_diffs.len(),
+            report.text_diffs.len(),
             total
         );
         for d in &report.zip_diffs {
             println!("  ZIP: {d}");
         }
         for d in &report.xml_diffs {
-            println!("  XML: {d}");
+            println!("  XML-count: {d}");
+        }
+        for d in &report.text_diffs {
+            println!("  TEXT: {d}");
         }
         total_zip += report.zip_diffs.len();
         total_xml += report.xml_diffs.len();
+        total_text += report.text_diffs.len();
         diff_count += 1;
     }
 
     println!("\n================================================================");
     println!(
-        "Total: {total_zip} ZIP diffs + {total_xml} XML diffs = {} across {ok_count} clean, {diff_count} with deviations, {skipped} skipped",
-        total_zip + total_xml
+        "Total: {total_zip} ZIP + {total_xml} XML-count + {total_text} text = {} across {ok_count} clean, {diff_count} with deviations, {skipped} skipped",
+        total_zip + total_xml + total_text
     );
 }
