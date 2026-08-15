@@ -93,10 +93,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [workspace.lints.rust]
+# 门禁：禁止 unsafe；文档缺失暂不强制（历史行为保持 allow）
 unsafe_code = "forbid"
-missing_docs = "warn"
+missing_docs = "allow"
 
 [workspace.lints.clippy]
+# 并集：各 crate 历史 allow 的统一收口，全部 crate 通过 lints.workspace = true 继承
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
@@ -113,3 +115,7 @@ unnecessary_map_or = "allow"
 missing_errors_doc = "allow"
 items_after_statements = "allow"
 manual_string_new = "allow"
+format_collect = "allow"
+format_push_string = "allow"
+needless_range_loop = "allow"
+uninlined_format_args = "allow"
