@@ -82,12 +82,12 @@ __pycache__/
 ### tools ###
 .mimocode/
 .codegraph/
-Cargo.lock
+# Cargo.lock 入库（含 bin crate 的 workspace，保证 CI/发布可复现性与审计一致性）
 *.profraw
 *.profdata
 **/target/
 **/*.rs.bk
-!xtask/Cargo.lock
+!xtask/# Cargo.lock 入库（含 bin crate 的 workspace，保证 CI/发布可复现性与审计一致性）
 .idea/
 .vscode/
 *.swp
