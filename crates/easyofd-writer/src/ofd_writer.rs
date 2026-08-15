@@ -18,6 +18,11 @@ pub struct OfdWriter {
     pub(crate) raw_ofd_xml: Option<String>,
     /// 原始 Document.xml XML 文本（roundtrip 保真用，有此值时 writer 原样输出）。
     pub(crate) raw_document_xml: Option<String>,
+    /// 额外图片资源（注解/模板迁移用），写入 DocumentRes.xml 但不在页面 Content 中引用。
+    ///
+    /// 对应 Java: `OFDMerger#resMigrate` 中迁移的非页面资源。
+    /// ID 从 `100 + 页面图片总数` 开始递增。
+    pub(crate) extra_resource_entries: Vec<(String, Vec<u8>, ImageFormat)>,
 }
 
 impl OfdWriter {
@@ -30,6 +35,7 @@ impl OfdWriter {
             preserved_entries: Vec::new(),
             raw_ofd_xml: None,
             raw_document_xml: None,
+            extra_resource_entries: Vec::new(),
         }
     }
 
@@ -42,6 +48,7 @@ impl OfdWriter {
             preserved_entries: Vec::new(),
             raw_ofd_xml: None,
             raw_document_xml: None,
+            extra_resource_entries: Vec::new(),
         }
     }
 
@@ -66,6 +73,16 @@ impl OfdWriter {
     /// 写入器会在写出时将这些条目按原字节复制，跳过已由写入器生成的条目。
     pub fn preserve_entries(&mut self, entries: Vec<(String, Vec<u8>)>) {
         self.preserved_entries.extend(entries);
+    }
+
+    /// 添加额外图片资源（注解/模板迁移用）。
+    ///
+    /// 对应 Java: `OFDMerger#resMigrate` 中迁移的非页面资源。
+    ///
+    /// 这些资源会被写入 DocumentRes.xml（ID 从 `100 + 页面图片总数` 开始递增），
+    /// 并写入 Res/ 目录，但不会出现在任何页面的 Content XML 中。
+    pub fn add_extra_resource(&mut self, res_name: String, data: Vec<u8>, format: ImageFormat) {
+        self.extra_resource_entries.push((res_name, data, format));
     }
 
     /// 设置原始 OFD.xml XML 文本（roundtrip 保真用）。
@@ -182,6 +199,14 @@ impl OfdWriter {
             }
         }
 
+        // ── 额外资源（注解/模板迁移）追加到图片资源列表 ──
+        // ID 从 100 + 页面图片总数 开始，与 build_document_res_xml 的 ID 分配一致。
+        let extra_res_refs: Vec<(String, &[u8], ImageFormat)> = self
+            .extra_resource_entries
+            .iter()
+            .map(|(name, data, fmt)| (name.clone(), data.as_slice(), *fmt))
+            .collect();
+
         // 1. 写入 OFD.xml
         let ofd_xml = self.build_ofd_xml();
         zip.start_file("OFD.xml", *options).map_err(zip_err)?;
@@ -194,18 +219,33 @@ impl OfdWriter {
         zip.write_all(doc_xml.as_bytes()).map_err(io_err)?;
 
         // 3. 写入 DocumentRes.xml（与 Document.xml 中的引用保持一致：仅在
-        // 存在图片资源时输出）
-        if !image_resources.is_empty() {
-            let doc_res_xml = self.build_document_res_xml(&image_resources);
-            zip.start_file(format!("{doc_dir}/DocumentRes.xml"), *options)
+        // 存在图片资源时输出）。若 preserved_entries 已含同名条目则跳过生成，
+        // 让 preserved_entries 中的合并产物 DocumentRes.xml 生效。
+        let doc_res_archive_path = format!("{doc_dir}/DocumentRes.xml");
+        let has_preserved_doc_res = self
+            .preserved_entries
+            .iter()
+            .any(|(name, _)| name == &doc_res_archive_path);
+        if !has_preserved_doc_res && (!image_resources.is_empty() || !extra_res_refs.is_empty()) {
+            // 合并页面图片资源和额外资源，生成统一的 DocumentRes.xml
+            let mut combined: Vec<(String, &[u8], ImageFormat)> = image_resources.clone();
+            combined.extend(extra_res_refs.iter().cloned());
+            let doc_res_xml = self.build_document_res_xml(&combined);
+            zip.start_file(&doc_res_archive_path, *options)
                 .map_err(zip_err)?;
             zip.write_all(doc_res_xml.as_bytes()).map_err(io_err)?;
         }
 
         // PublicRes.xml: ofdrw only writes the file when font resources were
         // explicitly added; a roundtrip source without it is preserved as-is.
-        if self.options.metadata.public_res_present {
-            zip.start_file(format!("{doc_dir}/PublicRes.xml"), *options)
+        // 若 preserved_entries 已含同名条目则跳过生成。
+        let pub_res_archive_path = format!("{doc_dir}/PublicRes.xml");
+        let has_preserved_pub_res = self
+            .preserved_entries
+            .iter()
+            .any(|(name, _)| name == &pub_res_archive_path);
+        if !has_preserved_pub_res && self.options.metadata.public_res_present {
+            zip.start_file(&pub_res_archive_path, *options)
                 .map_err(zip_err)?;
             zip.write_all(self.build_public_res_xml(&image_resources).as_bytes())
                 .map_err(io_err)?;
@@ -227,12 +267,32 @@ impl OfdWriter {
 
         // 5. 写入图片资源（按 res_name 去重，避免合并场景下相同内容的重复写入）。
         // 当多个页面引用相同 res_name 时（如 OfdMerger 的 SM3 去重），只写入一次。
+        //
+        // 额外资源的 res_name 可能不含 doc_dir 前缀（如 "Res/1.png"），
+        // 需要归一化为 "{doc_dir}/Res/1.png" 以匹配 OFD ZIP 结构。
         {
-            let mut written_image_res: std::collections::HashSet<&str> =
+            let mut written_image_res: std::collections::HashSet<String> =
                 std::collections::HashSet::new();
             for (res_name, data, _) in &image_resources {
-                if written_image_res.insert(res_name.as_str()) {
+                if written_image_res.insert(res_name.clone()) {
                     zip.start_file(res_name, *options).map_err(zip_err)?;
+                    zip.write_all(data).map_err(io_err)?;
+                }
+            }
+            // 额外资源文件（注解/模板迁移的资源）
+            let doc_dir_prefix = format!("{doc_dir}/");
+            for (res_name, data, _) in &self.extra_resource_entries {
+                let archive_path = if res_name.starts_with('/')
+                    || res_name
+                        .get(..doc_dir_prefix.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(&doc_dir_prefix))
+                {
+                    res_name.clone()
+                } else {
+                    format!("{doc_dir}/{res_name}")
+                };
+                if written_image_res.insert(archive_path.clone()) {
+                    zip.start_file(&archive_path, *options).map_err(zip_err)?;
                     zip.write_all(data).map_err(io_err)?;
                 }
             }
@@ -242,13 +302,31 @@ impl OfdWriter {
         let mut written: std::collections::HashSet<String> = std::collections::HashSet::new();
         written.insert("OFD.xml".to_string());
         written.insert(doc_path);
-        // DocumentRes.xml is only regenerated when there are image resources;
-        // a leftover DocumentRes.xml in the source archive is preserved then.
-        if !image_resources.is_empty() {
-            written.insert(format!("{doc_dir}/DocumentRes.xml"));
+        // DocumentRes.xml：仅在 writer 实际生成时标记为已写（preserved 优先）
+        if !has_preserved_doc_res && (!image_resources.is_empty() || !extra_res_refs.is_empty()) {
+            written.insert(doc_res_archive_path);
         }
-        written.insert(format!("{doc_dir}/PublicRes.xml"));
+        // PublicRes.xml：仅在 writer 实际生成时标记为已写
+        if !has_preserved_pub_res {
+            written.insert(pub_res_archive_path);
+        }
         written.extend(image_resources.iter().map(|(name, _, _)| name.clone()));
+        // 额外资源：归一化路径后加入 written 集合
+        {
+            let doc_dir_prefix = format!("{doc_dir}/");
+            for (name, _, _) in &self.extra_resource_entries {
+                let archive_path = if name.starts_with('/')
+                    || name
+                        .get(..doc_dir_prefix.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(&doc_dir_prefix))
+                {
+                    name.clone()
+                } else {
+                    format!("{doc_dir}/{name}")
+                };
+                written.insert(archive_path);
+            }
+        }
         for (i, page) in self.pages.iter().enumerate() {
             written.insert(self.page_archive_path(page, i));
         }
