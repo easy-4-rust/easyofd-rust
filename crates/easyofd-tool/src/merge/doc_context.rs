@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+use super::resource_dedup::ResourceDedup;
+
 /// 合并上下文。
 ///
 /// 对应 Java: `org.ofdrw.tool.merge.DocContext`
@@ -20,6 +22,10 @@ pub struct DocContext {
     page_mapping: HashMap<usize, (usize, usize)>,
     /// 资源路径重映射（源路径 → 目标路径）。
     resource_remap: HashMap<String, String>,
+    /// 资源文件内容寻址去重器。
+    ///
+    /// 对应 Java: `OFDMerger.resFileHashTable` + `OFDMerger.resFileCounter`
+    resource_dedup: ResourceDedup,
 }
 
 impl DocContext {
@@ -79,6 +85,20 @@ impl DocContext {
     pub fn page_count(&self) -> usize {
         self.page_mapping.len()
     }
+
+    /// 获取资源去重器的引用。
+    ///
+    /// 对应 Java: `OFDMerger.resFileHashTable`
+    #[must_use]
+    pub fn resource_dedup(&self) -> &ResourceDedup {
+        &self.resource_dedup
+    }
+
+    /// 获取资源去重器的可变引用。
+    #[must_use]
+    pub fn resource_dedup_mut(&mut self) -> &mut ResourceDedup {
+        &mut self.resource_dedup
+    }
 }
 
 #[cfg(test)]
@@ -124,5 +144,14 @@ mod tests {
 
         assert_eq!(ctx.resource_remap("res/font.ttf"), Some("res/font_0.ttf"));
         assert!(ctx.resource_remap("res/other.ttf").is_none());
+    }
+
+    #[test]
+    fn resource_dedup_accessor() {
+        let mut ctx = DocContext::new();
+        assert!(ctx.resource_dedup().is_empty());
+        // 可变引用可正常获取
+        let dedup = ctx.resource_dedup_mut();
+        assert_eq!(dedup.len(), 0);
     }
 }

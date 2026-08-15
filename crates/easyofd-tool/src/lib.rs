@@ -21,7 +21,7 @@
 pub mod merge;
 pub mod page_deleter;
 
-pub use merge::{BareOFDDoc, DocContext, DocPage, OfdMerger, PageEntry};
+pub use merge::{BareOFDDoc, DocContext, DocPage, OfdMerger, PageEntry, ResourceDedup};
 pub use page_deleter::OfdPageDeleter;
 
 /// 对应 Java: OFDMerger（Rust 命名别名）。

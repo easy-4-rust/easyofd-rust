@@ -6,6 +6,6 @@ mod keyword_extractor;
 mod keyword_position;
 mod keyword_resource;
 
-pub use keyword_extractor::KeywordExtractor;
+pub use keyword_extractor::{KeywordExtractor, TextCodeEntry};
 pub use keyword_position::KeywordPosition;
 pub use keyword_resource::KeywordResource;

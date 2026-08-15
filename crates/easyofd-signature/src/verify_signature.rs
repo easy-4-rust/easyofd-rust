@@ -9,10 +9,12 @@ use crate::xml;
 /// GB/T 38540 端到端签名验证：
 /// 1. 读取 Signature.xml/SignedInfo.xml/SignedValue.dat；
 /// 2. 校验 References/FileRef 列出的每个受保护 entry SM3 一致；
-/// 3. 用嵌入公钥对 SignedInfo 字节做 SM2 验签（DistId 固定为
+/// 3. 若 Signature.xml 含 `<ofd:Seal>` 节点，检查印章匹配（对应 Java:
+///    `OFDValidator#checkSealMatch`）；
+/// 4. 用嵌入公钥对 SignedInfo 字节做 SM2 验签（DistId 固定为
 ///    `"1234567812345678"` —— 与签章端一致）。
 ///
-/// 返回 `true` 当且仅当 References 完整性 + SM2 密码学全部通过。
+/// 返回 `true` 当且仅当 References 完整性 + 印章匹配（如适用） + SM2 密码学全部通过。
 ///
 /// # 错误
 ///
@@ -48,27 +50,61 @@ pub fn verify_signature(ofd_path: impl AsRef<std::path::Path>) -> OfdResult<bool
         return Err(easyofd_core::OfdError::Conversion("公钥长度无效".into()));
     }
 
-    // 3. 重新读取 SignedInfo 字节（签名时实际签名的消息）。
-    //    由于同一个 archive 不能同时持有多个 ZipFile，借用需要作用域隔离：
-    //    先一次性把需要的字节全部抽出来，然后释放 archive。
+    // 3. 一次性读取 Signature.xml / SignedInfo / Seal.esl / SignedValue 字节，
+    //    做印章匹配检查，然后释放 archive。
     let signed_info_bytes = {
         let bytes = std::fs::read(ofd_path).map_err(easyofd_core::OfdError::Io)?;
         let cursor = Cursor::new(&bytes[..]);
         let mut archive =
             zip::ZipArchive::new(cursor).map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-        let mut signature_file = archive
-            .by_name("Doc_0/Signs/Signature.xml")
-            .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-        let mut sig_xml = String::new();
-        signature_file
-            .read_to_string(&mut sig_xml)
-            .map_err(easyofd_core::OfdError::Io)?;
+
+        // 读取 Signature.xml 并解析路径。
+        let sig_xml = {
+            let mut f = archive
+                .by_name("Doc_0/Signs/Signature.xml")
+                .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+            let mut s = String::new();
+            f.read_to_string(&mut s)
+                .map_err(easyofd_core::OfdError::Io)?;
+            s
+        };
         let sig_top = xml::parse_signature_top(&sig_xml)?;
         let si_path = sig_top
             .signed_info_ref
             .unwrap_or_else(|| "Doc_0/Signs/SignedInfo.xml".to_string());
-        // 显式 drop 关闭 ZipFile 后再开新的（避免 E0499）。
-        drop(signature_file);
+
+        // 印章匹配检查（对应 Java: OFDValidator#checkSealMatch）。
+        // 仅当 Signature.xml 中存在 <ofd:Seal> 节点时执行。
+        if let Some(ref seal_path) = sig_top.seal_path {
+            let signed_value_path = sig_top
+                .signed_value
+                .unwrap_or_else(|| "Doc_0/Signs/SignedValue.dat".to_string());
+            let seal_bytes = {
+                let mut f = archive
+                    .by_name(seal_path)
+                    .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+                let mut buf = Vec::new();
+                f.read_to_end(&mut buf)
+                    .map_err(easyofd_core::OfdError::Io)?;
+                buf
+            };
+            let sv_bytes = {
+                let mut f = archive
+                    .by_name(&signed_value_path)
+                    .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
+                let mut buf = Vec::new();
+                f.read_to_end(&mut buf)
+                    .map_err(easyofd_core::OfdError::Io)?;
+                buf
+            };
+            let seal_ok =
+                crate::check_seal_match::check_seal_match(&seal_bytes, &sv_bytes).unwrap_or(false);
+            if !seal_ok {
+                return Ok(false);
+            }
+        }
+
+        // 读取 SignedInfo 字节。
         let mut signed_info_file = archive
             .by_name(&si_path)
             .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
@@ -233,7 +269,23 @@ fn verify_single_from_entries(
         }
     }
 
-    // 2. SM2 verification.
+    // 2. 印章匹配检查（Seal Match Check）。
+    //    对应 Java: org.ofdrw.sign.verify.OFDValidator#checkSealMatch
+    //    仅当 Signature.xml 中存在 <ofd:Seal> 节点时执行。
+    if let Some(ref seal_path) = sig_top.seal_path {
+        if let Some(seal_bytes) = entry_bytes.get(seal_path) {
+            let seal_ok = crate::check_seal_match::check_seal_match(seal_bytes, signed_value_bytes)
+                .unwrap_or(false);
+            if !seal_ok {
+                return invalid(name, signed_info_digest);
+            }
+        } else {
+            // Seal.esl 文件缺失视为不匹配。
+            return invalid(name, signed_info_digest);
+        }
+    }
+
+    // 3. SM2 verification.
     let public_key = sig_top.public_key.unwrap_or_default();
     let sig_hex = hex(signed_value_bytes);
     if public_key.is_empty() || sig_hex.is_empty() {

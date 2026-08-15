@@ -195,10 +195,17 @@ impl OfdWriter {
                 .count();
         }
 
-        // 5. 写入图片资源
-        for (res_name, data, _) in &image_resources {
-            zip.start_file(res_name, *options).map_err(zip_err)?;
-            zip.write_all(data).map_err(io_err)?;
+        // 5. 写入图片资源（按 res_name 去重，避免合并场景下相同内容的重复写入）。
+        // 当多个页面引用相同 res_name 时（如 OfdMerger 的 SM3 去重），只写入一次。
+        {
+            let mut written_image_res: std::collections::HashSet<&str> =
+                std::collections::HashSet::new();
+            for (res_name, data, _) in &image_resources {
+                if written_image_res.insert(res_name.as_str()) {
+                    zip.start_file(res_name, *options).map_err(zip_err)?;
+                    zip.write_all(data).map_err(io_err)?;
+                }
+            }
         }
 
         // 6. 原样保留的条目（roundtrip 容器内容），跳过已生成的同名条目

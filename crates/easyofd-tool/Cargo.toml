@@ -18,10 +18,14 @@ path = "src/main.rs"
 [dependencies]
 easyofd = { workspace = true }
 easyofd-core = { workspace = true }
+easyofd-reader = { workspace = true }
+easyofd-writer = { workspace = true }
 clap = { workspace = true }
+sm3 = { workspace = true }
 
 [dev-dependencies]
-easyofd-writer = { workspace = true }
+tempfile = "3"
+zip = { workspace = true }
 
 [lints]
 workspace = true

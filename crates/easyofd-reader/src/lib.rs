@@ -42,7 +42,7 @@ pub use content_extractor::ContentExtractor;
 #[allow(deprecated)]
 pub use dl_ofd_reader::DlOfdReader;
 pub use error_path_exception::ErrorPathException;
-pub use keyword::{KeywordExtractor, KeywordPosition, KeywordResource};
+pub use keyword::{KeywordExtractor, KeywordPosition, KeywordResource, TextCodeEntry};
 #[allow(deprecated)]
 pub use model::{
     AnnotionEntity, OfdDocumentVo, OfdPageVo, SealDataVo, StampAnnotVo, TemplatePageEntity,

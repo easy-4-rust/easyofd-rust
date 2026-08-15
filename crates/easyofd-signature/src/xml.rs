@@ -37,6 +37,12 @@ pub struct SignatureTop {
     pub provider: Option<String>,
     /// Signature datetime (text content of `<ofd:SignatureDateTime>`).
     pub datetime: Option<String>,
+    /// Path to Seal.esl (from `<ofd:Seal>` element's `BaseLoc` or `Ref` attribute).
+    ///
+    /// 对应 Java: `sig.getSignedInfo().getSeal().getBaseLoc()`
+    ///
+    /// This is an optional element; when absent, seal matching is skipped.
+    pub seal_path: Option<String>,
 }
 
 /// Extract the local name from a quick-xml `QName`, stripping any
@@ -285,6 +291,41 @@ pub fn parse_signature_top(xml: &str) -> OfdResult<SignatureTop> {
                     in_target = true;
                     current_tag.clone_from(&tag);
                     current_text.clear();
+                } else if tag == "Seal" {
+                    // 对应 Java: sig.getSignedInfo().getSeal().getBaseLoc()
+                    // <ofd:Seal> 提取 BaseLoc 或 Ref 属性作为印章文件路径。
+                    for attr in e.attributes().flatten() {
+                        let key = local_name(attr.key.as_ref()).to_string();
+                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        match key.as_str() {
+                            "BaseLoc" => {
+                                top.seal_path = Some(val.to_string());
+                            }
+                            "Ref" if top.seal_path.is_none() => {
+                                top.seal_path = Some(val.to_string());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(Event::Empty(e)) => {
+                // Self-closing element -- handle <ofd:Seal BaseLoc="..."/> etc.
+                let tag = local_name(e.name().as_ref()).to_string();
+                if tag == "Seal" {
+                    for attr in e.attributes().flatten() {
+                        let key = local_name(attr.key.as_ref()).to_string();
+                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        match key.as_str() {
+                            "BaseLoc" => {
+                                top.seal_path = Some(val.to_string());
+                            }
+                            "Ref" if top.seal_path.is_none() => {
+                                top.seal_path = Some(val.to_string());
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
             Ok(Event::Text(t)) => {
@@ -529,5 +570,44 @@ mod tests {
 </ofd:OFD>"#;
         let root = parse_ofd_root(xml).unwrap();
         assert!(root.signatures.is_empty());
+    }
+
+    // ── parse_signature_top Seal path ─────────────────────────────────
+
+    #[test]
+    fn parse_signature_top_seal_with_base_loc() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:SignedInfo>
+    <ofd:Seal BaseLoc="Doc_0/Signs/Sign_0/Seal.esl"/>
+  </ofd:SignedInfo>
+  <ofd:SignedValue>Doc_0/Signs/SignedValue.dat</ofd:SignedValue>
+</ofd:Signature>"#;
+        let top = parse_signature_top(xml).unwrap();
+        assert_eq!(
+            top.seal_path.as_deref(),
+            Some("Doc_0/Signs/Sign_0/Seal.esl")
+        );
+    }
+
+    #[test]
+    fn parse_signature_top_seal_with_ref_attr() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Seal ID="Seal_0" Type="Seal" Ref="Doc_0/Seal_0.esl">Doc_0/Res/Seal_0.png</ofd:Seal>
+  <ofd:SignedValue>Doc_0/Signs/SignedValue.dat</ofd:SignedValue>
+</ofd:Signature>"#;
+        let top = parse_signature_top(xml).unwrap();
+        assert_eq!(top.seal_path.as_deref(), Some("Doc_0/Seal_0.esl"));
+    }
+
+    #[test]
+    fn parse_signature_top_no_seal_returns_none() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:SignedValue>Doc_0/Signs/SignedValue.dat</ofd:SignedValue>
+</ofd:Signature>"#;
+        let top = parse_signature_top(xml).unwrap();
+        assert!(top.seal_path.is_none());
     }
 }

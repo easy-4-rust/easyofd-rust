@@ -5,6 +5,7 @@
 
 mod algorithm;
 mod cert;
+pub mod check_seal_match;
 mod crl;
 pub mod electronic_seal;
 pub mod errors;
@@ -36,6 +37,7 @@ pub(crate) use internal_helpers::{compute_sm3, hex, xml_escape};
 // Re-export all public types and functions for `easyofd_signature::*` access.
 pub use algorithm::SignatureAlgorithm;
 pub use cert::{CertificateInfo, parse_x509_der, parse_x509_pem, verify_chain};
+pub use check_seal_match::check_seal_match;
 pub use crl::{CrlInfo, check_revoked, ocsp_check, ocsp_check_with_endpoint, parse_crl_der};
 pub use electronic_seal::ElectronicSeal;
 pub use errors::{

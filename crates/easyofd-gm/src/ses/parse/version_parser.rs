@@ -131,6 +131,46 @@ impl VersionParser {
         let ver = decode_uint(&ver_val) as u32;
         Ok(ver)
     }
+
+    /// 从 SES_Signature DER 中提取内嵌 SESeal 并重新编码为 DER。
+    ///
+    /// 对应 Java: `OFDValidator.checkSealMatch` 中的印章提取逻辑
+    ///   - V4: `sesSignature.getToSign().getEseal().getEncoded("DER")`
+    ///   - V5: `sesSignature.getToSign().getEseal().getEncoded("DER")`
+    ///   - V1: `sesSignature.getToSign().getEseal().getEncoded("DER")`
+    ///
+    /// # 参数
+    ///
+    /// - `ses_signature_der`: 完整 SES_Signature DER 字节。
+    ///
+    /// # 返回
+    ///
+    /// 重新编码的 SESeal DER 字节。
+    ///
+    /// # 错误
+    ///
+    /// DER 结构不合法或版本无法识别时返回错误。
+    pub fn extract_seal_der(ses_signature_der: &[u8]) -> DerResult<Vec<u8>> {
+        let holder = Self::parse_signature_version(ses_signature_der)?;
+        let full_der = holder.ses_signature_der();
+        match holder.version() {
+            SESVersion::V1 => {
+                let sig = crate::ses::v1::SESSignature::decode_der(&full_der)
+                    .map_err(|_| DerError("V1 SES_Signature 解码失败"))?;
+                Ok(sig.to_sign.seal.encode_der())
+            }
+            SESVersion::V4 => {
+                let sig = crate::ses::v4::SESSignature::decode_der(&full_der)
+                    .map_err(|_| DerError("V4 SES_Signature 解码失败"))?;
+                Ok(sig.to_sign.seal.encode_der())
+            }
+            SESVersion::V5 => {
+                let sig = crate::ses::v5::SESSignature::decode_der(&full_der)
+                    .map_err(|_| DerError("V5 SES_Signature 解码失败"))?;
+                Ok(sig.to_sign.seal.encode_der())
+            }
+        }
+    }
 }
 
 /// 计算 SEQUENCE 内部的顶层子元素数量。

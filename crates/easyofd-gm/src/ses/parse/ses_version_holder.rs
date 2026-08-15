@@ -37,6 +37,16 @@ impl SESVersionHolder {
         &self.obj_bytes
     }
 
+    /// 重建完整的 SES_Signature DER（含 SEQUENCE tag + length）。
+    ///
+    /// 用于需要将 holder 中的字节重新解码为类型化结构的场景。
+    #[must_use]
+    pub fn ses_signature_der(&self) -> Vec<u8> {
+        let mut der = Vec::with_capacity(self.obj_bytes.len() + 4);
+        crate::ses::encode_sequence(&self.obj_bytes, &mut der);
+        der
+    }
+
     /// 尝试将内容解码为 V1 `SESSignature`。
     ///
     /// 仅当版本为 V1 且字节合法时返回 `Some`。
