@@ -48,6 +48,9 @@ pub(crate) struct OfdEntry {
     pub(crate) doc_usage: Option<String>,
     /// Document keywords (ofd:Keywords), if present.
     pub(crate) keywords: Option<String>,
+    /// Document subject (ofd:Subject), if present.
+    /// 对应 ofdrw CT_DocInfo.Subject。
+    pub(crate) subject: Option<String>,
 }
 
 /// Parse OFD.xml using the [`easyofd_core::XmlNode`] tree (via
@@ -88,6 +91,7 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
     let signatures_path = find_optional_text_deep(&root, "Signatures");
     let doc_usage = find_optional_text_deep(&root, "DocUsage");
     let keywords = find_optional_text_deep(&root, "Keywords");
+    let subject = find_optional_text_deep(&root, "Subject");
 
     // ── MaxUnitID ──
     let max_unit_id: u32 = find_text_deep(&root, "MaxUnitID")
@@ -122,6 +126,7 @@ pub(crate) fn parse_ofd_entry<R: Read + std::io::Seek>(
         signatures_path,
         doc_usage,
         keywords,
+        subject,
     })
 }
 

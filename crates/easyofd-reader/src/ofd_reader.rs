@@ -212,6 +212,7 @@ fn visit_archive<R: Read + Seek>(
         custom_datas: ofd_entry.custom_datas,
         doc_usage: ofd_entry.doc_usage,
         keywords: ofd_entry.keywords,
+        subject: ofd_entry.subject,
         application_box: document_entry.application_box,
         content_box: document_entry.content_box,
         clip_box: document_entry.clip_box,

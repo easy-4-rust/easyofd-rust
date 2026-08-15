@@ -45,6 +45,8 @@ pub struct OfdMetadata {
     pub doc_usage: Option<String>,
     /// 文档关键词（ofd:Keywords）。
     pub keywords: Option<String>,
+    /// 文档主题（ofd:Subject），对应 ofdrw CT_DocInfo.Subject。
+    pub subject: Option<String>,
     /// 应用区域（ofd:ApplicationBox），格式 "x y w h"。
     pub application_box: Option<String>,
     /// 内容区域（ofd:ContentBox），格式 "x y w h"。
@@ -104,6 +106,7 @@ impl Default for OfdMetadata {
             custom_datas: None,
             doc_usage: None,
             keywords: None,
+            subject: None,
             application_box: None,
             content_box: None,
             clip_box: None,

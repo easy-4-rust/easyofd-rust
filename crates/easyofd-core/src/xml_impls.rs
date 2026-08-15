@@ -1261,6 +1261,10 @@ impl XmlElement for OfdMetadata {
         if let Some(kw) = &self.keywords {
             nodes.push(text_child("Keywords", kw));
         }
+        // 对应 ofdrw CT_DocInfo.Subject
+        if let Some(subj) = &self.subject {
+            nodes.push(text_child("Subject", subj));
+        }
         nodes
     }
 
@@ -1278,6 +1282,7 @@ impl XmlElement for OfdMetadata {
             max_unit_id: child_u32(node, "MaxUnitID").unwrap_or(0),
             doc_usage: child_text(node, "DocUsage"),
             keywords: child_text(node, "Keywords"),
+            subject: child_text(node, "Subject"),
             ..Default::default()
         })
     }

@@ -93,3 +93,6 @@ Cargo.lock
 *.swp
 *.swo
 *.pyc
+
+### OF-B 样本生成（ofdrw 浅克隆，含测试用 p12/密钥，禁止入库）###
+.ofdrw-gen/

@@ -91,6 +91,10 @@ impl OfdWriter {
         if let Some(ref keywords) = self.options.metadata.keywords {
             doc_info.push_child(ofd_text("Keywords", keywords));
         }
+        // 对应 ofdrw CT_DocInfo.Subject
+        if let Some(ref subject) = self.options.metadata.subject {
+            doc_info.push_child(ofd_text("Subject", subject));
+        }
 
         // CustomDatas
         if let Some(ref custom_datas) = self.options.metadata.custom_datas {
