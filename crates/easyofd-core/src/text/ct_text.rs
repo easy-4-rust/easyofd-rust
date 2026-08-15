@@ -216,10 +216,10 @@ impl CT_Text {
             self.id, self.boundary
         );
         if let Some(fr) = self.font_ref {
-            write!(xml, " Font=\"{fr}\"").unwrap();
+            write!(xml, " Font=\"{fr}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(sz) = self.size {
-            write!(xml, " Size=\"{sz}\"").unwrap();
+            write!(xml, " Size=\"{sz}\"").expect("写入内存缓冲区不会失败");
         }
         if self.stroke {
             xml.push_str(" Stroke=\"true\"");
@@ -228,25 +228,25 @@ impl CT_Text {
             xml.push_str(" Fill=\"false\"");
         }
         if let Some(hs) = self.h_scale {
-            write!(xml, " HScale=\"{hs}\"").unwrap();
+            write!(xml, " HScale=\"{hs}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(rd) = self.read_direction {
-            write!(xml, " ReadDirection=\"{rd}\"").unwrap();
+            write!(xml, " ReadDirection=\"{rd}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(cd) = self.char_direction {
-            write!(xml, " CharDirection=\"{cd}\"").unwrap();
+            write!(xml, " CharDirection=\"{cd}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(w) = self.weight {
-            write!(xml, " Weight=\"{w}\"").unwrap();
+            write!(xml, " Weight=\"{w}\"").expect("写入内存缓冲区不会失败");
         }
         if self.italic {
             xml.push_str(" Italic=\"true\"");
         }
         if let Some(fc) = self.fill_color {
-            write!(xml, " FillColor=\"{fc}\"").unwrap();
+            write!(xml, " FillColor=\"{fc}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(sc) = self.stroke_color {
-            write!(xml, " StrokeColor=\"{sc}\"").unwrap();
+            write!(xml, " StrokeColor=\"{sc}\"").expect("写入内存缓冲区不会失败");
         }
         xml.push_str(">\n");
         for cg in &self.cg_transforms {

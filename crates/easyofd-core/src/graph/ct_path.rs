@@ -156,16 +156,16 @@ impl CT_Path {
             xml.push_str(" Fill=\"true\"");
         }
         if self.rule != FillRule::NonZero {
-            write!(xml, " Rule=\"{}\"", self.rule.as_str()).unwrap();
+            write!(xml, " Rule=\"{}\"", self.rule.as_str()).expect("写入内存缓冲区不会失败");
         }
         if let Some(lw) = self.line_width {
-            write!(xml, " LineWidth=\"{lw}\"").unwrap();
+            write!(xml, " LineWidth=\"{lw}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(sc) = self.stroke_color {
-            write!(xml, " StrokeColor=\"{sc}\"").unwrap();
+            write!(xml, " StrokeColor=\"{sc}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(fc) = self.fill_color {
-            write!(xml, " FillColor=\"{fc}\"").unwrap();
+            write!(xml, " FillColor=\"{fc}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(ref ad) = self.abbreviated_data {
             xml.push_str(">\n  ");

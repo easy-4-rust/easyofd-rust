@@ -122,12 +122,15 @@ impl CmapSubtable {
 
     // ─── getter ──────────────────────────────────────────────────────────────
 
+    /// 返回平台 ID。
     pub fn platform_id(&self) -> u16 {
         self.platform_id
     }
+    /// 返回编码 ID。
     pub fn encoding_id(&self) -> u16 {
         self.encoding_id
     }
+    /// 返回子表格式编号。
     pub fn format(&self) -> u16 {
         self.format
     }

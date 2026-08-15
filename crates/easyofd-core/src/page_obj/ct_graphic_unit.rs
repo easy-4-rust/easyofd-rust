@@ -237,7 +237,7 @@ impl CT_GraphicUnit {
             self.id, self.boundary
         );
         if let Some(ref name) = self.name {
-            write!(xml, " Name=\"{name}\"").unwrap();
+            write!(xml, " Name=\"{name}\"").expect("写入内存缓冲区不会失败");
         }
         if !self.visible {
             xml.push_str(" Visible=\"false\"");
@@ -248,31 +248,31 @@ impl CT_GraphicUnit {
                 " CTM=\"{} {} {} {} {} {}\"",
                 ctm[0], ctm[1], ctm[2], ctm[3], ctm[4], ctm[5]
             )
-            .unwrap();
+            .expect("写入内存缓冲区不会失败");
         }
         if let Some(dp) = self.draw_param {
-            write!(xml, " DrawParam=\"{dp}\"").unwrap();
+            write!(xml, " DrawParam=\"{dp}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(lw) = self.line_width {
-            write!(xml, " LineWidth=\"{lw}\"").unwrap();
+            write!(xml, " LineWidth=\"{lw}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(cap) = self.cap {
-            write!(xml, " Cap=\"{}\"", cap.as_str()).unwrap();
+            write!(xml, " Cap=\"{}\"", cap.as_str()).expect("写入内存缓冲区不会失败");
         }
         if let Some(join) = self.join {
-            write!(xml, " Join=\"{}\"", join.as_str()).unwrap();
+            write!(xml, " Join=\"{}\"", join.as_str()).expect("写入内存缓冲区不会失败");
         }
         if let Some(ml) = self.miter_limit {
-            write!(xml, " MiterLimit=\"{ml}\"").unwrap();
+            write!(xml, " MiterLimit=\"{ml}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(doff) = self.dash_offset {
-            write!(xml, " DashOffset=\"{doff}\"").unwrap();
+            write!(xml, " DashOffset=\"{doff}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(ref dp) = self.dash_pattern {
-            write!(xml, " DashPattern=\"{dp}\"").unwrap();
+            write!(xml, " DashPattern=\"{dp}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(a) = self.alpha {
-            write!(xml, " Alpha=\"{a}\"").unwrap();
+            write!(xml, " Alpha=\"{a}\"").expect("写入内存缓冲区不会失败");
         }
         xml.push_str(" />");
         xml

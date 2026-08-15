@@ -567,8 +567,32 @@ fn collect_content_objects<R: Read + std::io::Seek>(
     Ok(result)
 }
 
+/// 解析 OFD FillColor 值为 `u32` RGB。
+///
+/// 支持两种格式：
+/// - 十六进制（属性形式）：`"RRGGBB"` 或 `"#RRGGBB"`
+/// - 空格分隔十进制（子元素 Value 形式）：`"R G B"`（如 `"156 82 35"`）
+fn parse_fill_color_value(raw: &str) -> Option<u32> {
+    let trimmed = raw.trim();
+    // 空格分隔十进制："156 82 35"
+    if trimmed.contains(' ') {
+        let parts: Vec<u32> = trimmed
+            .split_whitespace()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        if parts.len() >= 3 {
+            return Some((parts[0] << 16) | (parts[1] << 8) | parts[2]);
+        }
+        return None;
+    }
+    // 十六进制：去掉可选的 '#' 前缀
+    let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    u32::from_str_radix(hex, 16).ok()
+}
+
 /// Build a [`TextObject`] from an [`XmlNode`], extracting Boundary/Font/Size
-/// attributes and concatenating text from all TextCode children.
+/// attributes, FillColor/Weight/Italic, and concatenating text from all
+/// TextCode children.
 #[allow(clippy::many_single_char_names)]
 fn build_text_object_from_node(node: &easyofd_core::XmlNode) -> TextObject {
     let mut x = 0.0_f64;
@@ -577,6 +601,9 @@ fn build_text_object_from_node(node: &easyofd_core::XmlNode) -> TextObject {
     let mut size = None;
     let mut width = None;
     let mut height = None;
+    let mut weight = None;
+    let mut italic = None;
+    let mut fill_color: Option<u32> = None;
 
     for (key, value) in &node.attrs {
         match key.as_str() {
@@ -596,7 +623,25 @@ fn build_text_object_from_node(node: &easyofd_core::XmlNode) -> TextObject {
             }
             "Font" => font = Some(value.clone()),
             "Size" => size = value.parse().ok(),
+            "Weight" => weight = value.parse().ok(),
+            "Italic" => {
+                italic = match value.as_str() {
+                    "true" | "1" => Some(true),
+                    "false" | "0" => Some(false),
+                    _ => None,
+                };
+            }
+            "FillColor" => fill_color = parse_fill_color_value(value),
             _ => {}
+        }
+    }
+
+    // FillColor 也可能作为子元素：<FillColor Value="R G B" />
+    if fill_color.is_none() {
+        if let Some(fc_node) = node.child("FillColor") {
+            if let Some(val) = fc_node.get_attr("Value") {
+                fill_color = parse_fill_color_value(val);
+            }
         }
     }
 
@@ -615,6 +660,15 @@ fn build_text_object_from_node(node: &easyofd_core::XmlNode) -> TextObject {
     }
     if let Some(s) = size {
         obj = obj.size(s);
+    }
+    if let Some(w) = weight {
+        obj.weight = w;
+    }
+    if let Some(i) = italic {
+        obj.italic = i;
+    }
+    if let Some(c) = fill_color {
+        obj.color = c;
     }
     obj.width = width;
     obj.height = height;
@@ -861,6 +915,124 @@ fn collect_nodes_deep<'a>(
     }
     for child in &node.children {
         collect_nodes_deep(child, name, result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use easyofd_core::XmlNode;
+
+    #[test]
+    fn parse_fill_color_hex_no_hash() {
+        assert_eq!(parse_fill_color_value("FF0000"), Some(0xFF_0000));
+    }
+
+    #[test]
+    fn parse_fill_color_hex_with_hash() {
+        assert_eq!(parse_fill_color_value("#00FF00"), Some(0x00_FF00));
+    }
+
+    #[test]
+    fn parse_fill_color_decimal_rgb() {
+        // 156=0x9C, 82=0x52, 35=0x23
+        assert_eq!(parse_fill_color_value("156 82 35"), Some(0x9C_5223));
+    }
+
+    #[test]
+    fn parse_fill_color_black() {
+        assert_eq!(parse_fill_color_value("0 0 0"), Some(0));
+    }
+
+    #[test]
+    fn parse_fill_color_invalid() {
+        assert_eq!(parse_fill_color_value("not_a_color"), None);
+    }
+
+    #[test]
+    fn build_text_object_weight_attr() {
+        let node = XmlNode::element("TextObject")
+            .attr("Boundary", "10 20 100 50")
+            .attr("Font", "SimSun")
+            .attr("Size", "12")
+            .attr("Weight", "700");
+        let obj = build_text_object_from_node(&node);
+        assert_eq!(obj.weight, 700);
+    }
+
+    #[test]
+    fn build_text_object_italic_attr() {
+        let node = XmlNode::element("TextObject")
+            .attr("Boundary", "10 20 100 50")
+            .attr("Font", "SimSun")
+            .attr("Size", "12")
+            .attr("Italic", "true");
+        let obj = build_text_object_from_node(&node);
+        assert!(obj.italic);
+    }
+
+    #[test]
+    fn build_text_object_italic_false() {
+        let node = XmlNode::element("TextObject")
+            .attr("Boundary", "10 20 100 50")
+            .attr("Italic", "false");
+        let obj = build_text_object_from_node(&node);
+        assert!(!obj.italic);
+    }
+
+    #[test]
+    fn build_text_object_fill_color_attr_hex() {
+        let node = XmlNode::element("TextObject")
+            .attr("Boundary", "10 20 100 50")
+            .attr("FillColor", "9C5223");
+        let obj = build_text_object_from_node(&node);
+        assert_eq!(obj.color, 0x9C_5223);
+    }
+
+    #[test]
+    fn build_text_object_fill_color_child_element() {
+        let mut node = XmlNode::element("TextObject").attr("Boundary", "10 20 100 50");
+        let fc = XmlNode::element("FillColor").attr("Value", "156 82 35");
+        node.push_child(fc);
+        let obj = build_text_object_from_node(&node);
+        assert_eq!(obj.color, 0x9C_5223);
+    }
+
+    #[test]
+    fn build_text_object_fill_color_attr_takes_precedence() {
+        let mut node = XmlNode::element("TextObject")
+            .attr("Boundary", "10 20 100 50")
+            .attr("FillColor", "FF0000");
+        let fc = XmlNode::element("FillColor").attr("Value", "0 255 0");
+        node.push_child(fc);
+        let obj = build_text_object_from_node(&node);
+        // 属性优先于子元素
+        assert_eq!(obj.color, 0xFF_0000);
+    }
+
+    #[test]
+    fn build_text_object_defaults_unchanged() {
+        let node = XmlNode::element("TextObject").attr("Boundary", "10 20 100 50");
+        let obj = build_text_object_from_node(&node);
+        assert_eq!(obj.weight, 400);
+        assert!(!obj.italic);
+        assert_eq!(obj.color, 0);
+    }
+
+    #[test]
+    fn build_text_object_all_three_together() {
+        let node = XmlNode::element("TextObject")
+            .attr("Boundary", "10 20 100 50")
+            .attr("Font", "SimHei")
+            .attr("Size", "14")
+            .attr("Weight", "900")
+            .attr("Italic", "true")
+            .attr("FillColor", "0000FF");
+        let obj = build_text_object_from_node(&node);
+        assert_eq!(obj.weight, 900);
+        assert!(obj.italic);
+        assert_eq!(obj.color, 0x00_00FF);
+        assert_eq!(obj.font, "SimHei");
     }
 }
 

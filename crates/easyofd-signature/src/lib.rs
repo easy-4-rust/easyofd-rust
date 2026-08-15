@@ -7,6 +7,7 @@ mod algorithm;
 mod cert;
 pub mod check_seal_match;
 mod crl;
+/// OFD 电子签章数据结构。
 pub mod electronic_seal;
 pub mod errors;
 mod internal_helpers;

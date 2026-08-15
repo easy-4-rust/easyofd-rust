@@ -139,6 +139,7 @@ pub struct OfdSignatureBuilder {
 }
 
 impl OfdSignatureBuilder {
+    /// 创建签名构建器，指定待签名的 OFD 文件路径。
     #[must_use]
     pub fn new(input: impl Into<String>) -> Self {
         Self {
@@ -151,11 +152,13 @@ impl OfdSignatureBuilder {
             sign_mode: SignMode::default(),
         }
     }
+    /// 添加签章信息。
     #[must_use]
     pub fn seal(mut self, seal: impl Into<SealInfo>) -> Self {
         self.seals.push(seal.into());
         self
     }
+    /// 设置签名算法。
     #[must_use]
     pub fn algorithm(mut self, alg: SignatureAlgorithm) -> Self {
         self.algorithm = alg;
@@ -233,6 +236,11 @@ impl OfdSignatureBuilder {
         })
     }
 
+    /// 执行签名，返回签名后的 OFD。
+    ///
+    /// # 错误
+    ///
+    /// OFD 文件读取、签章数据或签名操作失败时返回错误。
     #[allow(clippy::too_many_lines)]
     pub fn sign(self) -> OfdResult<SignedOfd> {
         let input_bytes = std::fs::read(&self.input_path).map_err(easyofd_core::OfdError::Io)?;

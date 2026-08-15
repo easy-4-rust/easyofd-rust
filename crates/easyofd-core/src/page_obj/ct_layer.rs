@@ -113,7 +113,7 @@ impl CT_Layer {
         use std::fmt::Write;
         let mut xml = format!("<ofd:Layer Type=\"{}\"", self.layer_type.as_str());
         if let Some(dp) = self.draw_param {
-            write!(xml, " DrawParam=\"{dp}\"").unwrap();
+            write!(xml, " DrawParam=\"{dp}\"").expect("写入内存缓冲区不会失败");
         }
         xml.push_str(">\n");
         // Inline the block content (skip outer PageBlock tags for layer).

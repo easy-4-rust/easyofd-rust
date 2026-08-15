@@ -3,9 +3,13 @@ use crate::seal::SealInfo;
 /// OFD 电子签章。
 #[derive(Debug, Clone)]
 pub struct ElectronicSeal {
+    /// 签章图片数据（PNG 格式）。
     pub image_data: Vec<u8>,
+    /// 签章名称。
     pub name: String,
+    /// 签章在页面上的位置 (x, y)（mm）。
     pub position: (f64, f64),
+    /// 签章所在页码（从 0 开始）。
     pub page: usize,
 }
 

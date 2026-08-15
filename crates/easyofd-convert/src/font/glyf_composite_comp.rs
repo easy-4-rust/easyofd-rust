@@ -101,33 +101,43 @@ impl GlyfCompositeComp {
 
     // ─── getter ──────────────────────────────────────────────────────────────
 
+    /// 返回复合字形组件标志。
     pub fn flags(&self) -> u16 {
         self.flags
     }
+    /// 返回字形索引。
     pub fn glyph_index(&self) -> u16 {
         self.glyph_index
     }
+    /// 返回参数 1（偏移或匹配点）。
     pub fn argument1(&self) -> i16 {
         self.argument1
     }
+    /// 返回参数 2（偏移或匹配点）。
     pub fn argument2(&self) -> i16 {
         self.argument2
     }
+    /// 返回 X 缩放因子。
     pub fn xscale(&self) -> f64 {
         self.xscale
     }
+    /// 返回 Y 缩放因子。
     pub fn yscale(&self) -> f64 {
         self.yscale
     }
+    /// 返回交叉缩放因子 scale01。
     pub fn scale01(&self) -> f64 {
         self.scale01
     }
+    /// 返回交叉缩放因子 scale10。
     pub fn scale10(&self) -> f64 {
         self.scale10
     }
+    /// 返回 X 平移量。
     pub fn xtranslate(&self) -> i32 {
         self.xtranslate
     }
+    /// 返回 Y 平移量。
     pub fn ytranslate(&self) -> i32 {
         self.ytranslate
     }

@@ -133,7 +133,7 @@ fn pad_delta(deltas: &[f64], content_len: usize) -> Vec<f64> {
         return deltas.to_vec();
     }
     let mut result = deltas.to_vec();
-    let last = *result.last().unwrap();
+    let last = *result.last().expect("deltas 非空");
     result.resize(content_len, last);
     result
 }

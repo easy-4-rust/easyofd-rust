@@ -123,22 +123,24 @@ impl CT_CommonData {
         use std::fmt::Write;
         let mut xml = String::from("<ofd:CommonData>\n");
         if let Some(id) = self.max_unit_id {
-            writeln!(xml, "  <ofd:MaxUnitID>{id}</ofd:MaxUnitID>").unwrap();
+            writeln!(xml, "  <ofd:MaxUnitID>{id}</ofd:MaxUnitID>").expect("写入内存缓冲区不会失败");
         }
         if let Some(ref pa) = self.page_area {
-            writeln!(xml, "  {}", pa.to_xml_string()).unwrap();
+            writeln!(xml, "  {}", pa.to_xml_string()).expect("写入内存缓冲区不会失败");
         }
         for res in &self.public_res {
-            writeln!(xml, "  <ofd:PublicRes>{res}</ofd:PublicRes>").unwrap();
+            writeln!(xml, "  <ofd:PublicRes>{res}</ofd:PublicRes>")
+                .expect("写入内存缓冲区不会失败");
         }
         for res in &self.document_res {
-            writeln!(xml, "  <ofd:DocumentRes>{res}</ofd:DocumentRes>").unwrap();
+            writeln!(xml, "  <ofd:DocumentRes>{res}</ofd:DocumentRes>")
+                .expect("写入内存缓冲区不会失败");
         }
         for tpl in &self.template_pages {
-            writeln!(xml, "  {}", tpl.to_xml_string()).unwrap();
+            writeln!(xml, "  {}", tpl.to_xml_string()).expect("写入内存缓冲区不会失败");
         }
         if let Some(cs) = self.default_cs {
-            writeln!(xml, "  <ofd:DefaultCS>{cs}</ofd:DefaultCS>").unwrap();
+            writeln!(xml, "  <ofd:DefaultCS>{cs}</ofd:DefaultCS>").expect("写入内存缓冲区不会失败");
         }
         xml.push_str("</ofd:CommonData>\n");
         xml

@@ -210,10 +210,12 @@ impl AbbreviatedData {
                 PathCommand::L(x, y) => write!(s, "L {x} {y} ").unwrap(),
                 PathCommand::Q(cx, cy, x, y) => write!(s, "Q {cx} {cy} {x} {y} ").unwrap(),
                 PathCommand::B(c1x, c1y, c2x, c2y, x, y) => {
-                    write!(s, "B {c1x} {c1y} {c2x} {c2y} {x} {y} ").unwrap();
+                    write!(s, "B {c1x} {c1y} {c2x} {c2y} {x} {y} ")
+                        .expect("写入内存缓冲区不会失败");
                 }
                 PathCommand::A(rx, ry, angle, large, sweep, x, y) => {
-                    write!(s, "A {rx} {ry} {angle} {large} {sweep} {x} {y} ").unwrap();
+                    write!(s, "A {rx} {ry} {angle} {large} {sweep} {x} {y} ")
+                        .expect("写入内存缓冲区不会失败");
                 }
                 PathCommand::C => write!(s, "C ").unwrap(),
             }

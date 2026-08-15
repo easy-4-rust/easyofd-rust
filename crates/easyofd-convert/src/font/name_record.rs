@@ -149,51 +149,65 @@ impl NameRecord {
 
     // ─── getter/setter ───────────────────────────────────────────────────────
 
+    /// 返回平台 ID。
     pub fn platform_id(&self) -> u16 {
         self.platform_id
     }
+    /// 设置平台 ID。
     pub fn set_platform_id(&mut self, v: u16) {
         self.platform_id = v;
     }
 
+    /// 返回平台编码 ID。
     pub fn platform_encoding_id(&self) -> u16 {
         self.platform_encoding_id
     }
+    /// 设置平台编码 ID。
     pub fn set_platform_encoding_id(&mut self, v: u16) {
         self.platform_encoding_id = v;
     }
 
+    /// 返回语言 ID。
     pub fn language_id(&self) -> u16 {
         self.language_id
     }
+    /// 设置语言 ID。
     pub fn set_language_id(&mut self, v: u16) {
         self.language_id = v;
     }
 
+    /// 返回名称 ID。
     pub fn name_id(&self) -> u16 {
         self.name_id
     }
+    /// 设置名称 ID。
     pub fn set_name_id(&mut self, v: u16) {
         self.name_id = v;
     }
 
+    /// 返回字符串长度。
     pub fn string_length(&self) -> u16 {
         self.string_length
     }
+    /// 设置字符串长度。
     pub fn set_string_length(&mut self, v: u16) {
         self.string_length = v;
     }
 
+    /// 返回字符串偏移量。
     pub fn string_offset(&self) -> u16 {
         self.string_offset
     }
+    /// 设置字符串偏移量。
     pub fn set_string_offset(&mut self, v: u16) {
         self.string_offset = v;
     }
 
+    /// 返回名称字符串值。
     pub fn string_value(&self) -> Option<&str> {
         self.string_value.as_deref()
     }
+    /// 设置名称字符串值。
     pub fn set_string_value(&mut self, v: Option<String>) {
         self.string_value = v;
     }

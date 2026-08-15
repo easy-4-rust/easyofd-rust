@@ -115,7 +115,7 @@ impl CT_Composite {
             self.id, self.boundary
         );
         if let Some(ref name) = self.name {
-            write!(xml, " Name=\"{name}\"").unwrap();
+            write!(xml, " Name=\"{name}\"").expect("写入内存缓冲区不会失败");
         }
         if !self.visible {
             xml.push_str(" Visible=\"false\"");
@@ -158,7 +158,7 @@ impl CompositeChild {
                 let inner_xml = inner.to_xml_string();
                 let mut out = String::new();
                 for line in inner_xml.lines() {
-                    writeln!(out, "  {line}").unwrap();
+                    writeln!(out, "  {line}").expect("写入内存缓冲区不会失败");
                 }
                 out
             }

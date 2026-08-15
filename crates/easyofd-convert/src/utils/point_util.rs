@@ -122,14 +122,16 @@ pub fn is_legacy_absolute_path(
     if !has_ctm || ctm.is_none() || points.is_empty() {
         return false;
     }
-    let ctm = ctm.unwrap();
+    // 已在上方检查 ctm.is_none() 并提前返回
+    let ctm = ctm.expect("已检查 ctm.is_none()");
 
     // 原始坐标范围
     let raw = path_bounds(points, None, 1.0);
     if raw.is_none() {
         return false;
     }
-    let (raw_max_x, raw_max_y) = raw.unwrap();
+    // 已在上方检查 raw.is_none() 并提前返回
+    let (raw_max_x, raw_max_y) = raw.expect("已检查 raw.is_none()");
     if raw_max_x <= width * 2.0 && raw_max_y <= height * 2.0 {
         return false;
     }

@@ -81,12 +81,12 @@ impl CT_VectorG {
             "<ofd:CT_VectorG ID=\"{}\" Boundary=\"{}\"",
             self.id, self.boundary
         );
-        write!(xml, " LineWidth=\"{}\"", self.line_width).unwrap();
+        write!(xml, " LineWidth=\"{}\"", self.line_width).expect("写入内存缓冲区不会失败");
         if let Some(sc) = self.stroke_color {
-            write!(xml, " StrokeColor=\"{sc}\"").unwrap();
+            write!(xml, " StrokeColor=\"{sc}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(fc) = self.fill_color {
-            write!(xml, " FillColor=\"{fc}\"").unwrap();
+            write!(xml, " FillColor=\"{fc}\"").expect("写入内存缓冲区不会失败");
         }
         xml.push_str(">\n");
         for content in &self.contents {

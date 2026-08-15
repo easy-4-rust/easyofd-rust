@@ -56,83 +56,106 @@ impl HorizontalHeaderTable {
 
     // ─── getter/setter ───────────────────────────────────────────────────────
 
+    /// 返回上升高度（基线到最高字形顶部的距离）。
     pub fn ascender(&self) -> i16 {
         self.ascender
     }
+    /// 设置上升高度。
     pub fn set_ascender(&mut self, v: i16) {
         self.ascender = v;
     }
 
+    /// 返回下降深度（基线到最低字形底部的距离，通常为负值）。
     pub fn descender(&self) -> i16 {
         self.descender
     }
+    /// 设置下降深度。
     pub fn set_descender(&mut self, v: i16) {
         self.descender = v;
     }
 
+    /// 返回行间距。
     pub fn line_gap(&self) -> i16 {
         self.line_gap
     }
+    /// 设置行间距。
     pub fn set_line_gap(&mut self, v: i16) {
         self.line_gap = v;
     }
 
+    /// 返回最大前进宽度。
     pub fn advance_width_max(&self) -> u16 {
         self.advance_width_max
     }
+    /// 设置最大前进宽度。
     pub fn set_advance_width_max(&mut self, v: u16) {
         self.advance_width_max = v;
     }
 
+    /// 返回最小左留白。
     pub fn min_left_side_bearing(&self) -> i16 {
         self.min_left_side_bearing
     }
+    /// 设置最小左留白。
     pub fn set_min_left_side_bearing(&mut self, v: i16) {
         self.min_left_side_bearing = v;
     }
 
+    /// 返回最小右留白。
     pub fn min_right_side_bearing(&self) -> i16 {
         self.min_right_side_bearing
     }
+    /// 设置最小右留白。
     pub fn set_min_right_side_bearing(&mut self, v: i16) {
         self.min_right_side_bearing = v;
     }
 
+    /// 返回最大 X 范围。
     pub fn x_max_extent(&self) -> i16 {
         self.x_max_extent
     }
+    /// 设置最大 X 范围。
     pub fn set_x_max_extent(&mut self, v: i16) {
         self.x_max_extent = v;
     }
 
+    /// 返回胸线斜率（上升值）。
     pub fn caret_slope_rise(&self) -> i16 {
         self.caret_slope_rise
     }
+    /// 设置胸线斜率上升值。
     pub fn set_caret_slope_rise(&mut self, v: i16) {
         self.caret_slope_rise = v;
     }
 
+    /// 返回胸线斜率运行值。
     pub fn caret_slope_run(&self) -> i16 {
         self.caret_slope_run
     }
+    /// 设置胸线斜率运行值。
     pub fn set_caret_slope_run(&mut self, v: i16) {
         self.caret_slope_run = v;
     }
 
+    /// 返回胸线偏移量。
     pub fn caret_offset(&self) -> i16 {
         self.caret_offset
     }
+    /// 设置胸线偏移量。
     pub fn set_caret_offset(&mut self, v: i16) {
         self.caret_offset = v;
     }
 
+    /// 返回水平度量数量。
     pub fn number_of_h_metrics(&self) -> u16 {
         self.number_of_h_metrics
     }
+    /// 设置水平度量数量。
     pub fn set_number_of_h_metrics(&mut self, v: u16) {
         self.number_of_h_metrics = v;
     }
 
+    /// 返回版本号。
     pub fn version(&self) -> u32 {
         self.version
     }

@@ -157,10 +157,10 @@ impl CT_Font {
             self.id, self.font_name
         );
         if let Some(ref fn_) = self.family_name {
-            write!(xml, " FamilyName=\"{fn_}\"").unwrap();
+            write!(xml, " FamilyName=\"{fn_}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(ref cs) = self.charset {
-            write!(xml, " Charset=\"{cs}\"").unwrap();
+            write!(xml, " Charset=\"{cs}\"").expect("写入内存缓冲区不会失败");
         }
         if self.italic {
             xml.push_str(" Italic=\"true\"");
@@ -175,7 +175,7 @@ impl CT_Font {
             xml.push_str(" FixedWidth=\"true\"");
         }
         if let Some(ref ff) = self.font_file {
-            write!(xml, " FontFile=\"{ff}\"").unwrap();
+            write!(xml, " FontFile=\"{ff}\"").expect("写入内存缓冲区不会失败");
         }
         xml.push_str(" />");
         xml

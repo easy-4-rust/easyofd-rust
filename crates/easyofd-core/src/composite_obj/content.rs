@@ -130,16 +130,16 @@ impl Content {
                     "<ofd:PathObject StrokeColor=\"{}\" LineWidth=\"{}\"",
                     p.stroke_color, p.line_width
                 )
-                .unwrap();
+                .expect("写入内存缓冲区不会失败");
                 if let Some(fc) = p.fill_color {
-                    write!(xml, " FillColor=\"{fc}\"").unwrap();
+                    write!(xml, " FillColor=\"{fc}\"").expect("写入内存缓冲区不会失败");
                 }
                 writeln!(
                     xml,
                     "><ofd:AbbreviatedData>{}</ofd:AbbreviatedData></ofd:PathObject>",
                     p.data
                 )
-                .unwrap();
+                .expect("写入内存缓冲区不会失败");
                 xml
             }
             Self::Text(t) => {

@@ -106,13 +106,13 @@ impl CT_TemplatePage {
         use std::fmt::Write;
         let mut xml = format!("<ofd:TemplatePage ID=\"{}\"", self.id);
         if let Some(ref name) = self.name {
-            write!(xml, " TemplatePageName=\"{name}\"").unwrap();
+            write!(xml, " TemplatePageName=\"{name}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(zo) = self.z_order {
-            write!(xml, " ZOrder=\"{}\"", zo.as_str()).unwrap();
+            write!(xml, " ZOrder=\"{}\"", zo.as_str()).expect("写入内存缓冲区不会失败");
         }
         if let Some(ref loc) = self.base_loc {
-            write!(xml, " BaseLoc=\"{loc}\"").unwrap();
+            write!(xml, " BaseLoc=\"{loc}\"").expect("写入内存缓冲区不会失败");
         }
         xml.push_str(" />");
         xml

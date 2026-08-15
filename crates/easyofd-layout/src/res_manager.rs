@@ -112,7 +112,7 @@ impl ResManager {
         let xml_key = {
             // 使用固定 sentinel ID 序列化，确保去重不受实际 ID 影响
             let mut clean = param.clone();
-            clean.set_id(easyofd_core::ST_ID::new(1).unwrap());
+            clean.set_id(easyofd_core::ST_ID::new(1).expect("常量 ID 1 有效"));
             hash_string(&clean.to_xml_string())
         };
         let mut params = self.draw_params.borrow_mut();
@@ -121,7 +121,7 @@ impl ResManager {
         }
         let id = self.alloc_id();
         let mut registered = param.clone();
-        registered.set_id(easyofd_core::ST_ID::new(u64::from(id)).unwrap());
+        registered.set_id(easyofd_core::ST_ID::new(u64::from(id)).expect("u32 转 u64 生成有效 ID"));
         params.insert(xml_key, (id, registered));
         id
     }

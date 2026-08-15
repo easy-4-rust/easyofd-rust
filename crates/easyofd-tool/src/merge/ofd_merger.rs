@@ -387,7 +387,11 @@ impl OfdMerger {
         if let std::collections::hash_map::Entry::Vacant(e) = sources.entry(source_index) {
             e.insert(SourceArchive::open(&src_path)?);
         }
-        let total_pages = sources.get(&source_index).unwrap().page_paths.len();
+        let total_pages = sources
+            .get(&source_index)
+            .expect("刚插入的 source 条目应存在")
+            .page_paths
+            .len();
 
         // 页码越界检查
         if page_index >= total_pages {

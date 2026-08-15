@@ -108,10 +108,10 @@ impl TextCode {
         use std::fmt::Write;
         let mut xml = String::from("<ofd:TextCode");
         if let Some(x) = self.x {
-            write!(xml, " X=\"{x}\"").unwrap();
+            write!(xml, " X=\"{x}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(y) = self.y {
-            write!(xml, " Y=\"{y}\"").unwrap();
+            write!(xml, " Y=\"{y}\"").expect("写入内存缓冲区不会失败");
         }
         if !self.delta_x.is_empty() {
             xml.push_str(" DeltaX=\"");
@@ -119,7 +119,7 @@ impl TextCode {
                 if i > 0 {
                     xml.push(' ');
                 }
-                write!(xml, "{d}").unwrap();
+                write!(xml, "{d}").expect("写入内存缓冲区不会失败");
             }
             xml.push('"');
         }
@@ -129,7 +129,7 @@ impl TextCode {
                 if i > 0 {
                     xml.push(' ');
                 }
-                write!(xml, "{d}").unwrap();
+                write!(xml, "{d}").expect("写入内存缓冲区不会失败");
             }
             xml.push('"');
         }

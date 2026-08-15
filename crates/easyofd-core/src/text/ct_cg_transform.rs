@@ -93,13 +93,13 @@ impl CT_CGTransform {
         use std::fmt::Write;
         let mut xml = String::from("<ofd:CGTransform");
         if let Some(cp) = self.code_position {
-            write!(xml, " CodePosition=\"{cp}\"").unwrap();
+            write!(xml, " CodePosition=\"{cp}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(cc) = self.code_count {
-            write!(xml, " CodeCount=\"{cc}\"").unwrap();
+            write!(xml, " CodeCount=\"{cc}\"").expect("写入内存缓冲区不会失败");
         }
         if let Some(gc) = self.glyph_count {
-            write!(xml, " GlyphCount=\"{gc}\"").unwrap();
+            write!(xml, " GlyphCount=\"{gc}\"").expect("写入内存缓冲区不会失败");
         }
         if !self.glyphs.is_empty() {
             xml.push_str(" Glyphs=\"");
@@ -107,7 +107,7 @@ impl CT_CGTransform {
                 if i > 0 {
                     xml.push(' ');
                 }
-                write!(xml, "{g}").unwrap();
+                write!(xml, "{g}").expect("写入内存缓冲区不会失败");
             }
             xml.push('"');
         }

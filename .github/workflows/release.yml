@@ -119,6 +119,9 @@ jobs:
             easyofd-archive
             easyofd-graphics2d
             easyofd
+            easyofd-wasm
+            easyofd-ffi
+            easyofd-async
             easyofd-tool
           )
           for crate in "${CRATES[@]}"; do

@@ -27,7 +27,7 @@ impl CreationDate {
         let value = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
             .or_else(|_| {
                 chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                    .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+                    .map(|d| d.and_hms_opt(0, 0, 0).expect("00:00:00 是有效时间"))
             })
             .ok()?;
         Some(Self { value })
