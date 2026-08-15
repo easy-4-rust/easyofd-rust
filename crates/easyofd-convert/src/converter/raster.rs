@@ -429,7 +429,9 @@ fn find_system_font() -> Option<Vec<u8>> {
 }
 
 /// 根据字体名称和粗体属性返回候选系统字体路径。
-fn system_font_candidates(font_name: &str, _bold: bool) -> Vec<std::path::PathBuf> {
+fn system_font_candidates(font_name: &str, bold: bool) -> Vec<std::path::PathBuf> {
+    // 非 Windows 平台不使用粗体参数（Windows 分支用于选择粗体字体文件）
+    let _ = bold;
     let mut paths = Vec::new();
     let name_lower = font_name.to_lowercase();
 
