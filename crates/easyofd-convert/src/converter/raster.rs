@@ -465,9 +465,12 @@ fn system_font_candidates(font_name: &str, bold: bool) -> Vec<std::path::PathBuf
     #[cfg(target_os = "linux")]
     {
         let linux_base = std::path::Path::new("/usr/share/fonts");
-        if name_lower.contains("simsun") || name_lower.contains("宋体") {
-            paths.push(linux_base.join("truetype/wqy/wqy-microhei.ttc"));
-        } else if name_lower.contains("simhei") || name_lower.contains("黑体") {
+        if name_lower.contains("simsun")
+            || name_lower.contains("宋体")
+            || name_lower.contains("simhei")
+            || name_lower.contains("黑体")
+        {
+            // Linux 中文字体统一回退文泉驿微米黑
             paths.push(linux_base.join("truetype/wqy/wqy-microhei.ttc"));
         }
         paths.push(linux_base.join("truetype/dejavu/DejaVuSans.ttf"));

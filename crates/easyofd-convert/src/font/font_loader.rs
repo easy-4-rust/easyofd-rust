@@ -479,7 +479,7 @@ mod tests {
     #[test]
     fn test_alias_mapping() {
         let temp_dir = std::env::temp_dir();
-        let font_path = temp_dir.join("simsun.ttf");
+        let font_path = temp_dir.join("simsun_alias.ttf");
         std::fs::write(&font_path, b"fake font data").unwrap();
 
         let mut loader = FontLoader::new();
@@ -499,7 +499,7 @@ mod tests {
     #[test]
     fn test_similar_font_replace_default_rules() {
         let temp_dir = std::env::temp_dir();
-        let font_path = temp_dir.join("kaiti.ttf");
+        let font_path = temp_dir.join("kaiti_default.ttf");
         std::fs::write(&font_path, b"fake kaiti data").unwrap();
 
         let mut loader = FontLoader::new();
@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn test_similar_font_replace_by_family_name() {
         let temp_dir = std::env::temp_dir();
-        let font_path = temp_dir.join("simsun.ttf");
+        let font_path = temp_dir.join("simsun_replace.ttf");
         std::fs::write(&font_path, b"fake simsun data").unwrap();
 
         let mut loader = FontLoader::new();
@@ -536,7 +536,7 @@ mod tests {
     #[test]
     fn test_similar_font_replace_disabled() {
         let temp_dir = std::env::temp_dir();
-        let font_path = temp_dir.join("kaiti.ttf");
+        let font_path = temp_dir.join("kaiti_disabled.ttf");
         std::fs::write(&font_path, b"fake kaiti data").unwrap();
 
         let mut loader = FontLoader::new();

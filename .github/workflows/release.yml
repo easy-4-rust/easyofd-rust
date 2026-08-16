@@ -62,7 +62,8 @@ jobs:
         run: cargo test --workspace --release --locked
 
       - name: Validate crate manifests
-        run: cargo publish --dry-run --allow-dirty -p easyofd
+        run: # 校验 leaf crate（facade 的 workspace 依赖需发布后才能 dry-run，publish-crates 步骤按序处理）
+          cargo publish --dry-run --allow-dirty -p easyofd-core
 
       - name: Build documentation
         run: cargo doc --no-deps --workspace
