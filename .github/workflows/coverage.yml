@@ -37,9 +37,9 @@ jobs:
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           files: lcov.info
-          fail_ci_if_error: true
+          # CODECOV_TOKEN 未配置时上传失败不阻断（配置 secret 后可改回 true）
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-          threshold: 1%
           flags: unittests
 
       - name: Generate HTML coverage report
