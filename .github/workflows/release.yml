@@ -102,6 +102,11 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
+          # 前置：token 未配置立即失败（避免空 token 重试 21×3 次的假绿）
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN secret 未配置（仓库 Settings → Secrets → Actions）"
+            exit 1
+          fi
           CRATES=(
             easyofd-core
             easyofd-derive-impl
@@ -125,16 +130,28 @@ jobs:
             easyofd-async
             easyofd-tool
           )
+          FAILED=()
           for crate in "${CRATES[@]}"; do
             echo "::group::Publishing $crate"
+            ok=0
             # Retry up to 3 times with backoff for crates.io index propagation
             for attempt in 1 2 3; do
               if cargo publish -p "$crate" --allow-dirty; then
                 echo "Successfully published $crate"
+                ok=1
                 break
               fi
               echo "Attempt $attempt failed for $crate, waiting before retry..."
               sleep 15
             done
+            if [ "$ok" -ne 1 ]; then
+              echo "::error::$crate 3 次重试后仍发布失败"
+              FAILED+=("$crate")
+            fi
             echo "::endgroup::"
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::发布失败的 crate: ${FAILED[*]}"
+            exit 1
+          fi
           done
