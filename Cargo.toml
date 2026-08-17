@@ -87,7 +87,7 @@ tiny-skia = "0.12.0"
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 cipher = "0.4"
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
 sm4 = "0.5"
