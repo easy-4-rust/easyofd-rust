@@ -90,7 +90,7 @@ cipher = "0.4"
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
-sm4 = "0.5"
+sm4 = "0.6"
 des = "0.8"
 ttf-parser = "0.25"
 rand = "0.10"
