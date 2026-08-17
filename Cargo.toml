@@ -91,7 +91,7 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 hmac = "0.12"
 sha1 = "0.10"
 sm4 = "0.5"
-des = "0.8"
+des = "0.9"
 ttf-parser = "0.25"
 rand = "0.10"
 serde = { version = "1", features = ["derive"] }
