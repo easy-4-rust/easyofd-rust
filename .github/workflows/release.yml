@@ -136,8 +136,8 @@ jobs:
             ok=0
             # Retry up to 3 times with backoff for crates.io index propagation
             for attempt in 1 2 3; do
-              out=$(cargo publish -p "$crate" --allow-dirty 2>&1)
-              if [ $? -eq 0 ]; then
+              # 必须用 if 条件捕获：Actions 默认 bash -e，独立赋值语句会在 cargo 失败（exit 101）时直接终止脚本
+              if out=$(cargo publish -p "$crate" --allow-dirty 2>&1); then
                 echo "Successfully published $crate"
                 ok=1
                 break
