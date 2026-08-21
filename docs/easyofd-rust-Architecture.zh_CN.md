@@ -2,10 +2,10 @@
 
 > **文档目的**：定义 easyofd-rust 的架构目标、边界、组件职责、运行主链、数据流与质量约束，使设计、开发、测试和发布使用同一套可验证的架构合同。
 >
-> **架构版本**：0.1.0<br>
+> **架构版本**：0.1.1<br>
 > **文档状态**：已批准<br>
 > **负责人**：easyofd-rust team<br>
-> **最后更新**：2026-08-09
+> **最后更新**：2026-08-21
 
 ## 目录
 
@@ -35,7 +35,7 @@
 | 字段 | 内容 |
 |---|---|
 | 系统/项目 | easyofd-rust |
-| 架构版本 | 0.1.0 |
+| 架构版本 | 0.1.1 |
 | 适用代码版本 | workspace edition 2024, resolver 3, rust-version 1.88 |
 | 适用形态 | Rust library / Cargo workspace |
 | 许可证 | Apache-2.0 |
@@ -83,8 +83,8 @@ Rust 应用 / 服务
 │ easyofd-layout      确定性阅读顺序分析                       │
 │ easyofd-markdown    OFD → Markdown 流式转换 + 损失报告       │
 │ easyofd-template    {placeholder} 替换引擎                   │
-│ easyofd-signature   电子签章（SM2 真签名 + SES DER 编解码）    │
-│ easyofd-convert     PDF ↔ OFD 转换（简化可用实现）            │
+│ easyofd-signature   GB/T 38540 签章（SM2WithSM3 + SES V1/V4/V5）│
+│ easyofd-convert     PDF ↔ OFD 转换（已实现）                   │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -98,7 +98,7 @@ OFD 文件 (GB/T 33190-2016 ZIP) / Markdown 文本
 | 安全 | `#![forbid(unsafe_code)]` 全 workspace、ZIP 炸弹防护、路径穿越校验 |
 | 易用 | 一行 `EasyOfd::write::<T>()` 即可生成 OFD，Builder 链式配置 |
 | 性能 | 流式 Writer 不保留全部页面内容、SAX 逐页解析、逐页 Markdown 输出 |
-| 合规 | GB/T 33190-2016 XML 命名空间、GB/T 38540 签章接口（实验性） |
+| 合规 | GB/T 33190-2016 XML 命名空间、GB/T 38540 数字签章（SM2WithSM3、SES V1/V4/V5） |
 
 ---
 
@@ -136,11 +136,13 @@ OFD（Open Fixed-layout Document）是中国国家标准 GB/T 33190-2016，广�
 
 | 系统负责 | 系统不负责 | 外部替代 |
 |---|---|---|
-| OFD 文件创建（文本、图片、路径） | PDF 渲染 | lopdf / printpdf（计划中） |
+| OFD 文件创建（文本、图片、路径） | PDF 渲染 | lopdf / printpdf |
 | OFD 文件安全读取 | OFD 可视化渲染 | OFD 阅读器 |
-| 模板占位符替换 | 数字签名密码学运算 | SM2/RSA 库（计划中） |
+| 模板占位符替换 | 证书管理 | PKI 基础设施 |
 | OFD → Markdown 转换 | Markdown → OFD 逆向 | 不在范围内 |
-| 电子签章（SM2 真签名 + SES DER） | 证书管理 | PKI 基础设施 |
+| GB/T 38540 数字签章（SM2WithSM3 + SES V1/V4/V5） | | |
+| SM4 加密（CBC/ECB） | | |
+| PDF ↔ OFD 转换 | | |
 
 ### 4.2 外部依赖
 
@@ -168,18 +170,18 @@ OFD（Open Fixed-layout Document）是中国国家标准 GB/T 33190-2016，广�
 | OFD → Markdown | `easyofd-markdown` 流式转换 + 损失报告 | ✅ 已实现 | 10 测试 |
 | 模板填充 | `easyofd-template` {key} 替换 | ✅ 已实现 | 2 测试 |
 | 编辑器 | `OfdEditor` 打开 → 修改 → 保存 | ✅ 已实现 | 4 测试 |
-| 电子签章 | `easyofd-signature` + 真 SM2 签名路径（OfdSignatureBuilder + sm2 crate），SES v1/v4/v5 ASN.1 DER 编解码（easyofd-gm） | ✅ 已实现 | gbt38540_full_pipeline 测试通过（2026-08-11 更新） |
-| PDF ↔ OFD | `easyofd-convert` 简化但可用的实现 | ✅ 已实现 | 文本提取+路径转换可用（2026-08-11 更新） |
+| 电子签章 | `easyofd-signature` + SM2WithSM3 + SES V1/V4/V5 + checkSealMatch + PKCS#12（PBES2 AES/SM4 + 传统 PBE 3DES） | ✅ 已实现 | gbt38540_full_pipeline 测试通过 |
+| PDF ↔ OFD | `easyofd-convert`（lopdf + printpdf）保真转换 | ✅ 已实现 | 坐标基线、FontCache family mapping、颜色/粗体/斜体 |
 | 流式 Writer | `OfdStreamWriter` 逐页写入 | ✅ 已实现 | 1 测试 |
 
 ### 5.2 差距矩阵
 
 | 差距 | 当前 | 目标 | 优先级 |
 |---|---|---|:---:|
-| 数字签名密码学 | SM2 真实签名路径已实现 | RSA 签名 + 完整证书链验证 | P5 |
-| PDF → OFD 转换 | 简化实现可用 | 完整转换管线 | P7 |
-| OFD → PDF 转换 | 简化实现可用 | 完整渲染管线 | P7 |
-| 字体嵌入 | 注册 API | 完整字体资源生成 | P2 |
+| 数字签名密码学 | SM2WithSM3 真实签名 + SES V1/V4/V5 | RSA 签名 + 完整证书链验证 | P5 |
+| PDF → OFD 转换 | 已实现（lopdf） | 完整转换管线 | ✅ 已完成 |
+| OFD → PDF 转换 | 已实现（printpdf） | 完整渲染管线 | ✅ 已完成 |
+| 字体嵌入 | 字体资源生成 + FontLoader | 完整字体子集化 | P2 |
 | OCR 回退 | OcrProvider trait | 外部 OCR 集成 | P3 |
 
 ---
@@ -202,7 +204,7 @@ OFD（Open Fixed-layout Document）是中国国家标准 GB/T 33190-2016，广�
 
 | ADR | 决策 | 理由 |
 |---|---|---|
-| ADR-001 | 12 crate workspace 拆分 | 职责隔离、独立编译、可选依赖 |
+| ADR-001 | 21 crate workspace 拆分 | 职责隔离、独立编译、可选依赖 |
 | ADR-002 | SAX 解析而非 DOM | 内存效率、大文件友好 |
 | ADR-003 | `OfdWriter` + `OfdStreamWriter` 双 Writer | 批量场景用 Writer，流式场景用 StreamWriter |
 | ADR-004 | Layout 分析器独立 crate | 确定性、可测试、可替换 |
@@ -236,11 +238,23 @@ flowchart TB
 
     subgraph Infrastructure["基础设施层"]
         PACKAGE["easyofd-package<br/>ZIP 安全 + 原子写入"]
+        GM["easyofd-gm<br/>SM2/SM3/SM4 国密集成"]
+        CRYPTO["easyofd-crypto<br/>OFD 加密（SM4）"]
+        ARCHIVE["easyofd-archive<br/>归档合规规则引擎"]
+        GRAPHICS2D["easyofd-graphics2d<br/>2D 图形抽象"]
+        FONT["easyofd-font<br/>字体管理与嵌入"]
     end
 
-    subgraph Experimental["实验层"]
-        SIGNATURE["easyofd-signature<br/>电子签章 API"]
-        CONVERT["easyofd-convert<br/>PDF ↔ OFD API"]
+    subgraph Extensions["扩展层"]
+        SIGNATURE["easyofd-signature<br/>GB/T 38540 签章，SES V1-V5"]
+        CONVERT["easyofd-convert<br/>PDF ↔ OFD 转换"]
+    end
+
+    subgraph Platform["平台与工具层"]
+        TOOL["easyofd-tool<br/>CLI：info/markdown/pdf/sign/verify/merge"]
+        WASM["easyofd-wasm<br/>WASM 绑定（wasm32）"]
+        FFI["easyofd-ffi<br/>C ABI 绑定（cdylib）"]
+        ASYNC["easyofd-async<br/>异步门面（spawn_blocking）"]
     end
 
     EASYOFD --> CORE
@@ -296,8 +310,17 @@ flowchart TB
 | `easyofd-layout` | 159 | 确定性阅读顺序分析 | `LayoutAnalyzer`, `LayoutBlock`, `LayoutOptions` |
 | `easyofd-markdown` | 307 | OFD → Markdown 流式转换 | `MarkdownConverter`, `MarkdownOptions`, `ConversionReport` |
 | `easyofd-template` | 160 | {placeholder} 替换引擎 | `OfdTemplateFiller` |
-| `easyofd-signature` | 180 | 电子签章（SM2 真签名 + SES DER 编解码） | `OfdSignatureBuilder`, `ElectronicSeal`, `SignedOfd` |
-| `easyofd-convert` | 80 | PDF ↔ OFD 转换（简化可用实现） | `pdf_to_ofd`, `ofd_to_pdf`, `ConvertOptions` |
+| `easyofd-signature` | — | GB/T 38540 签章，SES V1-V5，印章验证 | `OfdSignatureBuilder`, `ElectronicSeal`, `SignedOfd` |
+| `easyofd-convert` | — | PDF ↔ OFD 转换（lopdf + printpdf） | `pdf_to_ofd`, `ofd_to_pdf`, `ConvertOptions` |
+| `easyofd-gm` | — | SM2/SM3/SM4 国密集成 | SM2 密码、SM3 杂凑、SM4 分组密码 |
+| `easyofd-crypto` | — | OFD 加密基础设施（SM4、PKCS#12） | SM4-CBC/ECB 加密、密钥管理 |
+| `easyofd-archive` | — | 归档合规规则引擎 | 合规检查、完整性校验 |
+| `easyofd-graphics2d` | — | 2D 图形抽象（ofdrw-graphics2d） | 画布绘制、矢量路径 |
+| `easyofd-font` | — | 字体管理与嵌入 | 字体资源生成、FontLoader |
+| `easyofd-tool` | — | CLI：info / to-markdown / to-pdf / sign / verify / pages / merge | 命令行接口 |
+| `easyofd-wasm` | — | WASM 绑定，浏览器端读取（wasm32） | 浏览器集成 |
+| `easyofd-ffi` | — | C ABI 绑定（15 个函数，cdylib） | FFI 接口 |
+| `easyofd-async` | — | 异步门面（spawn_blocking 桥接） | 异步包装 |
 
 ### 8.2 核心数据模型
 
@@ -629,18 +652,27 @@ cargo run --release -p easyofd --example benchmark -- 10000
 
 | Crate | 单元测试 | 集成测试 | compile-fail | 总计 |
 |---|---:|---:|---:|---:|
-| easyofd-core | 48 | — | — | 48 |
-| easyofd-derive-impl | 34 | — | 2 | 36 |
-| easyofd-reader | 12 | — | — | 12 |
-| easyofd-writer | 62 | — | — | 62 |
-| easyofd-package | 6 | — | — | 6 |
-| easyofd-layout | 3 | — | — | 3 |
-| easyofd-markdown | 10 | — | — | 10 |
-| easyofd-template | 2 | — | — | 2 |
-| easyofd-signature | 3 | — | — | 3 |
-| easyofd-convert | 5 | — | — | 5 |
-| easyofd (facade) | 12 | — | — | 12 |
-| **总计** | **197** | **—** | **2** | **199** |
+| easyofd-core | — | — | — | — |
+| easyofd-derive-impl | — | — | 2 | — |
+| easyofd-reader | — | — | — | — |
+| easyofd-writer | — | — | — | — |
+| easyofd-package | — | — | — | — |
+| easyofd-layout | — | — | — | — |
+| easyofd-markdown | — | — | — | — |
+| easyofd-template | — | — | — | — |
+| easyofd-signature | — | — | — | — |
+| easyofd-convert | — | — | — | — |
+| easyofd-gm | — | — | — | — |
+| easyofd-crypto | — | — | — | — |
+| easyofd-archive | — | — | — | — |
+| easyofd-graphics2d | — | — | — | — |
+| easyofd-font | — | — | — | — |
+| easyofd-tool | — | — | — | — |
+| easyofd-wasm | — | — | — | — |
+| easyofd-ffi | — | — | — | — |
+| easyofd-async | — | — | — | — |
+| easyofd (facade) | — | — | — | — |
+| **总计** | **2858** | **—** | **2** | **2860** |
 
 ### 14.2 质量门禁
 
@@ -660,20 +692,15 @@ cargo run --release -p easyofd --example benchmark -- 10000
 | 风险 | 影响 | 缓解 |
 |---|---|---|
 | OFD 规范复杂度超预期 | 部分元素不支持 | 逐版本扩展，损失报告透明 |
-| 签章密码学依赖 | 引入 C/C++ 依赖 | 优先纯 Rust SM2 实现 |
+| 签章密码学依赖 | 引入 C/C++ 依赖 | 纯 Rust SM2 实现（sm2/sm3 crate） |
 | PDF 转换精度 | 布局丢失 | 明确限制，提供损失报告 |
 
 ### 15.2 路线图
 
 | 版本 | 里程碑 | 状态 |
 |---|---|:---:|
-| v0.1 | Writer + Derive + 基础 API | ✅ |
-| v0.2 | Reader + Template + Package 安全 | ✅ |
-| v0.3 | Signature API + SM2 真签名 + SES DER | ✅ |
-| v0.4 | Convert API + 简化 PDF ↔ OFD 实现 | ✅ |
-| v0.5 | Layout + Markdown + Editor + StreamWriter | ✅ |
-| v0.6 | 签章密码学实现 | 🗓️ |
-| v0.7 | PDF ↔ OFD 转换实现 | 🗓️ |
+| v0.1.0 | 首次 crates.io 发布（facade + core） | ✅ 2026-08-10 发布 |
+| v0.1.1 | 完整 21 crate workspace：签章、加密、PDF、合并、WASM/FFI/async；ofdrw 字节级一致 | ✅ 2026-08-21 发布 |
 
 ---
 
