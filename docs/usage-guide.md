@@ -2,7 +2,7 @@
 
 > Step-by-step examples for all easyofd-rust operations.
 >
-> **Capability notice:** signature examples demonstrate the experimental package API; they do not currently create a cryptographically valid SM2/RSA signature. Font embedding and PDF conversion are also not production-complete.
+> **Capability notice:** Signature examples demonstrate the complete GB/T 38540 SM2WithSM3 digital signing flow (SES V1/V4/V5, PKCS#12). Font embedding, PDF conversion, SM4 encryption, and document merge are all production-ready as of v0.1.1.
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```toml
 [dependencies]
-easyofd = "0.4"
+easyofd = "0.1"
 ```
 
 ---
@@ -292,7 +292,7 @@ let seal = ElectronicSeal {
     image_data: std::fs::read("company_seal.png")?,
     name: "Company Official Seal".into(),
     position: (150.0, 200.0),  // mm from top-left
-    page: 1,                     // 1-based page number
+    page: 0,                     // 0-based page index
 };
 
 OfdSignatureBuilder::new("contract.ofd")
@@ -324,18 +324,36 @@ OfdSignatureBuilder::new("document.ofd")
     .save("signed.ofd")?;
 ```
 
-### 4.4 With Certificate (Full Cryptographic Signing)
+### 4.4 Full Cryptographic Signing (SM2WithSM3)
+
+The `sign()` method performs real SM2WithSM3 signing (GB/T 38540) using an
+internal SM2 key pair.  The resulting `SignedOfd` carries the SM3 digest
+and SM2 signature value; `verify_signature()` validates the roundtrip.
 
 ```rust
-let cert = std::fs::read("certificate.pem")?;
-let key = std::fs::read("private_key.pem")?;
-
-OfdSignatureBuilder::new("document.ofd")
+// Sign with default SM2WithSM3 algorithm
+let signed = OfdSignatureBuilder::new("document.ofd")
     .seal(my_seal)
-    .certificate(cert)
-    .private_key(key)
-    .sign()?     // ← generates actual Signature.xml with certificate info
-    .save("fully-signed.ofd")?;
+    .sign()?;    // ← generates Signature.xml + SignedInfo + SignedValue
+
+signed.save("fully-signed.ofd")?;
+
+// Verify
+let valid = easyofd::verify_signature("fully-signed.ofd")?;
+assert!(valid);
+```
+
+For multi-signer scenarios (batch signing), use `.add_signature()`:
+
+```rust
+use easyofd_signature::SignatureAlgorithm;
+
+let signed = OfdSignatureBuilder::new("document.ofd")
+    .algorithm(SignatureAlgorithm::Sm2WithSm3)
+    .add_signature(secret_key, vec![seal1, seal2])
+    .sign_multiple()?;
+
+signed.save("multi-signed.ofd")?;
 ```
 
 ---
@@ -383,16 +401,32 @@ assert!(reader.extract_all_text().contains("Roundtrip test"));
 ### 6.2 Write → Sign → Read Pipeline
 
 ```rust
-// Step 1: Create document
-EasyOfd::write_pages("draft.ofd").do_write(pages)?;
+use easyofd::{EasyOfd, OfdPage, TextObject, OfdSignatureBuilder, ElectronicSeal};
 
-// Step 2: Apply electronic seal
+// Step 1: Create document
+let mut page = OfdPage::new(210.0, 297.0);
+page.add_text(TextObject::new(20.0, 30.0, "Contract content"));
+EasyOfd::write_pages("draft.ofd")
+    .metadata_title("Contract")
+    .do_write(vec![page])?;
+
+// Step 2: Apply electronic seal (SM2WithSM3 signing)
+let seal = ElectronicSeal {
+    image_data: std::fs::read("seal.png")?,
+    name: "Company Seal".into(),
+    position: (150.0, 200.0),
+    page: 0,
+};
 OfdSignatureBuilder::new("draft.ofd")
-    .seal(my_seal)
+    .seal(seal)
     .sign()?
     .save("final.ofd")?;
 
-// Step 3: Verify
+// Step 3: Verify signature
+let valid = easyofd::verify_signature("final.ofd")?;
+println!("Signature valid: {valid}");
+
+// Step 4: Read back
 let reader = EasyOfd::read("final.ofd")?;
 println!("Signed document: {} pages", reader.page_count());
 ```

@@ -2,7 +2,7 @@
 
 > **目标**：将 easyofd-rust 从 v0.1.0 实验阶段推进至可用于电子发票、公文等生产场景
 > **创建日期**：2026-08-10
-> **当前状态**：199 测试通过，91.47% 覆盖率，Clippy 通过
+> **当前状态**：v0.1.1 已发布 crates.io（2026-08-21），2860 测试通过，93%+ 覆盖率，Clippy 通过，21/21 crate 全部发布
 
 ---
 
@@ -32,18 +32,22 @@
 
 ---
 
-## Phase 2：签章密码学实现
+## Phase 2：签章密码学实现（✅ 已完成）
 
 ### 2.1 SM2/SM3 签名
 
 - 引入纯 Rust SM2/SM3 实现（`sm2` + `sm3` crate）
 - 实现 `Signature.xml` 真实摘要计算
 - 实现 `SignedInfo` 和 `SignatureValue` 生成
+- SES V1/V4/V5 ASN.1 DER 编解码（easyofd-gm）
+- PKCS#12 密钥库支持（PBES2 AES/SM4 + 传统 PBE 3DES）
+- checkSealMatch 印章匹配验证
 
 ### 2.2 签章验证
 
 - 实现签名验证 API
 - 补充签章 roundtrip 测试
+- 70 个 ofdrw 样本零偏差验证
 
 ---
 
@@ -69,7 +73,7 @@
 
 - 补充 `description`、`license`、`repository`、`keywords`
 - 设置 `publish = true`（默认）
-- 首次发布 v0.1.0
+- 首次发布 v0.1.0（2026-08-10），v0.1.1（2026-08-21，21/21 crate 全部发布）
 
 ### 4.2 文档
 
@@ -79,10 +83,9 @@
 
 ### 4.3 版本策略
 
-- v0.1.x：当前功能稳定化
-- v0.2.0：签章密码学
-- v0.3.0：PDF 互转
-- v1.0.0：生产就绪
+- v0.1.0：首次发布（2026-08-10）
+- v0.1.1：完整 21 crate workspace 发布（2026-08-21）——签章密码学、PDF 互转、加密、合并、WASM/FFI/async 全部已实现
+- v1.0.0：生产就绪（待定）
 
 ---
 
@@ -90,10 +93,10 @@
 
 | 维度 | 标准 |
 |---|---|
-| 测试 | 全部通过，无 flaky |
-| 覆盖率 | ≥ 90% 行覆盖 |
+| 测试 | 全部通过，无 flaky（2860 测试） |
+| 覆盖率 | ≥ 90% 行覆盖（当前 93%+） |
 | Clippy | `-D warnings` 零警告 |
 | 文件大小 | 所有 `.rs` 文件 ≤ 800 行 |
-| CI | GitHub Actions 全绿 |
-| 签章 | SM2/SM3 真实签名可验证 |
-| 发布 | crates.io 可安装 |
+| CI | 6 个 workflow 全绿（3-OS × 2 toolchains） |
+| 签章 | SM2WithSM3 真实签名可验证（SES V1/V4/V5、checkSealMatch、PKCS#12） |
+| 发布 | crates.io 可安装（v0.1.1，21/21 crate） |

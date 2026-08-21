@@ -9,6 +9,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance)
+[![crates.io](https://img.shields.io/crates/v/easyofd.svg)](https://crates.io/crates/easyofd)
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
@@ -21,15 +22,21 @@
 
 ---
 
-> **Current version**: `0.1.0`<br>
+> **Current version**: `0.1.1` (published on crates.io)<br>
 > **MSRV**: Rust `1.88`<br>
 > **Edition**: `2024`<br>
 > **Workspace Resolver**: `3`<br>
 > **License**: Apache-2.0
 
-`easyofd-rust` provides a fluent, type-safe API for OFD (Open Fixed-layout Document) operations: **create**, **read**, **stream-write**, **template fill**, **edit**, and **OFD → Markdown** conversion. Digital signatures and PDF conversion are experimental/planned.
+`easyofd-rust` is a pure-Rust implementation of the OFD (Open Fixed-layout Document)
+national standard **GB/T 33190-2016**, including **GB/T 38540** digital signatures.
+It covers the full document lifecycle: **create**, **read**, **stream-write**,
+**template fill**, **edit**, **merge**, **encrypt**, **sign & verify**,
+**OFD → Markdown** and **OFD ↔ PDF** conversion.
 
-OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic invoices, official documents, and archival purposes. Inspired by [Alibaba EasyExcel](https://github.com/alibaba/easyexcel).
+The workspace mirrors the Java [ofdrw](https://github.com/ofdrw/ofdrw) feature set
+with byte-level output fidelity (70/70 ofdrw test samples round-trip with zero deviations).
+Inspired by [Alibaba EasyExcel](https://github.com/alibaba/easyexcel).
 
 ---
 
@@ -41,52 +48,59 @@ OFD is the Chinese national standard GB/T 33190-2016, widely used for electronic
 | `#[derive(OfdModel)]` | ✅ | Compile-time reflection; zero runtime cost |
 | Stream Writer | ✅ | Page-by-page ZIP writing; constant memory per page |
 | Editor | ✅ | Open → modify (add text, pages, watermarks) → save |
-| Read OFD | ✅ | SAX-based parsing, page visitor, safe ZIP validation |
+| Read OFD | ✅ | XML parsing, page visitor, safe ZIP validation |
 | OFD → Markdown | ✅ | Deterministic reading-order, image export, loss report |
 | Template fill | ✅ | `{key}` placeholder replacement, binary-preserving |
-| Atomic output | ✅ | Same-directory temp file + atomic rename |
-| Digital signatures | ⚠️ | API complete, cryptographic signing is stub |
-| PDF ↔ OFD | 🗓️ | API surface returns explicit not-implemented error |
-| Vector paths | ✅ | hline, vline, rect with stroke/fill |
-| Custom fonts | ⚠️ | Registration API only, no font resource generation yet |
+| Merge | ✅ | Streaming multi-document merge; full resource migration (ColorSpace/Font/DrawParam/templates) with SM3 dedup |
+| Digital signatures | ✅ | GB/T 38540 SM2WithSM3; SES V1/V4/V5; seal-match verification (`checkSealMatch`); PKCS#12 (PBES2 AES/SM4 + legacy PBE 3DES) |
+| Encryption | ✅ | SM4-CBC/ECB; archive integrity rules & compliance engine |
+| PDF ↔ OFD | ✅ | PDF fidelity: coordinate baseline, FontCache family mapping, color/bold/italic |
+| Keyword search | ✅ | Cross-`TextCode`-boundary keyword location + CTM affine transforms |
+| Vector paths | ✅ | hline, vline, rect with stroke/fill; canvas drawing |
+| Custom fonts | ✅ | Font resource generation + FontLoader similar-substitution |
+
+## Byte-level fidelity with ofdrw
+
+Roundtrip verification (`read → write → compare`) against every `.ofd` sample produced
+by the Java ofdrw test suite:
+
+```
+70/70 samples, 0 ZIP + 0 XML + 0 text deviations, 0 skipped
+```
+
+Raw-XML pass-through for `OFD.xml` / `Document.xml` matches ofdrw's flush semantics,
+and metadata (Creator / Author / ModDate / DocID / …) is preserved field-by-field.
 
 ---
 
 ## Architecture
 
 ```
-easyofd-rust (12 crates)
-├── easyofd             🎯 Facade — EasyOfd::write/read/to_markdown/fill_template
+easyofd-rust (21 crates)
+├── easyofd             🎯 Facade — EasyOfd::write/read/to_markdown/fill_template/…
 ├── easyofd-core        🧩 Types, traits, errors, data model
-├── easyofd-derive      ⚡ Proc-macro shim (6 lines)
-├── easyofd-derive-impl ⚙️ All derive logic (400 lines)
-├── easyofd-reader      📖 SAX-based OFD parsing + page visitor
+├── easyofd-derive      ⚡ Proc-macro shim
+├── easyofd-derive-impl ⚙️ All derive logic
+├── easyofd-reader      📖 OFD parsing + page visitor
 ├── easyofd-writer      ✍️ ZIP/XML generation + stream writer + editor
 ├── easyofd-package     🛡️ ZIP limits, safe paths, atomic replacement
 ├── easyofd-layout      📐 Deterministic reading-order analysis
 ├── easyofd-markdown    📝 Streaming OFD → Markdown + loss report
 ├── easyofd-template    📋 Placeholder replacement engine
-├── easyofd-signature   🔐 GB/T 38540 electronic seals [experimental]
-└── easyofd-convert     🧪 PDF ↔ OFD bridge API [planned]
+├── easyofd-signature   🔐 GB/T 38540 signatures, SES V1-V5, seal verification
+├── easyofd-convert     🔄 OFD ↔ PDF conversion
+├── easyofd-gm          🇨🇳 SM2/SM3/SM4 integration (GM algorithms)
+├── easyofd-crypto      🔒 OFD encryption infrastructure (SM4, PKCS#12)
+├── easyofd-archive     🗄️ Archive compliance rules engine
+├── easyofd-graphics2d  🎨 2D graphics abstraction (ofdrw-graphics2d)
+├── easyofd-font        🔤 Font management & embedding
+├── easyofd-tool        🧰 CLI: info / to-markdown / to-pdf / sign / verify / pages / merge
+├── easyofd-wasm        🌐 WASM bindings for browser-side reading (wasm32)
+├── easyofd-ffi         🅲 C ABI bindings (15 functions, cdylib)
+└── easyofd-async       ⚡ Async facade (spawn_blocking bridge)
 ```
 
-```mermaid
-flowchart TB
-    USER["Your Application"] --> FACADE["easyofd facade"]
-    FACADE --> CORE["easyofd-core"]
-    FACADE --> READER["easyofd-reader"]
-    FACADE --> WRITER["easyofd-writer"]
-    FACADE --> MARKDOWN["easyofd-markdown"]
-    FACADE --> TEMPLATE["easyofd-template"]
-    READER --> PACKAGE["easyofd-package"]
-    WRITER --> PACKAGE
-    MARKDOWN --> READER
-    MARKDOWN --> LAYOUT["easyofd-layout"]
-    DERIVE["easyofd-derive"] --> DERIVE_IMPL["derive-impl"]
-    DERIVE_IMPL --> CORE
-```
-
-See [docs/easyofd-rust-Architecture.zh_CN.md](docs/easyofd-rust-Architecture.zh_CN.md) for the full architecture document.
+See [docs/easyofd-rust-Architecture.md](docs/easyofd-rust-Architecture.md) for the full architecture document.
 
 ---
 
@@ -203,6 +217,27 @@ editor.apply_watermarks(&[Watermark::text("CONFIDENTIAL").position(50.0, 150.0)]
 editor.save("edited.ofd")?;
 ```
 
+### 8. Sign (GB/T 38540)
+
+```rust
+use easyofd_signature::{ElectronicSeal, OfdSignatureBuilder, SignatureAlgorithm};
+
+let signed = OfdSignatureBuilder::new("input.ofd")
+    .algorithm(SignatureAlgorithm::SM2WithSM3)
+    .seal(seal_info) // SealInfo / ElectronicSeal — see examples/07_sign_verify.rs
+    .add_signature(secret_key, vec![seal])
+    .sign()?; // → SignedOfd
+signed.save("signed.ofd")?;
+```
+
+> Verification (SES V1/V4/V5 containers, `check_seal_match`, chain/CRL/OCSP) and
+> tamper-detection are exercised in `crates/easyofd-signature/tests/` and
+> `examples/07_sign_verify.rs`.
+
+> More complete examples — digital seal (SES), batch signing, merge, archive check,
+> encryption, keyword search — live in `crates/easyofd/examples/` (22 runnable examples,
+> indexed in [docs/usage-guide.md](docs/usage-guide.md)).
+
 ---
 
 ## API Reference
@@ -218,9 +253,15 @@ All operations go through `EasyOfd` static methods:
 | `EasyOfd::write_pages_to(path, pages)` | `OfdResult<()>` | One-shot file write |
 | `EasyOfd::write_pages_to_bytes(pages)` | `OfdResult<Vec<u8>>` | One-shot bytes |
 | `EasyOfd::stream_writer(output)` | `OfdStreamWriter<W>` | Streaming write |
+| `EasyOfd::read(path)` | `OfdResult<OfdReader>` | Full read (metadata + pages) |
+| `EasyOfd::read_from_bytes(data)` | `OfdResult<OfdReader>` | Read from in-memory bytes |
 | `EasyOfd::read_pages(path)` | `OfdReadBuilder` | Page visitor |
 | `EasyOfd::to_markdown(path)` | `MarkdownConversionBuilder` | Markdown conversion |
 | `EasyOfd::fill_template(path, data)` | `OfdResult<OfdTemplateFiller>` | Template fill |
+
+Signing, verification, encryption, merge and keyword search are provided by the
+dedicated crates (`easyofd-signature`, `easyofd-crypto`, `easyofd-tool`) and re-exported
+where applicable — see [docs/usage-guide.md](docs/usage-guide.md).
 
 ### Core Types
 
@@ -231,7 +272,7 @@ All operations go through `EasyOfd` static methods:
 | `ImageObject` | Positioned image (JPEG/PNG/BMP/TIFF) |
 | `PathObject` | Vector path (SVG-like `d` attribute) |
 | `OfdModel` | Trait for mapping Rust structs to OFD pages |
-| `OfdError` | Unified error enum (7 variants) |
+| `OfdError` | Unified error enum (workspace-wide `OfdResult<T>`) |
 | `ConversionReport` | Markdown conversion results + losses + warnings |
 
 ---
@@ -240,44 +281,40 @@ All operations go through `EasyOfd` static methods:
 
 | Principle | Implementation |
 |---|---|
-| **Zero unsafe** | `#![forbid(unsafe_code)]` across entire workspace |
+| **Zero unsafe** | `#![forbid(unsafe_code)]` across the workspace (FFI crate exempted with documented `SAFETY` comments) |
 | **Fluent Builders** | `mut self → Self` with `#[must_use]` |
 | **Compile-time reflection** | `#[derive(OfdModel)]` — zero runtime cost |
 | **Single facade** | `EasyOfd` — discoverable static factory |
 | **GB/T 33190-2016** | Valid OFD ZIP with correct XML namespaces |
-| **Single error type** | `OfdError` + `type OfdResult<T>` |
-| **Streaming first** | Writer/Reader/Markdown all support page-by-page processing |
+| **Byte-level fidelity** | Raw-XML pass-through + normalized full-text roundtrip vs ofdrw (0 deviations) |
+| **Streaming first** | Writer/Reader/Markdown all support page-by-page processing; merge is O(1) memory per source |
 | **Separation of concerns** | Each crate has one job; facade wires them together |
 
 ---
 
-## Workspace Structure
+## Workspace
 
-| Crate | Tests | Lines | Description |
-|---|---:|---:|---|
-| `easyofd` | 12 | 504 | Facade, Builders, re-exports |
-| `easyofd-core` | 48 | 612 | Types, traits, errors |
-| `easyofd-derive` | — | 6 | Proc-macro shim |
-| `easyofd-derive-impl` | 34+2 | 400 | Derive logic + compile-fail |
-| `easyofd-reader` | 12 | 844 | SAX parser + visitor |
-| `easyofd-writer` | 62 | 1440 | Writer + StreamWriter + Editor |
-| `easyofd-package` | 6 | 280 | ZIP safety + atomic I/O |
-| `easyofd-layout` | 3 | 159 | Reading-order analysis |
-| `easyofd-markdown` | 10 | 307 | OFD → Markdown |
-| `easyofd-template` | 2 | 160 | Placeholder engine |
-| `easyofd-signature` | 3 | 180 | Electronic seals [experimental] |
-| `easyofd-convert` | 5 | 80 | PDF bridge [planned] |
-| **Total** | **199** | **6128** | — |
+21 crates across 4 groups (all published to crates.io as `0.1.1`):
+
+| Group | Crates |
+|---|---|
+| Facade & core | `easyofd`, `easyofd-core`, `easyofd-derive`, `easyofd-derive-impl` |
+| Read/write pipeline | `easyofd-reader`, `easyofd-writer`, `easyofd-package`, `easyofd-layout`, `easyofd-markdown`, `easyofd-template` |
+| ofdrw-aligned modules | `easyofd-signature`, `easyofd-convert`, `easyofd-gm`, `easyofd-crypto`, `easyofd-archive`, `easyofd-graphics2d`, `easyofd-font` |
+| Platform & tooling | `easyofd-tool` (CLI), `easyofd-wasm`, `easyofd-ffi`, `easyofd-async` |
+
+**2860 tests · 22 examples · clippy `-D warnings` clean · coverage 93%+ · 6 CI workflows (3-OS × 2 toolchains)**
 
 ---
 
-## Benchmark
+## Performance vs ofdrw (Java)
 
-```bash
-cargo run --release -p easyofd --example benchmark -- 10000
-```
+Full benchmark methodology and per-scenario results:
+[docs/benchmark-report.md](docs/benchmark-report.md) (2026-08-16, Apple Silicon vs OpenJDK 21).
 
-Output: JSON with page count, input size, read/write timings.
+Summary: **7–59× faster than ofdrw** across 18 write/read/roundtrip scenarios.
+Rust keeps the whole pipeline in memory (no disk unzip, no layout engine overhead);
+caveats on methodology are documented in the report.
 
 ---
 
@@ -285,23 +322,29 @@ Output: JSON with page count, input size, read/write timings.
 
 | Example | Description | Run |
 |---|---|---|
-| `write_simple` | Create OFD with text, images, and paths | `cargo run --example write_simple` |
-| `read_simple` | Read OFD and print page count + text | `cargo run --example read_simple` |
-| `read_with_visitor` | Stream-read OFD page-by-page (visitor pattern) | `cargo run --example read_with_visitor` |
-| `markdown_export` | Export OFD to Markdown with loss reporting | `cargo run --example markdown_export` |
-| `signature_roundtrip` | GB/T 38540 sign → verify → tamper detection | `cargo run --example signature_roundtrip` |
-| `action_uri` | Create OFD with URI hyperlinks (GB/T 33190 Ch.15) | `cargo run --example action_uri` |
-| `annotation` | Create OFD with text/highlight/stamp annotations (Ch.16) | `cargo run --example annotation` |
-| `batch_sign` | Batch sign multiple OFDs + multi-signer mode | `cargo run --example batch_sign` |
-| `convert_pdf` | OFD → PDF conversion and PDF → OFD roundtrip | `cargo run --example convert_pdf` |
-| `benchmark` | Performance benchmark (read/write/markdown) | `cargo run --release --example benchmark -- 10000` |
+| `01_hello_ofd` | Minimal OFD creation | `cargo run --example 01_hello_ofd` |
+| `02_read_metadata` | Read metadata / DocInfo fields | `cargo run --example 02_read_metadata` |
+| `03_text_image_page` | Text + image + vector page | `cargo run --example 03_text_image_page` |
+| `04_stream_writer` | Page-by-page streaming | `cargo run --example 04_stream_writer` |
+| `05_template_fill` | Template placeholder fill | `cargo run --example 05_template_fill` |
+| `06_to_markdown` | OFD → Markdown + loss report | `cargo run --example 06_to_markdown` |
+| `07_sign_verify` | SM2WithSM3 sign → verify | `cargo run --example 07_sign_verify` |
+| `08_merge_docs` | Multi-document merge | `cargo run --example 08_merge_docs` |
+| `09_archive_check` | Archive compliance rules | `cargo run --example 09_archive_check` |
+| `10_convert_pdf` | OFD ↔ PDF conversion | `cargo run --example 10_convert_pdf` |
+| `11_keyword_search` | Cross-boundary keyword search | `cargo run --example 11_keyword_search` |
+| `12_encrypt_decrypt` | SM4 encryption roundtrip | `cargo run --example 12_encrypt_decrypt` |
+| `batch_sign` | Batch + multi-signer signing | `cargo run --example batch_sign` |
+| `benchmark` | Performance benchmark | `cargo run --release --example benchmark -- 10000` |
+
+Full list (22 examples): [docs/usage-guide.md](docs/usage-guide.md).
 
 ---
 
 ## Testing
 
 ```bash
-# All tests
+# All tests (2860)
 cargo test --workspace
 
 # Clippy
@@ -309,6 +352,9 @@ cargo clippy --workspace -- -D warnings
 
 # Compile-fail tests (derive macro error messages)
 cargo test -p easyofd-derive-impl
+
+# ofdrw byte-level parity (70 fixtures)
+cargo test -p easyofd --test roundtrip_diff --release
 ```
 
 ---
@@ -317,13 +363,8 @@ cargo test -p easyofd-derive-impl
 
 | Version | Milestone | Status |
 |---|---|:---:|
-| v0.1 | Writer + Derive + basic API | ✅ |
-| v0.2 | Reader + Template + Package safety | ✅ |
-| v0.3 | Signature API design | ✅ experimental |
-| v0.4 | Convert API design | ✅ planned |
-| v0.5 | Layout + Markdown + Editor + StreamWriter | ✅ |
-| v0.6 | Cryptographic signing implementation | 🗓️ |
-| v0.7 | PDF ↔ OFD conversion implementation | 🗓️ |
+| v0.1.0 | Initial crates.io release (facade + core) | ✅ published 2026-08-10 |
+| v0.1.1 | Full 21-crate workspace: signatures, encryption, PDF, merge, WASM/FFI/async; byte-level ofdrw parity | ✅ published 2026-08-21 |
 
 ---
 
@@ -333,7 +374,7 @@ cargo test -p easyofd-derive-impl
 2. `cargo test --workspace` — all tests must pass
 3. `cargo clippy --workspace -- -D warnings` — no warnings
 4. All new code must have `#[test]` coverage
-5. No `unsafe` code — `#![forbid(unsafe_code)]` is enforced
+5. No `unsafe` code — `#![forbid(unsafe_code)]` is enforced (FFI crate exempted)
 
 ---
 

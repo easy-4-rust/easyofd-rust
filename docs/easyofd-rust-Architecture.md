@@ -2,10 +2,10 @@
 
 > **Purpose**: Define the architecture goals, boundaries, component responsibilities, core flows, data models, and quality constraints for easyofd-rust, so that design, development, testing, and release use the same verifiable architecture contract.
 >
-> **Architecture Version**: 0.1.0<br>
+> **Architecture Version**: 0.1.1<br>
 > **Status**: Approved<br>
 > **Owner**: easyofd-rust team<br>
-> **Last Updated**: 2026-08-09
+> **Last Updated**: 2026-08-21
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@
 | Field | Value |
 |---|---|
 | Project | easyofd-rust |
-| Version | 0.1.0 |
+| Version | 0.1.1 |
 | Applicable Code | workspace edition 2024, resolver 3, rust-version 1.88 |
 | Form Factor | Rust library / Cargo workspace |
 | License | Apache-2.0 |
@@ -83,8 +83,8 @@ Rust Application / Service
 │ easyofd-layout      Deterministic reading-order analysis    │
 │ easyofd-markdown    OFD → Markdown + loss report            │
 │ easyofd-template    {placeholder} replacement engine        │
-│ easyofd-signature   Electronic seal API [experimental]      │
-│ easyofd-convert     PDF ↔ OFD bridge API [planned]          │
+│ easyofd-signature   GB/T 38540 signatures, SES V1-V5        │
+│ easyofd-convert     PDF ↔ OFD conversion (implemented)      │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -98,7 +98,7 @@ OFD File (GB/T 33190-2016 ZIP) / Markdown Text
 | Safety | `#![forbid(unsafe_code)]` workspace-wide, ZIP bomb protection, path traversal validation |
 | Ease of Use | One-line `EasyOfd::write::<T>()` to generate OFD, fluent Builder chain |
 | Performance | Streaming Writer doesn't retain all pages, SAX per-page parsing, per-page Markdown output |
-| Compliance | GB/T 33190-2016 XML namespaces, GB/T 38540 signature interface (experimental) |
+| Compliance | GB/T 33190-2016 XML namespaces, GB/T 38540 digital signatures (SM2WithSM3, SES V1/V4/V5) |
 
 ---
 
@@ -128,7 +128,6 @@ OFD File (GB/T 33190-2016 ZIP) / Markdown Text
 
 - PDF rendering (delegated to external libraries)
 - OFD visual rendering
-- Cryptographic signing operations (experimental only)
 - Markdown → OFD reverse conversion
 
 ---
@@ -139,11 +138,13 @@ OFD File (GB/T 33190-2016 ZIP) / Markdown Text
 
 | System Responsible | System NOT Responsible | External Alternative |
 |---|---|---|
-| OFD file creation (text, images, paths) | PDF rendering | lopdf / printpdf (planned) |
+| OFD file creation (text, images, paths) | PDF rendering | lopdf / printpdf |
 | Safe OFD reading | OFD visual rendering | OFD readers |
-| Template placeholder replacement | Cryptographic signing | SM2/RSA libraries (planned) |
+| Template placeholder replacement | Certificate management | PKI infrastructure |
 | OFD → Markdown conversion | Markdown → OFD reverse | Out of scope |
-| Electronic seal API packaging | Certificate management | PKI infrastructure |
+| GB/T 38540 digital signatures (SM2WithSM3, SES V1/V4/V5) | Certificate management | PKI infrastructure |
+| SM4 encryption (CBC/ECB) | | |
+| PDF ↔ OFD conversion | | |
 
 ### 4.2 External Dependencies
 
@@ -171,18 +172,18 @@ OFD File (GB/T 33190-2016 ZIP) / Markdown Text
 | OFD → Markdown | `easyofd-markdown` streaming conversion + loss report | ✅ Implemented | 10 tests |
 | Template Fill | `easyofd-template` {key} replacement | ✅ Implemented | 2 tests |
 | Editor | `OfdEditor` open → modify → save | ✅ Implemented | 4 tests |
-| Electronic Seal | `easyofd-signature` API + placeholder signing | ⚠️ Experimental | API complete, crypto stub |
-| PDF ↔ OFD | `easyofd-convert` API stub | 🗓️ Planned | Returns not-implemented error |
+| Electronic Seal | `easyofd-signature` + SM2WithSM3 + SES V1/V4/V5 + checkSealMatch + PKCS#12 | ✅ Implemented | gbt38540_full_pipeline tests passing |
+| PDF ↔ OFD | `easyofd-convert` (lopdf + printpdf) | ✅ Implemented | PDF ↔ OFD conversion with fidelity |
 | Stream Writer | `OfdStreamWriter` page-by-page writing | ✅ Implemented | 1 test |
 
 ### 5.2 Gap Matrix
 
 | Gap | Current | Target | Priority |
 |---|---|---|:---:|
-| Digital signature cryptography | Placeholder signing | SM2/RSA real signing | P2 |
-| PDF → OFD conversion | API stub | Full conversion pipeline | P2 |
-| OFD → PDF conversion | API stub | Full rendering pipeline | P2 |
-| Font embedding | Registration API only | Full font resource generation | P2 |
+| Digital signature cryptography | SM2WithSM3 real signing + SES V1/V4/V5 | RSA signing + complete cert chain verification | P5 |
+| PDF → OFD conversion | Implemented (lopdf) | Full conversion pipeline | ✅ Done |
+| OFD → PDF conversion | Implemented (printpdf) | Full rendering pipeline | ✅ Done |
+| Font embedding | Font resource generation + FontLoader | Complete font subsetting | P2 |
 | OCR fallback | OcrProvider trait | External OCR integration | P3 |
 
 ---
@@ -205,7 +206,7 @@ OFD File (GB/T 33190-2016 ZIP) / Markdown Text
 
 | ADR | Decision | Rationale |
 |---|---|---|
-| ADR-001 | 12-crate workspace split | Responsibility isolation, independent compilation, optional dependencies |
+| ADR-001 | 21-crate workspace split | Responsibility isolation, independent compilation, optional dependencies |
 | ADR-002 | SAX parsing over DOM | Memory efficiency, large file friendly |
 | ADR-003 | `OfdWriter` + `OfdStreamWriter` dual Writer | Batch uses Writer, streaming uses StreamWriter |
 | ADR-004 | Layout analyzer as independent crate | Deterministic, testable, replaceable |
@@ -239,11 +240,23 @@ flowchart TB
 
     subgraph Infrastructure["Infrastructure Layer"]
         PACKAGE["easyofd-package<br/>ZIP safety + atomic write"]
+        GM["easyofd-gm<br/>SM2/SM3/SM4 integration"]
+        CRYPTO["easyofd-crypto<br/>OFD encryption (SM4)"]
+        ARCHIVE["easyofd-archive<br/>Archive compliance rules"]
+        GRAPHICS2D["easyofd-graphics2d<br/>2D graphics abstraction"]
+        FONT["easyofd-font<br/>Font management & embedding"]
     end
 
-    subgraph Experimental["Experimental Layer"]
-        SIGNATURE["easyofd-signature<br/>electronic seal API"]
-        CONVERT["easyofd-convert<br/>PDF ↔ OFD API"]
+    subgraph Extensions["Extension Layer"]
+        SIGNATURE["easyofd-signature<br/>GB/T 38540 signatures, SES V1-V5"]
+        CONVERT["easyofd-convert<br/>PDF ↔ OFD conversion"]
+    end
+
+    subgraph Platform["Platform & Tooling Layer"]
+        TOOL["easyofd-tool<br/>CLI: info/markdown/pdf/sign/verify/merge"]
+        WASM["easyofd-wasm<br/>WASM bindings (wasm32)"]
+        FFI["easyofd-ffi<br/>C ABI bindings (cdylib)"]
+        ASYNC["easyofd-async<br/>Async facade (spawn_blocking)"]
     end
 
     EASYOFD --> CORE
@@ -299,8 +312,17 @@ flowchart TB
 | `easyofd-layout` | 159 | Deterministic reading-order | `LayoutAnalyzer`, `LayoutBlock`, `LayoutOptions` |
 | `easyofd-markdown` | 307 | OFD → Markdown streaming | `MarkdownConverter`, `MarkdownOptions`, `ConversionReport` |
 | `easyofd-template` | 160 | {placeholder} replacement | `OfdTemplateFiller` |
-| `easyofd-signature` | 180 | Electronic seal API [experimental] | `OfdSignatureBuilder`, `ElectronicSeal`, `SignedOfd` |
-| `easyofd-convert` | 80 | PDF ↔ OFD API [planned] | `pdf_to_ofd`, `ofd_to_pdf`, `ConvertOptions` |
+| `easyofd-signature` | — | GB/T 38540 signatures, SES V1-V5, seal verification | `OfdSignatureBuilder`, `ElectronicSeal`, `SignedOfd` |
+| `easyofd-convert` | — | PDF ↔ OFD conversion (lopdf + printpdf) | `pdf_to_ofd`, `ofd_to_pdf`, `ConvertOptions` |
+| `easyofd-gm` | — | SM2/SM3/SM4 integration (GM algorithms) | SM2 cipher, SM3 hash, SM4 cipher |
+| `easyofd-crypto` | — | OFD encryption infrastructure (SM4, PKCS#12) | SM4-CBC/ECB encryption, key management |
+| `easyofd-archive` | — | Archive compliance rules engine | Compliance checks, integrity verification |
+| `easyofd-graphics2d` | — | 2D graphics abstraction (ofdrw-graphics2d) | Canvas drawing, vector paths |
+| `easyofd-font` | — | Font management & embedding | Font resource generation, FontLoader |
+| `easyofd-tool` | — | CLI: info / to-markdown / to-pdf / sign / verify / pages / merge | Command-line interface |
+| `easyofd-wasm` | — | WASM bindings for browser-side reading (wasm32) | Browser integration |
+| `easyofd-ffi` | — | C ABI bindings (15 functions, cdylib) | FFI interface |
+| `easyofd-async` | — | Async facade (spawn_blocking bridge) | Async wrapper |
 
 ### 8.2 Core Data Model
 
@@ -628,18 +650,27 @@ Output JSON: pages, input_bytes, visited_pages, text_bytes, read_millis, markdow
 
 | Crate | Unit Tests | Compile-fail | Total |
 |---|---:|---:|---:|
-| easyofd-core | 48 | — | 48 |
-| easyofd-derive-impl | 34 | 2 | 36 |
-| easyofd-reader | 12 | — | 12 |
-| easyofd-writer | 62 | — | 62 |
-| easyofd-package | 6 | — | 6 |
-| easyofd-layout | 3 | — | 3 |
-| easyofd-markdown | 10 | — | 10 |
-| easyofd-template | 2 | — | 2 |
-| easyofd-signature | 3 | — | 3 |
-| easyofd-convert | 5 | — | 5 |
-| easyofd (facade) | 12 | — | 12 |
-| **Total** | **197** | **2** | **199** |
+| easyofd-core | — | — | — |
+| easyofd-derive-impl | — | 2 | — |
+| easyofd-reader | — | — | — |
+| easyofd-writer | — | — | — |
+| easyofd-package | — | — | — |
+| easyofd-layout | — | — | — |
+| easyofd-markdown | — | — | — |
+| easyofd-template | — | — | — |
+| easyofd-signature | — | — | — |
+| easyofd-convert | — | — | — |
+| easyofd-gm | — | — | — |
+| easyofd-crypto | — | — | — |
+| easyofd-archive | — | — | — |
+| easyofd-graphics2d | — | — | — |
+| easyofd-font | — | — | — |
+| easyofd-tool | — | — | — |
+| easyofd-wasm | — | — | — |
+| easyofd-ffi | — | — | — |
+| easyofd-async | — | — | — |
+| easyofd (facade) | — | — | — |
+| **Total** | **2858** | **2** | **2860** |
 
 ### 14.2 Quality Gates
 
@@ -659,20 +690,15 @@ Output JSON: pages, input_bytes, visited_pages, text_bytes, read_millis, markdow
 | Risk | Impact | Mitigation |
 |---|---|---|
 | OFD spec complexity exceeds expectations | Some elements unsupported | Incremental version expansion, transparent loss reporting |
-| Signature crypto dependency | Introduces C/C++ dependency | Prefer pure-Rust SM2 implementation |
+| Signature crypto dependency | Introduces C/C++ dependency | Pure-Rust SM2 implementation (sm2/sm3 crates) |
 | PDF conversion precision | Layout loss | Clear limitations, provide loss report |
 
 ### 15.2 Roadmap
 
 | Version | Milestone | Status |
 |---|---|:---:|
-| v0.1 | Writer + Derive + basic API | ✅ |
-| v0.2 | Reader + Template + Package safety | ✅ |
-| v0.3 | Signature API design | ✅ experimental |
-| v0.4 | Convert API design | ✅ planned |
-| v0.5 | Layout + Markdown + Editor + StreamWriter | ✅ |
-| v0.6 | Cryptographic signing implementation | 🗓️ |
-| v0.7 | PDF ↔ OFD conversion implementation | 🗓️ |
+| v0.1.0 | Initial crates.io release (facade + core) | ✅ published 2026-08-10 |
+| v0.1.1 | Full 21-crate workspace: signatures, encryption, PDF, merge, WASM/FFI/async; byte-level ofdrw parity | ✅ published 2026-08-21 |
 
 ---
 

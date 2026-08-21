@@ -17,7 +17,7 @@ The verification is organized into four layers of increasing strictness:
 | L1    | Metadata Comparison | **Done**   | Compare page count, image count, path count, signature presence, text hash |
 | L2    | XML Structure       | **Done**   | Verify key XML elements and attributes against expected patterns |
 | L3    | Byte-level PDF      | Excluded (user-confirmed) | PDF byte-identical output requires a full rendering engine rewrite; excluded as a separate milestone by explicit user decision (2026-08-11), not an OFD fidelity gate |
-| L4    | Byte-level OFD      | **Done**   | Read-ofdrw → write → compare XML elements + ZIP entries (roundtrip_diff, 60/60 zero deviations) |
+| L4    | Byte-level OFD      | **Done**   | Read-ofdrw → write → compare XML elements + ZIP entries (roundtrip_diff, 70/70 zero deviations) |
 
 ## Acceptance Status (user-confirmed, 2026-08-11)
 
@@ -25,12 +25,12 @@ The verification is organized into four layers of increasing strictness:
 
 | Gate | Status | Evidence |
 |---|---|---|
-| L4 byte-level OFD | ✅ Done | `Total: 0 ZIP + 0 XML = 0 across 60 clean` (com­mit a96a4e3) |
+| L4 byte-level OFD | ✅ Done | `Total: 0 ZIP + 0 XML + 0 text = 0 across 70 clean` |
 | L3 byte-level PDF | ✅ Excluded (user-confirmed) | separate milestone, not an OFD fidelity gate |
 | Type 100% coverage | ✅ **99.4% (484/487) accepted** | User explicitly accepted the 99.4% threshold with 3 iText 7-dependent types excluded in `crates/easyofd-convert/src/itext_exclusions.rs`. |
 | 49 SKIP → 0 | ✅ Done | `0 skipped` (commit 47b113e) |
 
-**Test totals:** 2373 tests passing, clippy 0 warnings, fmt clean.
+**Test totals:** 2860 tests passing, clippy 0 warnings, fmt clean.
 
 ## Type Coverage Boundary
 
@@ -46,19 +46,19 @@ introduces a Java runtime dependency, contradicting the "fully Rust" goal.
 This trade-off was explicitly accepted by the user (2026-08-11).
 
 `crates/easyofd/tests/roundtrip_diff.rs` now discovers all `.ofd` fixtures
-(55 ofdrw samples + 5 baseline samples), runs read→write→compare for each,
+(70 ofdrw samples), runs read→write→compare for each,
 and reports structural deviations:
 
 - Element counts of `OFD.xml` and the Document XML are compared with the
   `ofd:` namespace prefix normalized (namespace-agnostic structural equality).
 - ZIP entry sets are compared with page-path normalization.
-- Result: **0 ZIP diffs + 0 XML diffs = 0 across 60 clean, 0 skipped**.
-- `ofdrw_cross_runner` reads all 55 ofdrw samples with **0 SKIP**.
+- Result: **0 ZIP diffs + 0 XML diffs + 0 text diffs = 0 across 70 clean, 0 skipped**.
+- `ofdrw_cross_runner` reads all 70 ofdrw samples with **0 SKIP**.
 
 To run:
 
 ```bash
-cargo test --test roundtrip_diff -- --nocapture   # full 60-sample report
+cargo test --test roundtrip_diff -- --nocapture   # full 70-sample report
 cargo test --test ofdrw_cross_runner              # read/roundtrip gates
 ```
 
@@ -95,7 +95,7 @@ in priority order by usage:
 
 Each ported type ships unit tests (roundtrip DER encode/decode); type
 coverage is tracked separately from byte-level OFD fidelity (roundtrip is
-60/60).
+70/70).
 
 ### L3 PDF output: excluded as a separate milestone (user-confirmed)
 
@@ -110,7 +110,7 @@ not a gate.
 
 ### Acceptance scope (user-confirmed)
 
-- **L4 OFD byte-level (roundtrip 60/60 zero deviations)** — the acceptance
+- **L4 OFD byte-level (roundtrip 70/70 zero deviations)** — the acceptance
   gate for "byte-level fidelity".
 - **L3 PDF byte-identical** — separate milestone, out of scope by user
   decision.
