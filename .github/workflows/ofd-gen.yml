@@ -59,7 +59,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Download generated samples
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ofdrw-gen-samples
           path: tests/fixtures/ofdrw_gen/
