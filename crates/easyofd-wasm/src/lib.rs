@@ -199,8 +199,7 @@ impl OfdReaderCore {
         let has_signs_dir = (0..archive.len()).any(|i| {
             archive
                 .by_index(i)
-                .ok()
-                .is_some_and(|f| f.name().contains("/Signs/"))
+                .is_ok_and(|f| f.name().contains("/Signs/"))
         });
         let has_signature_xml = archive.by_name("Doc_0/Signs/Signature.xml").is_ok();
 

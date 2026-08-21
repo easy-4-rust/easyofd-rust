@@ -23,10 +23,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Maven
-        uses: actions/setup-maven@v4
-        with:
-          maven-version: "3.9"
+      # actions/setup-maven 不存在（官方 404）；ubuntu-latest 预装 Maven 3.9.x，
+      # ofd_sample_gen.sh 内部自带 mvn 可用性检查
 
       - name: Generate samples
         run: bash scripts/ofd_sample_gen.sh 2>&1 | tail -30
