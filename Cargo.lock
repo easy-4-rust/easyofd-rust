@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "easyofd-archive",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-archive"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
  "quick-xml",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-async"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd",
  "tokio",
@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-convert"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "easyofd-core",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-core"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "quick-xml",
@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-crypto"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "cbc 0.2.1",
  "easyofd-core",
@@ -821,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-derive"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-derive-impl",
  "proc-macro2",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-derive-impl"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
  "proc-macro2",
@@ -841,18 +841,18 @@ dependencies = [
 
 [[package]]
 name = "easyofd-ffi"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd",
 ]
 
 [[package]]
 name = "easyofd-font"
-version = "1.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "easyofd-gm"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "cbc 0.1.2",
@@ -873,21 +873,21 @@ dependencies = [
 
 [[package]]
 name = "easyofd-graphics2d"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
 ]
 
 [[package]]
 name = "easyofd-layout"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
 ]
 
 [[package]]
 name = "easyofd-markdown"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
  "easyofd-layout",
@@ -899,7 +899,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-package"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
  "zip",
@@ -907,7 +907,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-reader"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "criterion",
@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-signature"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "der",
@@ -941,7 +941,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-template"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
  "easyofd-package",
@@ -953,7 +953,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-tool"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "easyofd",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-wasm"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "easyofd-core",
  "easyofd-reader",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "easyofd-writer"
-version = "1.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "criterion",
