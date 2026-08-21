@@ -38,7 +38,7 @@ jobs:
           echo "Count: $(ls tests/fixtures/ofdrw_gen/*.ofd 2>/dev/null | wc -l)"
 
       - name: Upload samples as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ofdrw-gen-samples
           path: tests/fixtures/ofdrw_gen/*.ofd
