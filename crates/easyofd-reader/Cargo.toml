@@ -19,7 +19,10 @@ quick-xml = { workspace = true }
 workspace = true
 
 [dev-dependencies]
-easyofd-writer = { workspace = true }
+# 钉到 crates.io 已存在的 0.1.0：reader(dev)↔writer(normal) 循环依赖使
+# cargo publish 无法让两者都要求 ^0.1.1（发布 reader 需 writer 0.1.1 存在，
+# 发布 writer 需 reader 0.1.1 存在）。dev-dep 不进发布包，本地构建仍走 path 源码（0.1.1 满足 ^0.1.0）。
+easyofd-writer = { path = "../easyofd-writer", version = "0.1.0" }
 criterion = { workspace = true }
 
 [[bench]]

@@ -136,11 +136,19 @@ jobs:
             ok=0
             # Retry up to 3 times with backoff for crates.io index propagation
             for attempt in 1 2 3; do
-              if cargo publish -p "$crate" --allow-dirty; then
+              out=$(cargo publish -p "$crate" --allow-dirty 2>&1)
+              if [ $? -eq 0 ]; then
                 echo "Successfully published $crate"
                 ok=1
                 break
               fi
+              # 幂等重跑：版本已上传视为成功（cargo publish 对已存在版本报错退出）
+              if echo "$out" | grep -qiE "already (uploaded|exists)"; then
+                echo "$crate already published (version exists), skipping"
+                ok=1
+                break
+              fi
+              echo "$out" | tail -5
               echo "Attempt $attempt failed for $crate, waiting before retry..."
               sleep 15
             done
