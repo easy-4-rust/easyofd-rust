@@ -17,6 +17,13 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # 固定已验证的工具链版本，避免 stable 漂移在发布当天引入意外
+  # （对齐 ci.yml 矩阵中已全绿的 stable 版本；升级需先在 CI 验证）
+  RUST_TOOLCHAIN: "1.98.0"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   validate-tag:
@@ -40,7 +47,7 @@ jobs:
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
           echo "Validated version: $TAG"
 
-  publish:
+  build-and-test:
     name: Release (${{ matrix.os }})
     needs: validate-tag
     runs-on: ${{ matrix.os }}
@@ -52,7 +59,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Build release
@@ -61,42 +68,67 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --release --locked
 
-      - name: Validate crate manifests
-        run: # 校验 leaf crate（facade 的 workspace 依赖需发布后才能 dry-run，publish-crates 步骤按序处理）
-          cargo publish --dry-run --allow-dirty -p easyofd-core
-
       - name: Build documentation
         run: cargo doc --no-deps --workspace
 
-  create-release:
-    name: Create GitHub Release
-    needs: [validate-tag, publish]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        with:
-          tag_name: ${{ needs.validate-tag.outputs.version }}
-          name: ${{ needs.validate-tag.outputs.version }}
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-crates:
-    name: Publish to crates.io
-    needs: [validate-tag, publish]
+  dry-run-publish:
+    name: Dry-run Publish (manifest validation)
+    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Validate crate manifests
+        run: |
+          # 依赖已发布版本的中间 crate 无法在本 job 内 full dry-run
+          # （其内部依赖 ^0.1.x 在 crates.io 尚无对应版本），因此分层校验：
+          #   - 无内部依赖的 leaf（easyofd-core）做完整 cargo publish --dry-run
+          #   - 其余 crate 做 cargo package --list（校验打包内容/manifest 完整）
+          cargo publish --dry-run --allow-dirty -p easyofd-core || exit 1
+          CRATES=(
+            easyofd-core
+            easyofd-derive-impl
+            easyofd-derive
+            easyofd-font
+            easyofd-package
+            easyofd-reader
+            easyofd-gm
+            easyofd-crypto
+            easyofd-writer
+            easyofd-signature
+            easyofd-layout
+            easyofd-convert
+            easyofd-markdown
+            easyofd-template
+            easyofd-archive
+            easyofd-graphics2d
+            easyofd
+            easyofd-wasm
+            easyofd-ffi
+            easyofd-async
+            easyofd-tool
+          )
+          for crate in "${CRATES[@]}"; do
+            echo "::group::Packaging $crate"
+            cargo package -p "$crate" --list --allow-dirty > /dev/null || { echo "::error::$crate package 校验失败"; exit 1; }
+            echo "::endgroup::"
+          done
+          echo "All 21 crate manifests validated."
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: [validate-tag, build-and-test, dry-run-publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Publish crates in dependency order
         env:
@@ -162,3 +194,25 @@ jobs:
             echo "::error::发布失败的 crate: ${FAILED[*]}"
             exit 1
           fi
+
+  create-release:
+    name: Create GitHub Release
+    # 关键顺序：等全部 crate 发布成功后才建 GitHub Release，
+    # 避免"crate 未发布但 Release 已建"的假 Release（需手动删）
+    needs: [validate-tag, publish-crates]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ needs.validate-tag.outputs.version }}
+          name: ${{ needs.validate-tag.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
