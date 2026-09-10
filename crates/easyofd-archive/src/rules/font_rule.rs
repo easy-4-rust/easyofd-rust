@@ -74,15 +74,14 @@ fn extract_public_res_refs(xml_bytes: &[u8]) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 let tag = e.name();
-                let tag_bytes = tag.as_ref();
-                if tag_bytes == b"ofd:PublicRes" || tag_bytes == b"PublicRes" {
+                let tag_str = tag.as_ref();
+                if tag_str == "ofd:PublicRes" || tag_str == "PublicRes" {
                     // 检查 BaseLoc 属性
                     for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"BaseLoc" {
-                            if let Ok(val) = attr.decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            ) {
+                        if attr.key.as_ref() == "BaseLoc" {
+                            if let Ok(val) =
+                                attr.normalized_value(quick_xml::XmlVersion::Explicit1_0)
+                            {
                                 refs.push(val.to_string());
                             }
                         }
@@ -90,19 +89,16 @@ fn extract_public_res_refs(xml_bytes: &[u8]) -> Vec<String> {
                 }
             }
             Ok(Event::Text(ref t)) if in_public_res => {
-                if let Ok(s) = t.xml10_content() {
-                    let trimmed = s.trim().to_string();
-                    if !trimmed.is_empty() {
-                        refs.push(trimmed);
-                    }
+                let s = t.xml10_content();
+                let trimmed = s.trim().to_string();
+                if !trimmed.is_empty() {
+                    refs.push(trimmed);
                 }
             }
             Ok(Event::End(ref e)) => {
                 let end_tag = e.name();
-                let end_tag_bytes = end_tag.as_ref();
-                if (end_tag_bytes == b"ofd:PublicRes" || end_tag_bytes == b"PublicRes")
-                    && in_public_res
-                {
+                let end_tag_str = end_tag.as_ref();
+                if (end_tag_str == "ofd:PublicRes" || end_tag_str == "PublicRes") && in_public_res {
                     in_public_res = false;
                 }
             }

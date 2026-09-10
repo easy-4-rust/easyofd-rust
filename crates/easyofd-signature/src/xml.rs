@@ -47,11 +47,8 @@ pub struct SignatureTop {
 
 /// Extract the local name from a quick-xml `QName`, stripping any
 /// namespace prefix (e.g. `ofd:FileRef` -> `FileRef`).
-fn local_name(name: &[u8]) -> &str {
-    std::str::from_utf8(name)
-        .ok()
-        .and_then(|s| s.rsplit_once(':').map(|(_, local)| local).or(Some(s)))
-        .unwrap_or("")
+fn local_name(name: &str) -> &str {
+    name.rsplit_once(':').map_or(name, |(_, local)| local)
 }
 
 /// Parse SignedInfo.xml and return every `<ofd:FileRef>` entry.
@@ -97,7 +94,7 @@ pub fn parse_signed_info(xml: &str) -> OfdResult<Vec<FileRefEntry>> {
                         };
                         for attr in e.attributes().flatten() {
                             let key = local_name(attr.key.as_ref()).to_string();
-                            let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                            let val = attr.value.as_ref();
                             match key.as_str() {
                                 "CheckMethod" => {
                                     current_entry.check_method = val.to_string();
@@ -123,7 +120,7 @@ pub fn parse_signed_info(xml: &str) -> OfdResult<Vec<FileRefEntry>> {
                     };
                     for attr in e.attributes().flatten() {
                         let key = local_name(attr.key.as_ref()).to_string();
-                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        let val = attr.value.as_ref();
                         match key.as_str() {
                             "CheckMethod" => {
                                 entry.check_method = val.to_string();
@@ -150,7 +147,7 @@ pub fn parse_signed_info(xml: &str) -> OfdResult<Vec<FileRefEntry>> {
             }
             Ok(Event::Text(t)) => {
                 if in_target {
-                    current_text.push_str(std::str::from_utf8(t.as_ref()).unwrap_or(""));
+                    current_text.push_str(t.as_ref());
                 }
             }
             Ok(Event::Eof) => break,
@@ -218,7 +215,7 @@ pub fn parse_ofd_root(xml: &str) -> OfdResult<OfdRoot> {
                     for attr in e.attributes().flatten() {
                         let key = local_name(attr.key.as_ref()).to_string();
                         if key == "BaseLoc" {
-                            let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                            let val = attr.value.as_ref();
                             root.signatures.push(SignatureRef {
                                 path: val.to_string(),
                             });
@@ -228,7 +225,7 @@ pub fn parse_ofd_root(xml: &str) -> OfdResult<OfdRoot> {
             }
             Ok(Event::Text(t)) => {
                 if in_sig_ref {
-                    current_text.push_str(std::str::from_utf8(t.as_ref()).unwrap_or(""));
+                    current_text.push_str(t.as_ref());
                 }
             }
             Ok(Event::End(e)) => {
@@ -296,7 +293,7 @@ pub fn parse_signature_top(xml: &str) -> OfdResult<SignatureTop> {
                     // <ofd:Seal> 提取 BaseLoc 或 Ref 属性作为印章文件路径。
                     for attr in e.attributes().flatten() {
                         let key = local_name(attr.key.as_ref()).to_string();
-                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        let val = attr.value.as_ref();
                         match key.as_str() {
                             "BaseLoc" => {
                                 top.seal_path = Some(val.to_string());
@@ -315,7 +312,7 @@ pub fn parse_signature_top(xml: &str) -> OfdResult<SignatureTop> {
                 if tag == "Seal" {
                     for attr in e.attributes().flatten() {
                         let key = local_name(attr.key.as_ref()).to_string();
-                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        let val = attr.value.as_ref();
                         match key.as_str() {
                             "BaseLoc" => {
                                 top.seal_path = Some(val.to_string());
@@ -330,7 +327,7 @@ pub fn parse_signature_top(xml: &str) -> OfdResult<SignatureTop> {
             }
             Ok(Event::Text(t)) => {
                 if in_target {
-                    current_text.push_str(std::str::from_utf8(t.as_ref()).unwrap_or(""));
+                    current_text.push_str(t.as_ref());
                 }
             }
             Ok(Event::End(e)) => {
@@ -371,17 +368,17 @@ mod tests {
 
     #[test]
     fn local_name_strips_namespace() {
-        assert_eq!(local_name(b"ofd:FileRef"), "FileRef");
+        assert_eq!(local_name("ofd:FileRef"), "FileRef");
     }
 
     #[test]
     fn local_name_returns_full_when_no_prefix() {
-        assert_eq!(local_name(b"FileRef"), "FileRef");
+        assert_eq!(local_name("FileRef"), "FileRef");
     }
 
     #[test]
     fn local_name_handles_empty() {
-        assert_eq!(local_name(b""), "");
+        assert_eq!(local_name(""), "");
     }
 
     // ── parse_signed_info ──────────────────────────────────────────────

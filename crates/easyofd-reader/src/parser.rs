@@ -404,49 +404,40 @@ pub(crate) fn parse_document_resources<R: Read + Seek>(
     let mut resources = HashMap::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref event)) if event.name().as_ref() == b"ofd:Res" => {
+            Ok(Event::Start(ref event)) if event.name().as_ref() == "ofd:Res" => {
                 // 对应 Java: ResourceParser#parseBaseLoc
                 let mut base_loc = String::new();
                 for attribute in event.attributes().flatten() {
-                    if attribute.key.as_ref() == b"BaseLoc" {
+                    if attribute.key.as_ref() == "BaseLoc" {
                         base_loc = attribute
-                            .decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            )
+                            .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                             .unwrap_or_default()
                             .to_string();
                     }
                 }
                 base_loc_stack.push(base_loc);
             }
-            Ok(Event::Start(ref event)) if event.name().as_ref() == b"ofd:MultiMedia" => {
+            Ok(Event::Start(ref event)) if event.name().as_ref() == "ofd:MultiMedia" => {
                 let mut id = None;
                 let mut format = ImageFormat::Jpeg;
                 for attribute in event.attributes().flatten() {
                     let value = attribute
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        )
+                        .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                         .unwrap_or_default();
                     match attribute.key.as_ref() {
-                        b"ID" => id = Some(value.to_string()),
-                        b"Type" => format = parse_image_format(&value),
+                        "ID" => id = Some(value.to_string()),
+                        "Type" => format = parse_image_format(&value),
                         _ => {}
                     }
                 }
                 current = id.map(|id| (id, format));
             }
-            Ok(Event::Start(ref event)) if event.name().as_ref() == b"ofd:MediaFile" => {
+            Ok(Event::Start(ref event)) if event.name().as_ref() == "ofd:MediaFile" => {
                 in_media_file = true;
             }
             Ok(Event::Text(ref event)) if in_media_file => {
                 if let Some((id, format)) = current.take() {
-                    let raw_path = event
-                        .xml10_content()
-                        .map(|value| value.into_owned())
-                        .unwrap_or_default();
+                    let raw_path = event.xml10_content().into_owned();
                     let raw_path = raw_path.trim().to_string();
                     // Prepend the current BaseLoc (if any) to the
                     // MediaFile path so that the location stored in
@@ -469,10 +460,10 @@ pub(crate) fn parse_document_resources<R: Read + Seek>(
                     );
                 }
             }
-            Ok(Event::End(ref event)) if event.name().as_ref() == b"ofd:MediaFile" => {
+            Ok(Event::End(ref event)) if event.name().as_ref() == "ofd:MediaFile" => {
                 in_media_file = false;
             }
-            Ok(Event::End(ref event)) if event.name().as_ref() == b"ofd:Res" => {
+            Ok(Event::End(ref event)) if event.name().as_ref() == "ofd:Res" => {
                 base_loc_stack.pop();
             }
             Ok(Event::Eof) => break,

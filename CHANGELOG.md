@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-10
+
+### 依赖升级
+- **quick-xml 0.41.0 → 0.42.0**：完成 API 迁移（借用类型 `&[u8]`/`Cow<[u8]>`
+  → `&str`/`Cow<str>`；`Reader::decoder()` 移除，改用
+  `normalized_value(version)`；`xml10_content()` 直返 `Cow<str>`），
+  21 crate 全量适配，行为零变更（字节级 roundtrip 70 样本仍零偏差）
+- syn 3.0.3 → 3.0.5、der 等传递依赖随 Cargo.lock 刷新
+- GitHub Actions：actions/setup-java 5 → 6、softprops/action-gh-release 3.0.2 → 3.0.3
+
+### 修复
+- 修复 `easyofd-crypto` 的 `test_decrypt_wrong_key` 偶发失败：加密测试改用
+  固定 IV，消除随机 IV 下约 1/256 概率的 PKCS#7 填充碰撞（CI 实证 Windows
+  stable 偶发红）
+
 ## [0.1.1] - 2026-08-21
 
 ### 生产就绪与字节级保真

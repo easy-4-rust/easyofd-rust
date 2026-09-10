@@ -73,41 +73,37 @@ fn check_path_objects(xml_bytes: &[u8]) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let tag = e.name();
-                let tag_bytes = tag.as_ref();
-                if tag_bytes == b"ofd:PathObject" || tag_bytes == b"PathObject" {
+                let tag_str = tag.as_ref();
+                if tag_str == "ofd:PathObject" || tag_str == "PathObject" {
                     in_path_object = true;
                     has_path_data = false;
                     path_id.clear();
                     // 提取 ID 用于错误报告
                     for attr in e.attributes().flatten() {
-                        if attr.key.as_ref() == b"ID" {
-                            if let Ok(val) = attr.decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            ) {
+                        if attr.key.as_ref() == "ID" {
+                            if let Ok(val) =
+                                attr.normalized_value(quick_xml::XmlVersion::Explicit1_0)
+                            {
                                 path_id = val.to_string();
                             }
                         }
                     }
                 } else if in_path_object
-                    && (tag_bytes == b"ofd:AbbreviatedData" || tag_bytes == b"AbbreviatedData")
+                    && (tag_str == "ofd:AbbreviatedData" || tag_str == "AbbreviatedData")
                 {
                     has_path_data = true;
                 }
             }
             Ok(Event::Text(ref t)) if in_path_object => {
                 // AbbreviatedData 的文本内容
-                if let Ok(s) = t.xml10_content() {
-                    let trimmed = s.trim();
-                    if !trimmed.is_empty() {
-                        has_path_data = true;
-                    }
+                if !t.xml10_content().trim().is_empty() {
+                    has_path_data = true;
                 }
             }
             Ok(Event::End(ref e)) => {
                 let end_tag = e.name();
-                let end_tag_bytes = end_tag.as_ref();
-                if (end_tag_bytes == b"ofd:PathObject" || end_tag_bytes == b"PathObject")
+                let end_tag_str = end_tag.as_ref();
+                if (end_tag_str == "ofd:PathObject" || end_tag_str == "PathObject")
                     && in_path_object
                 {
                     if !has_path_data {
