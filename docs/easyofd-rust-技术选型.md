@@ -1,9 +1,9 @@
 # easyofd-rust 技术选型文档
 
 > **参考来源**：[ddd4j-ddd4r 依赖映射对照表](../../workspace-ddd4r/ddd4r/docs/ddd4j-ddd4r-依赖映射对照表.md)
-> **项目基线**：easyofd-rust v0.1.1，Rust 1.88+，Edition 2024，Resolver 3
-> **版本**：V1.1.0
-> **最后更新**：2026-08-21
+> **项目基线**：easyofd-rust v0.1.2，Rust 1.88+，Edition 2024，Resolver 3
+> **版本**：V1.2.0
+> **最后更新**：2026-09-10
 
 ---
 
@@ -52,7 +52,7 @@
 
 | 领域 | Java 对等组件 | Rust 组件 | crate | 版本 | 状态 | 说明 |
 |:---|:---|:---|:---|:---|:---:|:---|
-| OFD 读写 | 自研 OFD SDK | **easyofd-rust** | — | 0.1.1 | ✅ | 21 crate workspace |
+| OFD 读写 | 自研 OFD SDK | **easyofd-rust** | — | 0.1.2 | ✅ | 21 crate workspace |
 | PDF 解析 | Apache PDFBox / iText | **lopdf** | `lopdf` | — | ✅ | PDF → OFD 转换（已实现） |
 | PDF 生成 | Apache PDFBox / iText | **printpdf** | `printpdf` | — | ✅ | OFD → PDF 转换（已实现） |
 | 图片处理 | `javax.imageio` | **image** (可选) | `image` | — | 🗓️ | 图片格式转换 |
@@ -151,3 +151,4 @@
 |:---|:---|:---|
 | V1.0.0 | 2026-08-10 | 初始版本；基于 ddd4j-ddd4r 映射表编写 |
 | V1.1.0 | 2026-08-21 | 基线升级至 v0.1.1；21 crate workspace；PDF 转换已实现；测试数更新为 2860 |
+| V1.2.0 | 2026-09-10 | 基线升级至 v0.1.2；依赖升级（quick-xml 0.42/syn 3.0.5）；sm4 偶发测试修复 |
