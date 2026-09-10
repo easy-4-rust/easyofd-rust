@@ -179,7 +179,10 @@ mod tests {
     #[test]
     fn test_decrypt_wrong_key() {
         let plaintext = b"secret data for wrong key test";
-        let ct = encrypt(&TEST_KEY, plaintext).unwrap();
+        // 固定 IV 保证确定性：随机 IV 下错钥解密约有 1/256 概率碰巧产生
+        // 合法 PKCS#7 填充，导致本测试偶发失败。
+        let iv = [0x5Au8; BLOCK_SIZE];
+        let ct = encrypt_with_iv(&TEST_KEY, &iv, plaintext).unwrap();
 
         let wrong_key = [0xFFu8; KEY_SIZE];
         let result = decrypt(&wrong_key, &ct);
