@@ -87,15 +87,14 @@ fn extract_signature_refs(xml_bytes: &[u8]) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 let tag = e.name();
-                let tag_bytes = tag.as_ref();
-                if tag_bytes == b"ofd:Signature" || tag_bytes == b"Signature" {
+                let tag_str = tag.as_ref();
+                if tag_str == "ofd:Signature" || tag_str == "Signature" {
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref();
-                        if key == b"BaseLoc" {
-                            if let Ok(val) = attr.decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            ) {
+                        if key == "BaseLoc" {
+                            if let Ok(val) =
+                                attr.normalized_value(quick_xml::XmlVersion::Explicit1_0)
+                            {
                                 refs.push(val.to_string());
                             }
                         }

@@ -75,8 +75,8 @@ fn check_text_objects(xml_bytes: &[u8]) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
                 let tag = e.name();
-                let tag_bytes = tag.as_ref();
-                if tag_bytes == b"ofd:TextObject" || tag_bytes == b"TextObject" {
+                let tag_str = tag.as_ref();
+                if tag_str == "ofd:TextObject" || tag_str == "TextObject" {
                     in_text_object = true;
                     has_font = false;
                     has_size = false;
@@ -84,15 +84,14 @@ fn check_text_objects(xml_bytes: &[u8]) -> Vec<String> {
                     // 检查 Font 和 Size 属性
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref();
-                        if key == b"Font" {
+                        if key == "Font" {
                             has_font = true;
                         }
-                        if key == b"Size" {
+                        if key == "Size" {
                             has_size = true;
-                            if let Ok(val) = attr.decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            ) {
+                            if let Ok(val) =
+                                attr.normalized_value(quick_xml::XmlVersion::Explicit1_0)
+                            {
                                 if let Ok(size) = val.parse::<f64>() {
                                     if size <= 0.0 {
                                         issues.push("TextObject 的 Size 必须大于零".into());
@@ -101,16 +100,14 @@ fn check_text_objects(xml_bytes: &[u8]) -> Vec<String> {
                             }
                         }
                     }
-                } else if in_text_object
-                    && (tag_bytes == b"ofd:TextCode" || tag_bytes == b"TextCode")
-                {
+                } else if in_text_object && (tag_str == "ofd:TextCode" || tag_str == "TextCode") {
                     has_text_code = true;
                 }
             }
             Ok(Event::End(ref e)) => {
                 let end_tag = e.name();
-                let end_tag_bytes = end_tag.as_ref();
-                if (end_tag_bytes == b"ofd:TextObject" || end_tag_bytes == b"TextObject")
+                let end_tag_str = end_tag.as_ref();
+                if (end_tag_str == "ofd:TextObject" || end_tag_str == "TextObject")
                     && in_text_object
                 {
                     if !has_font {

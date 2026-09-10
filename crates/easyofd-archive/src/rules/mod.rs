@@ -71,9 +71,7 @@ fn xml_text_content(xml_bytes: &[u8]) -> String {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(ref t)) => {
-                if let Ok(s) = t.xml10_content() {
-                    text.push_str(&s);
-                }
+                text.push_str(&t.xml10_content());
             }
             Ok(Event::Eof) | Err(_) => break,
             _ => {}
@@ -84,21 +82,18 @@ fn xml_text_content(xml_bytes: &[u8]) -> String {
 }
 
 /// 从 OFD.xml 中提取指定属性值。
-fn ofd_xml_attr(xml_bytes: &[u8], attr_name: &[u8]) -> Option<String> {
+fn ofd_xml_attr(xml_bytes: &[u8], attr_name: &str) -> Option<String> {
     let mut reader = XmlReader::from_reader(Cursor::new(xml_bytes));
     reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:OFD" => {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "ofd:OFD" => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == attr_name {
                         return attr
-                            .decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            )
+                            .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                             .ok()
                             .map(|v| v.to_string());
                     }
@@ -122,13 +117,13 @@ fn ofd_xml_doc_root(xml_bytes: &[u8]) -> Option<String> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "ofd:DocRoot" => {
                 in_doc_root = true;
             }
             Ok(Event::Text(ref t)) if in_doc_root => {
-                return t.xml10_content().ok().map(|c| c.into_owned());
+                return Some(t.xml10_content().into_owned());
             }
-            Ok(Event::End(ref e)) if e.name().as_ref() == b"ofd:DocRoot" => {
+            Ok(Event::End(ref e)) if e.name().as_ref() == "ofd:DocRoot" => {
                 in_doc_root = false;
             }
             Ok(Event::Eof) | Err(_) => break,
@@ -148,13 +143,10 @@ fn document_page_locs(xml_bytes: &[u8]) -> Vec<String> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e) | Event::Empty(ref e)) if e.name().as_ref() == b"ofd:Page" => {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) if e.name().as_ref() == "ofd:Page" => {
                 for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"BaseLoc" {
-                        if let Ok(val) = attr.decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        ) {
+                    if attr.key.as_ref() == "BaseLoc" {
+                        if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Explicit1_0) {
                             locs.push(val.to_string());
                         }
                     }
@@ -176,11 +168,11 @@ fn document_resource_refs(xml_bytes: &[u8]) -> Vec<String> {
     let mut buf = Vec::new();
     let mut refs = Vec::new();
     let mut in_target = false;
-    let targets: &[&[u8]] = &[
-        b"ofd:PublicRes",
-        b"ofd:DocumentRes",
-        b"ofd:Attachment",
-        b"ofd:Annotation",
+    let targets: &[&str] = &[
+        "ofd:PublicRes",
+        "ofd:DocumentRes",
+        "ofd:Attachment",
+        "ofd:Annotation",
     ];
 
     loop {
@@ -191,11 +183,10 @@ fn document_resource_refs(xml_bytes: &[u8]) -> Vec<String> {
                 }
             }
             Ok(Event::Text(ref t)) if in_target => {
-                if let Ok(s) = t.xml10_content() {
-                    let trimmed = s.trim().to_string();
-                    if !trimmed.is_empty() {
-                        refs.push(trimmed);
-                    }
+                let s = t.xml10_content();
+                let trimmed = s.trim().to_string();
+                if !trimmed.is_empty() {
+                    refs.push(trimmed);
                 }
             }
             Ok(Event::End(ref e)) if targets.contains(&e.name().as_ref()) => {
@@ -227,23 +218,18 @@ fn contains_external_refs(xml_bytes: &[u8]) -> bool {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Text(ref t)) => {
-                if let Ok(s) = t.xml10_content() {
-                    if contains_external_url(&s) {
-                        return true;
-                    }
+                if contains_external_url(&t.xml10_content()) {
+                    return true;
                 }
             }
             Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 for attr in e.attributes().flatten() {
                     let key = attr.key.as_ref();
                     // 跳过 xmlns 命名空间声明
-                    if key == b"xmlns" || key.starts_with(b"xmlns:") {
+                    if key == "xmlns" || key.starts_with("xmlns:") {
                         continue;
                     }
-                    if let Ok(val) = attr.decoded_and_normalized_value(
-                        quick_xml::XmlVersion::Explicit1_0,
-                        reader.decoder(),
-                    ) {
+                    if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Explicit1_0) {
                         if contains_external_url(&val) {
                             return true;
                         }
@@ -301,7 +287,7 @@ impl ComplianceRule for DocTypeRule {
             }
         };
 
-        match ofd_xml_attr(ofd_xml, b"DocType") {
+        match ofd_xml_attr(ofd_xml, "DocType") {
             Some(ref doctype) if doctype == "OFD" => RuleResult {
                 passed: true,
                 message: "DocType=\"OFD\" 校验通过".into(),
@@ -342,7 +328,7 @@ impl ComplianceRule for VersionRule {
             }
         };
 
-        match ofd_xml_attr(ofd_xml, b"Version") {
+        match ofd_xml_attr(ofd_xml, "Version") {
             Some(ref version) if version == "1.2" => RuleResult {
                 passed: true,
                 message: "Version=\"1.2\" 校验通过".into(),

@@ -154,19 +154,16 @@ fn parse_check_values<R: Read + std::io::Seek>(
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"ofd:CheckValue" => {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "ofd:CheckValue" => {
                 let mut file_path = String::new();
                 let mut method = CheckMethod::SM3;
                 for attr in e.attributes().flatten() {
                     let value = attr
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        )
+                        .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                         .unwrap_or_default();
                     match attr.key.as_ref() {
-                        b"FileLoc" => file_path = value.to_string(),
-                        b"HashMethod" => {
+                        "FileLoc" => file_path = value.to_string(),
+                        "HashMethod" => {
                             method = if value.contains("SHA256") || value.contains("sha256") {
                                 CheckMethod::SHA256
                             } else {
@@ -182,10 +179,7 @@ fn parse_check_values<R: Read + std::io::Seek>(
                     loop {
                         match reader.read_event_into(&mut buf) {
                             Ok(Event::Text(ref t)) => {
-                                check_value = t
-                                    .xml10_content()
-                                    .map(|c| c.into_owned())
-                                    .unwrap_or_default();
+                                check_value = t.xml10_content().into_owned();
                             }
                             Ok(Event::End(_) | Event::Eof) => break,
                             _ => {}

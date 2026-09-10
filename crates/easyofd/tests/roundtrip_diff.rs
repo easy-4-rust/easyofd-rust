@@ -63,7 +63,7 @@ fn count_xml_elements(xml: &str) -> HashMap<String, usize> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e) | Event::Empty(e)) => {
-                let raw = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let raw = e.name().as_ref().to_string();
                 let name = raw.strip_prefix("ofd:").unwrap_or(&raw).to_string();
                 *counts.entry(name).or_insert(0) += 1;
             }

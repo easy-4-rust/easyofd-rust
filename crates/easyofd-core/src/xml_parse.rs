@@ -27,10 +27,7 @@ pub fn parse_xml_to_nodes(xml: &str) -> Result<XmlNode, String> {
                 for attr in e.attributes().flatten() {
                     let key = local_name(attr.key.as_ref());
                     let value = attr
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        )
+                        .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                         .unwrap_or_default()
                         .to_string();
                     node.attrs.push((key, value));
@@ -43,10 +40,7 @@ pub fn parse_xml_to_nodes(xml: &str) -> Result<XmlNode, String> {
                 for attr in e.attributes().flatten() {
                     let key = local_name(attr.key.as_ref());
                     let value = attr
-                        .decoded_and_normalized_value(
-                            quick_xml::XmlVersion::Explicit1_0,
-                            reader.decoder(),
-                        )
+                        .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                         .unwrap_or_default()
                         .to_string();
                     node.attrs.push((key, value));
@@ -54,10 +48,7 @@ pub fn parse_xml_to_nodes(xml: &str) -> Result<XmlNode, String> {
                 attach_node(&mut stack, &mut root, node);
             }
             Ok(Event::Text(e)) => {
-                let text = e
-                    .xml10_content()
-                    .map(|c| c.into_owned())
-                    .unwrap_or_default();
+                let text = e.xml10_content().into_owned();
                 // Append (not assign): quick-xml may split a text node into
                 // multiple Text events around entity references.  We keep ALL
                 // text including whitespace-only fragments so that the tree
@@ -71,10 +62,7 @@ pub fn parse_xml_to_nodes(xml: &str) -> Result<XmlNode, String> {
                 }
             }
             Ok(Event::GeneralRef(e)) => {
-                let name = e
-                    .xml10_content()
-                    .map(|c| c.into_owned())
-                    .unwrap_or_default();
+                let name = e.xml10_content().into_owned();
                 if let Some(ch) = resolve_xml_entity_ref(&name) {
                     if let Some(top) = stack.last_mut() {
                         match &mut top.text {
@@ -100,11 +88,10 @@ pub fn parse_xml_to_nodes(xml: &str) -> Result<XmlNode, String> {
 }
 
 /// 去掉命名空间前缀（"ofd:Page" → "Page"）。
-fn local_name(name: &[u8]) -> String {
-    let s = String::from_utf8_lossy(name);
-    match s.rsplit_once(':') {
+fn local_name(name: &str) -> String {
+    match name.rsplit_once(':') {
         Some((_, local)) => local.to_string(),
-        None => s.into_owned(),
+        None => name.to_string(),
     }
 }
 

@@ -79,15 +79,14 @@ fn extract_image_refs(xml_bytes: &[u8]) -> Vec<String> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 let tag = e.name();
-                let tag_bytes = tag.as_ref();
-                if tag_bytes == b"ofd:ImageObject" || tag_bytes == b"ImageObject" {
+                let tag_str = tag.as_ref();
+                if tag_str == "ofd:ImageObject" || tag_str == "ImageObject" {
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref();
-                        if key == b"ResourceID" {
-                            if let Ok(val) = attr.decoded_and_normalized_value(
-                                quick_xml::XmlVersion::Explicit1_0,
-                                reader.decoder(),
-                            ) {
+                        if key == "ResourceID" {
+                            if let Ok(val) =
+                                attr.normalized_value(quick_xml::XmlVersion::Explicit1_0)
+                            {
                                 refs.push(val.to_string());
                             }
                         }
