@@ -22,7 +22,7 @@
 
 ---
 
-> **Current version**: `0.1.1` (published on crates.io)<br>
+> **Current version**: `0.1.2` (published on crates.io)<br>
 > **MSRV**: Rust `1.88`<br>
 > **Edition**: `2024`<br>
 > **Workspace Resolver**: `3`<br>
@@ -294,7 +294,7 @@ where applicable — see [docs/usage-guide.md](docs/usage-guide.md).
 
 ## Workspace
 
-21 crates across 4 groups (all published to crates.io as `0.1.1`):
+21 crates across 4 groups (all published to crates.io as `0.1.2`):
 
 | Group | Crates |
 |---|---|
@@ -365,6 +365,7 @@ cargo test -p easyofd --test roundtrip_diff --release
 |---|---|:---:|
 | v0.1.0 | Initial crates.io release (facade + core) | ✅ published 2026-08-10 |
 | v0.1.1 | Full 21-crate workspace: signatures, encryption, PDF, merge, WASM/FFI/async; byte-level ofdrw parity | ✅ published 2026-08-21 |
+| v0.1.2 | Dep upgrades (quick-xml 0.42, syn 3.0.5); sm4 flaky test fix; CI hardening | ✅ published 2026-09-10 |
 
 ---
 

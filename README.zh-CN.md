@@ -22,7 +22,7 @@
 
 ---
 
-> **当前版本**：`0.1.1`（已发布至 crates.io）<br>
+> **当前版本**：`0.1.2`（已发布至 crates.io）<br>
 > **MSRV**：Rust `1.88`<br>
 > **Edition**：`2024`<br>
 > **Workspace Resolver**：`3`<br>
@@ -291,7 +291,7 @@ signed.save("signed.ofd")?;
 
 ## Workspace
 
-21 个 crate，4 组（全部以 `0.1.1` 发布至 crates.io）：
+21 个 crate，4 组（全部以 `0.1.2` 发布至 crates.io）：
 
 | 分组 | Crate |
 |---|---|
@@ -361,6 +361,7 @@ cargo test -p easyofd --test roundtrip_diff --release
 |---|---|:---:|
 | v0.1.0 | 首次 crates.io 发布（外观层 + 核心） | ✅ 2026-08-10 发布 |
 | v0.1.1 | 完整 21-crate 工作区：签章、加密、PDF、合并、WASM/FFI/async；ofdrw 字节级一致 | ✅ 2026-08-21 发布 |
+| v0.1.2 | 依赖升级（quick-xml 0.42、syn 3.0.5）；修复 sm4 偶发测试；CI 强化 | ✅ 2026-09-10 发布 |
 
 ---
 
