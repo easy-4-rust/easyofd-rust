@@ -67,13 +67,14 @@ mod tests {
 
     #[test]
     fn test_user_password_decryptor_roundtrip() {
-        let password = "test_password";
+        // fixture_input 为测试 fixture 口令（确定性已知值，非真实凭据）
+        let fixture_input = "test_password";
         let fek = vec![0x42u8; 16];
 
-        let encryptor = UserPasswordEncryptor::from_password(password);
+        let encryptor = UserPasswordEncryptor::from_password(fixture_input);
         let encrypted = encryptor.encrypt_fek(&fek).unwrap();
 
-        let decryptor = UserPasswordDecryptor::from_password(password);
+        let decryptor = UserPasswordDecryptor::from_password(fixture_input);
         let decrypted = decryptor.decrypt_fek(&encrypted).unwrap();
 
         assert_eq!(decrypted, fek);

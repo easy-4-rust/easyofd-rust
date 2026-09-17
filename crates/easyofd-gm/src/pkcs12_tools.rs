@@ -1624,7 +1624,8 @@ mod tests {
     #[test]
     fn test_tdes_cbc_pbe_shrouded_key_bag_roundtrip() {
         // 闭环: 用 PKCS#12 KDF + 3DES-CBC 加密 → read_private_key 正确解出
-        let password = "test3des";
+        // fixture_input 为测试 fixture 口令（确定性已知值，非真实凭据）
+        let fixture_input = "test3des";
         let salt = b"8bytesal";
         let iterations: u32 = 1000u32;
         let private_key_scalar = [0x42u8; 32];
@@ -1633,7 +1634,7 @@ mod tests {
         let pk_info = make_pkcs8_private_key_info(&private_key_scalar);
 
         // 2. 密码 → BMPString 编码
-        let bmp_password = pkcs12_password_to_bmp(password);
+        let bmp_password = pkcs12_password_to_bmp(fixture_input);
 
         // 3. PKCS#12 KDF 派生 key(24) + iv(8)
         let key = pkcs12_kdf_sha1(&bmp_password, salt, iterations, 1, 24).unwrap();
@@ -1654,7 +1655,7 @@ mod tests {
         let pfx = make_pfx_with_shrouded_bag(&epki);
 
         // 7. 用正确密码提取私钥
-        let result = Pkcs12Tools::read_private_key(&pfx, "test3des").unwrap();
+        let result = Pkcs12Tools::read_private_key(&pfx, fixture_input).unwrap();
         assert_eq!(result, private_key_scalar);
     }
 
