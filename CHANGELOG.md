@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-14
+
+### 依赖升级
+- **lopdf 0.44.0 → 0.45.0**：PDF→OFD 转换依赖，现有 API 用法零受影响
+  （全量 CI 三平台 × 双工具链验证通过）
+- trybuild 1.0.120 → 1.0.121 及传递依赖随 Cargo.lock 刷新
+
 ## [0.1.2] - 2026-09-10
 
 ### 依赖升级
