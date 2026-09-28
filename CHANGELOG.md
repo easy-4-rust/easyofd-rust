@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-21
+
+### CI / Actions 升级
+- `dtolnay/rust-toolchain` action SHA 更新（ci.yml + coverage.yml；实际 Rust
+  版本仍由 `with: toolchain:` 显式指定 stable / 1.88.0，不改变工具链选择）
+- `codecov/codecov-action` 7.0.0 → 7.1.1
+
+### 依赖升级
+- clap 4.6.6 → 4.6.7、syn 3.0.5 → 3.0.6（Cargo.lock-only）
+
 ## [0.1.3] - 2026-09-14
 
 ### 依赖升级

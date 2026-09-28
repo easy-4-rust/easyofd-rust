@@ -27,7 +27,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -37,24 +37,24 @@ keywords = ["ofd", "document", "writer", "reader", "easyofd"]
 categories = ["encoding", "parser"]
 
 [workspace.dependencies]
-easyofd-core = { path = "crates/easyofd-core" , version = "0.1.3" }
-easyofd-convert = { path = "crates/easyofd-convert" , version = "0.1.3" }
-easyofd-derive = { path = "crates/easyofd-derive" , version = "0.1.3" }
-easyofd-derive-impl = { path = "crates/easyofd-derive-impl" , version = "0.1.3" }
-easyofd-layout = { path = "crates/easyofd-layout" , version = "0.1.3" }
-easyofd-markdown = { path = "crates/easyofd-markdown" , version = "0.1.3" }
-easyofd-package = { path = "crates/easyofd-package" , version = "0.1.3" }
-easyofd-reader = { path = "crates/easyofd-reader" , version = "0.1.3" }
-easyofd-signature = { path = "crates/easyofd-signature" , version = "0.1.3" }
-easyofd-template = { path = "crates/easyofd-template" , version = "0.1.3" }
-easyofd-writer = { path = "crates/easyofd-writer" , version = "0.1.3" }
-easyofd = { path = "crates/easyofd" , version = "0.1.3" }
-easyofd-gm = { path = "crates/easyofd-gm" , version = "0.1.3" }
-easyofd-archive = { path = "crates/easyofd-archive" , version = "0.1.3" }
-easyofd-crypto = { path = "crates/easyofd-crypto" , version = "0.1.3" }
-easyofd-graphics2d = { path = "crates/easyofd-graphics2d" , version = "0.1.3" }
-easyofd-font = { path = "crates/easyofd-font" , version = "0.1.3" }
-easyofd-tool = { path = "crates/easyofd-tool" , version = "0.1.3" }
+easyofd-core = { path = "crates/easyofd-core" , version = "0.1.4" }
+easyofd-convert = { path = "crates/easyofd-convert" , version = "0.1.4" }
+easyofd-derive = { path = "crates/easyofd-derive" , version = "0.1.4" }
+easyofd-derive-impl = { path = "crates/easyofd-derive-impl" , version = "0.1.4" }
+easyofd-layout = { path = "crates/easyofd-layout" , version = "0.1.4" }
+easyofd-markdown = { path = "crates/easyofd-markdown" , version = "0.1.4" }
+easyofd-package = { path = "crates/easyofd-package" , version = "0.1.4" }
+easyofd-reader = { path = "crates/easyofd-reader" , version = "0.1.4" }
+easyofd-signature = { path = "crates/easyofd-signature" , version = "0.1.4" }
+easyofd-template = { path = "crates/easyofd-template" , version = "0.1.4" }
+easyofd-writer = { path = "crates/easyofd-writer" , version = "0.1.4" }
+easyofd = { path = "crates/easyofd" , version = "0.1.4" }
+easyofd-gm = { path = "crates/easyofd-gm" , version = "0.1.4" }
+easyofd-archive = { path = "crates/easyofd-archive" , version = "0.1.4" }
+easyofd-crypto = { path = "crates/easyofd-crypto" , version = "0.1.4" }
+easyofd-graphics2d = { path = "crates/easyofd-graphics2d" , version = "0.1.4" }
+easyofd-font = { path = "crates/easyofd-font" , version = "0.1.4" }
+easyofd-tool = { path = "crates/easyofd-tool" , version = "0.1.4" }
 
 clap = { version = "4.5", features = ["derive"] }
 thiserror = "2.0.18"
