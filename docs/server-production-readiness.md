@@ -1,6 +1,6 @@
 # 服务端库生产就绪验收
 
-> 下列为代码9ba5d3f的历史验收记录。三项依赖例外正在由[无豁免依赖治理](dependency-remediation-verification.md)替代；新源码的最终CI完成前不沿用历史结论。
+> 下列为代码9ba5d3f的历史验收记录。三项依赖例外已由[无豁免依赖治理](dependency-remediation-verification.md)彻底移除；新代码8dd0bbf的三平台CI、覆盖率、Security和Fuzz全部通过。下方风险裁决仅为历史记录。
 日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：验收通过（限定已验证支持范围及服务集成契约），ARCHIVED。收尾遗漏的裸SM2/GB35275骨架已真实修复并完成新SHA完整门禁；不以历史归档或旧CI替代当前证据。
 对应规格：[当前版本生产验收](superpowers/specs/2026-10-14-production-readiness.md)。
 

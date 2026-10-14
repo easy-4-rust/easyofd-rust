@@ -55,4 +55,4 @@
 
 ## 无豁免依赖治理（2026-10-14）
 
-[计划](plans/2026-10-14-dependency-remediation.md)：IMPLEMENTING；PDF及字体迁移已实现，审计无例外，等待最终同源码CI。[规格](specs/2026-10-14-dependency-remediation.md)，[验证报告](../dependency-remediation-verification.md)。
+[计划](plans/2026-10-14-dependency-remediation.md)：ARCHIVED；PDF及字体迁移完成，代码8dd0bbf六矩阵CI/Coverage/Security/Fuzz全部通过，审计无例外。[规格](specs/2026-10-14-dependency-remediation.md)，[验证报告](../dependency-remediation-verification.md)。

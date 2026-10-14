@@ -1,4 +1,5 @@
 # 无豁免依赖治理 Implementation Plan
+状态：ARCHIVED。全部任务及代码8dd0bbf的最终CI通过；[证据](../../dependency-remediation-verification.md)。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development.
 **Goal:** 清除三项依赖风险且保持转换行为和Rust1.88。
 **Architecture:** Task1升级PDF引擎并适配操作流，Task2将字体统一到Fontations及tiny-skia，Task3严格依赖门禁/无豁免审计和全平台验证。
@@ -32,5 +33,5 @@
 **Files:** scripts/check_dependency_contract.py、deny.toml、.cargo/audit.toml、.github/workflows/security.yml、Fuzz lock、验收文档。
 **Interfaces:** 根/Fuzz锁文件强制拒绝目标问题包，audit warnings拒绝；不降低许可证、安全或覆盖门禁。
 - [x] Step 1: 删除全部例外，无配置audit及deny、严格依赖门禁GREEN。
-- [ ] Step 2: 完整workspace/tests/doc/clippy/fmt/cov、Rust1.88、四Fuzz及实际烟测，独立全变更审查。
-- [ ] Step 3: 提交推送代码触发三平台/覆盖/安全，dispatch Fuzz；当前SHA全部通过再文档归档推送。
+- [x] Step 2: 完整workspace/tests/doc/clippy/fmt/cov、Rust1.88、四Fuzz及实际烟测，独立全变更审查。
+- [x] Step 3: 提交推送代码触发三平台/覆盖/安全，dispatch Fuzz；当前SHA全部通过再文档归档推送。
