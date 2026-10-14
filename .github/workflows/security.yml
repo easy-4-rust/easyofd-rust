@@ -31,8 +31,20 @@ jobs:
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
 
-      - name: cargo audit
-        run: cargo audit
+      - name: Dependency contract
+        run: python3 scripts/check_dependency_contract.py
+
+      - name: Fresh consumer dependency resolution
+        run: python3 scripts/check_fresh_resolution.py
+
+      - name: Unfiltered cargo audit (production and fuzz)
+        shell: bash
+        run: |
+          audit_workspace=$(mktemp -d)
+          trap 'rm -rf "$audit_workspace"' EXIT
+          cd "$audit_workspace"
+          cargo audit --db "$audit_workspace/advisory-db" --file "$GITHUB_WORKSPACE/Cargo.lock" --deny warnings
+          cargo audit --db "$audit_workspace/advisory-db" --file "$GITHUB_WORKSPACE/fuzz/Cargo.lock" --deny warnings
 
       - name: cargo deny check
         run: cargo deny check

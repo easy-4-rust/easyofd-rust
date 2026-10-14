@@ -1,9 +1,3 @@
-# cargo-audit 配置（与 deny.toml [advisories].ignore 保持同步）
-# 豁免理由见 deny.toml：lopdf0.31仅由printpdf生成PDF时使用，外部PDF解析使用已修复的lopdf0.45；
-# ttf-parser unmaintained(fontdue 依赖)、proc-macro-error unmaintained(printpdf 传递依赖)。
+# 无豁免审计；CI同时从仓库外运行，防止配置掩盖报告。
 [advisories]
-ignore = [
-    "RUSTSEC-2026-0187",
-    "RUSTSEC-2026-0192",
-    "RUSTSEC-2024-0370",
-]
+ignore = []

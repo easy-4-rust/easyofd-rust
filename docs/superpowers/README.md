@@ -52,3 +52,7 @@
 ## 服务端生产验收（2026-10-14）
 
 [生产验收计划](plans/2026-10-14-production-readiness.md)：ARCHIVED；Task1–6全部完成，代码9ba5d3f的CI/Coverage/Security/Fuzz通过；事实源为[生产验收规格](specs/2026-10-14-production-readiness.md)，证据与部署约束见[服务端验收](../server-production-readiness.md)。
+
+## 无豁免依赖治理（2026-10-14）
+
+[计划](plans/2026-10-14-dependency-remediation.md)：IMPLEMENTING；PDF及字体迁移已实现，审计无例外，等待最终同源码CI。[规格](specs/2026-10-14-dependency-remediation.md)，[验证报告](../dependency-remediation-verification.md)。
