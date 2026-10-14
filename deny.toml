@@ -10,9 +10,10 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
 # 豁免理由（2026-08-12）：
-# - RUSTSEC-2026-0187 (lopdf): 深层嵌套 PDF 对象栈溢出，仅 DoS（CVSS 7.5），
-#   修复需 lopdf >= 0.42，但 printpdf 0.7.0 硬锁 lopdf = "0.31.0"（workspace 直接
-#   依赖 0.35 亦受影响且无 0.42 兼容版）。无升级路径，仅影响不可信 PDF 输入解析。
+# - RUSTSEC-2026-0187 (lopdf)：仅传递printpdf0.7 -> lopdf0.31；项目外部
+#   PDF读入使用直接依赖lopdf0.45，printpdf路径只生成PDF，不调用旧版load*。
+#   此例外禁止扩展到外部PDF解析；Fuzz同步使用0.45并包含10380层嵌套输入。
+#   若引入printpdf解析API，应先迁移生成依赖或取消豁免。此为范围限定风险接受。
 # - RUSTSEC-2026-0192 (ttf-parser): unmaintained，无安全升级可用；fontdue 0.9.4
 #   依赖 ttf-parser 0.25.1，仅用于可选栅格文本渲染（AWTMaker 替换路径）。
 # - RUSTSEC-2024-0370 (proc-macro-error): unmaintained，传递依赖

@@ -21,8 +21,9 @@
 //!   无纯 Rust rc2/rc4 crate，仅支持 3DES-CBC
 //! - EncryptedData 类型的 ContentInfo
 //!   需要 PKCS#7 解密，当前无纯 Rust 实现
-//! - 带 MAC 校验的 PFX（macData 字段）
-//!   当前跳过 MAC 校验，仅解析 authSafe
+//! 有MacData时必须通过SHA1/SHA2完整性校验；旧入口允许无MAC历史格式，
+//! 生产导入应使用read_private_key_verified拒绝无MAC数据。
+//! 输入上限32MiB，口令上限4096字节，KDF迭代上限2000000。
 
 use der::asn1::Any;
 use der::{Decode, Encode, Reader, SliceReader, Tag, Tagged};
@@ -108,7 +109,14 @@ impl Pkcs12Tools {
     /// - EncryptedData ContentInfo
     #[must_use]
     pub fn read_private_key(p12_data: &[u8], password: &str) -> Option<Vec<u8>> {
-        extract_first_private_key(p12_data, password)
+        extract_first_private_key(p12_data, password, false)
+    }
+    /// 严格导入私钥。对应Java: PKCS12Tools#ReadPrvKey。
+    /// 参数为PFX字节与完整性/解密口令；必须有有效MAC才返回SM2私钥，失败返回None。
+    /// 不执行证书信任/吊销认证；生产服务应使用本入口。
+    #[must_use]
+    pub fn read_private_key_verified(p12_data: &[u8], password: &str) -> Option<Vec<u8>> {
+        extract_first_private_key(p12_data, password, true)
     }
 }
 
@@ -117,10 +125,20 @@ impl Pkcs12Tools {
 // ══════════════════════════════════════════════════════════════════════════
 
 /// 从 PFX 结构中提取第一个私钥。
-fn extract_first_private_key(pfx_data: &[u8], password: &str) -> Option<Vec<u8>> {
+fn extract_first_private_key(
+    pfx_data: &[u8],
+    password: &str,
+    require_mac: bool,
+) -> Option<Vec<u8>> {
+    if pfx_data.len() > 32 * 1024 * 1024 || password.len() > 4096 {
+        return None;
+    }
     // 1. 解析 PFX SEQUENCE { version INTEGER, authSafe ContentInfo, [macData] }
     let pfx_fields = parse_sequence_fields(pfx_data)?;
-    if pfx_fields.len() < 2 {
+    if !(2..=3).contains(&pfx_fields.len())
+        || pfx_fields[0].tag() != Tag::Integer
+        || pfx_fields[0].value() != [3]
+    {
         return None;
     }
 
@@ -138,6 +156,11 @@ fn extract_first_private_key(pfx_data: &[u8], password: &str) -> Option<Vec<u8>>
 
     // 4. 提取 [0] EXPLICIT 中的 OCTET STRING（包含 AuthenticatedSafe）
     let auth_safe_data = extract_explicit_content(&auth_safe_fields[1])?;
+    if let Some(mac) = pfx_fields.get(2) {
+        crate::pkcs12_mac::verify(mac, &auth_safe_data, password)?;
+    } else if require_mac {
+        return None;
+    }
 
     // 5. 解析 AuthenticatedSafe ::= SEQUENCE OF ContentInfo
     let auth_safe_items = parse_sequence_fields(&auth_safe_data)?;
@@ -302,7 +325,7 @@ fn pbes2_decrypt(params_der: &[u8], encrypted_data: &[u8], password: &str) -> Op
 
     let salt = pbkdf2_params[0].value();
     let iterations = parse_integer_u32(&pbkdf2_params[1])?;
-    if iterations == 0 {
+    if !(1..=crate::pkcs12_mac::MAX_KDF_ITERATIONS).contains(&iterations) {
         return None;
     }
 
@@ -349,6 +372,9 @@ fn pbes2_decrypt(params_der: &[u8], encrypted_data: &[u8], password: &str) -> Op
         _ => return None,
     });
 
+    if key_len != BLOCK_SIZE {
+        return None;
+    }
     // ── 派生密钥 ──
     let key = derive_key_pbkdf2(password.as_bytes(), salt, iterations, key_len, &prf)?;
 
@@ -381,6 +407,14 @@ fn derive_key_pbkdf2(
     key_len: usize,
     prf_oid: &str,
 ) -> Option<Vec<u8>> {
+    if key_len == 0
+        || key_len > 64
+        || !(1..=crate::pkcs12_mac::MAX_KDF_ITERATIONS).contains(&iterations)
+        || salt.len() > 65536
+        || password.len() > 4096
+    {
+        return None;
+    }
     match prf_oid {
         OID_HMAC_SHA1 => {
             let mut key = vec![0u8; key_len];
@@ -581,7 +615,7 @@ fn pbe_sha1_3des_decrypt(
 
     let salt = params_fields[0].value();
     let iterations = parse_integer_u32(&params_fields[1])?;
-    if iterations == 0 {
+    if !(1..=crate::pkcs12_mac::MAX_KDF_ITERATIONS).contains(&iterations) {
         return None;
     }
 
@@ -644,7 +678,12 @@ fn pkcs12_kdf_sha1(
 ) -> Option<Vec<u8>> {
     use sha1::Digest;
 
-    if iterations == 0 || out_len == 0 {
+    if !(1..=crate::pkcs12_mac::MAX_KDF_ITERATIONS).contains(&iterations)
+        || out_len == 0
+        || out_len > 64
+        || salt.len() > 65536
+        || password.len() > 8194
+    {
         return None;
     }
 
@@ -823,6 +862,19 @@ fn extract_private_key_from_pkcs8(pk_info_der: &[u8]) -> Option<Vec<u8>> {
         return None;
     }
 
+    if pk_fields[0].tag() != Tag::Integer
+        || pk_fields[0].value() != [0]
+        || pk_fields[1].tag() != Tag::Sequence
+    {
+        return None;
+    }
+    let algorithm = parse_der_fields(pk_fields[1].value())?;
+    if algorithm.len() != 2
+        || parse_oid_string(&algorithm[0])? != "1.2.840.10045.2.1"
+        || parse_oid_string(&algorithm[1])? != "1.2.156.10197.1.301"
+    {
+        return None;
+    }
     // pk_fields[2] = privateKey OCTET STRING（包含 ECPrivateKey DER）
     let ec_key_any = &pk_fields[2];
     if ec_key_any.tag() != Tag::OctetString {
@@ -835,6 +887,9 @@ fn extract_private_key_from_pkcs8(pk_info_der: &[u8]) -> Option<Vec<u8>> {
         return None;
     }
 
+    if ec_fields[0].tag() != Tag::Integer || ec_fields[0].value() != [1] {
+        return None;
+    }
     // ec_fields[1] = privateKey OCTET STRING (32 字节标量)
     let private_key_any = &ec_fields[1];
     if private_key_any.tag() != Tag::OctetString {
@@ -842,7 +897,7 @@ fn extract_private_key_from_pkcs8(pk_info_der: &[u8]) -> Option<Vec<u8>> {
     }
 
     let key_bytes = private_key_any.value();
-    if key_bytes.len() < 32 {
+    if key_bytes.len() != 32 || sm2::SecretKey::from_slice(key_bytes).is_err() {
         return None;
     }
 
@@ -871,7 +926,7 @@ fn parse_sequence_fields(data: &[u8]) -> Option<Vec<Any>> {
 /// 注意：不能使用 `Any::from_der` 逐字段解析，因为 der 0.8 的 `from_der`
 /// 要求输入被单个 TLV 完全消费，遇到尾随数据会报 `TrailingData` 错误；
 /// 必须用 `SliceReader` + `Any::decode` 逐字段解码而不检查 EOF。
-fn parse_der_fields(data: &[u8]) -> Option<Vec<Any>> {
+pub(crate) fn parse_der_fields(data: &[u8]) -> Option<Vec<Any>> {
     let mut fields = Vec::new();
     let mut reader = SliceReader::new(data).ok()?;
     while reader.position() < reader.input_len() {
@@ -907,7 +962,7 @@ fn extract_explicit_tlv(any: &Any) -> Option<Vec<u8>> {
 }
 
 /// 从 Any 中解析 OID 并返回点分字符串。
-fn parse_oid_string(any: &Any) -> Option<String> {
+pub(crate) fn parse_oid_string(any: &Any) -> Option<String> {
     if any.tag() != Tag::ObjectIdentifier {
         return None;
     }
@@ -917,12 +972,12 @@ fn parse_oid_string(any: &Any) -> Option<String> {
 }
 
 /// 从 DER INTEGER 中解析 u32 值。
-fn parse_integer_u32(any: &Any) -> Option<u32> {
+pub(crate) fn parse_integer_u32(any: &Any) -> Option<u32> {
     if any.tag() != Tag::Integer {
         return None;
     }
     let bytes = any.value();
-    if bytes.is_empty() {
+    if bytes.is_empty() || bytes[0] & 0x80 != 0 {
         return None;
     }
     // 跳过前导零字节（DER 正整数可能有 padding）
@@ -944,7 +999,7 @@ fn parse_integer_usize(any: &Any) -> Option<usize> {
         return None;
     }
     let bytes = any.value();
-    if bytes.is_empty() {
+    if bytes.is_empty() || bytes[0] & 0x80 != 0 {
         return None;
     }
     let start = usize::from(bytes[0] == 0 && bytes.len() > 1);
@@ -1037,7 +1092,7 @@ mod tests {
     // EC 公钥 OID 1.2.840.10045.2.1
     const DER_OID_EC_PUBLIC_KEY: &[u8] = &[0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01];
     // secp256r1 OID 1.2.840.10045.3.1.7
-    const DER_OID_SECP256R1: &[u8] = &[0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07];
+    const DER_OID_SM2_CURVE: &[u8] = &[0x06, 0x08, 0x2A, 0x81, 0x1C, 0xCF, 0x55, 0x01, 0x82, 0x2D];
 
     /// 构造 PKCS#8 PrivateKeyInfo DER（EC/SM2 私钥格式）。
     fn make_pkcs8_private_key_info(private_key_scalar: &[u8; 32]) -> Vec<u8> {
@@ -1052,7 +1107,7 @@ mod tests {
         //     AlgorithmIdentifier SEQUENCE { ecPublicKey OID, curve OID },
         //     privateKey OCTET STRING
         // }
-        let alg_id = der_seq_raw(&concat(&[DER_OID_EC_PUBLIC_KEY, DER_OID_SECP256R1]));
+        let alg_id = der_seq_raw(&concat(&[DER_OID_EC_PUBLIC_KEY, DER_OID_SM2_CURVE]));
         der_seq_raw(&concat(&[
             &der_integer(&[0x00]),
             &alg_id,
@@ -1893,5 +1948,21 @@ mod tests {
     #[test]
     fn test_derive_key_pbkdf2_unknown_prf() {
         assert!(derive_key_pbkdf2(b"pw", b"sl", 100, 16, "1.2.3.4.5").is_none());
+    }
+    #[test]
+    fn pbkdf2_rejects_oversized_derivation() {
+        assert!(derive_key_pbkdf2(b"password", b"salt", 1, 65536, OID_HMAC_SHA256).is_none());
+    }
+    #[test]
+    fn negative_key_length_integer_is_rejected() {
+        let value = Any::from_der(&[2, 1, 255]).unwrap();
+        assert!(parse_integer_usize(&value).is_none());
+    }
+
+    #[test]
+    fn pbkdf2_huge_lengths_reject_without_allocating() {
+        for length in [0, 65, 65536, usize::MAX] {
+            assert!(derive_key_pbkdf2(b"pw", b"salt", 1, length, OID_HMAC_SHA1).is_none());
+        }
     }
 }

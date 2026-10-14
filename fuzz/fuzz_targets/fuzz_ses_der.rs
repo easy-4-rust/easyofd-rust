@@ -17,6 +17,7 @@
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
+    let _ = easyofd_gm::pkcs12_tools::Pkcs12Tools::read_private_key_verified(data, "public-test");
     // ---- SES v1 ----
     let _ = easyofd_gm::ses::v1::SESSignature::decode_der(data);
     let _ = easyofd_gm::ses::v1::SESeal::decode_der(data);

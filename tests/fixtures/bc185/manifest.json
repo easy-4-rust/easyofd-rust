@@ -18,6 +18,8 @@
     "ses-v1.der": "def42e6c13c7366b2ad2d321480a4f28322718ddc0e604f904c6211e15dab4fc",
     "ses-v4.der": "f4014659c9f9e9fa999bfddaba821a1b5bbcd4272b4cf7dba13030a101763249",
     "ses-v5.der": "d88dc4a0d86aa0339cf465419c19cbde864ac8de619f30b33d7c98561b81e62d",
-    "sm2.der": "48b0dc415011fc2cc0188240ffbbad3f130ae2248d84c6a5a571dc7f03ff7477"
-  }
+    "sm2.der": "48b0dc415011fc2cc0188240ffbbad3f130ae2248d84c6a5a571dc7f03ff7477",
+    "rust-public-test.p12": "39aa5999bfad282871d602801be96f8c403a4b7118692080179dc9e4a608cb68"
+  },
+  "rust_pfx_source": "bc185_generate Rust example, public identity, SHA1 MacData"
 }

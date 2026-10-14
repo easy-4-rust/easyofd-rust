@@ -60,3 +60,5 @@ mod tests {
         assert_eq!(module_name(), "easyofd-gm");
     }
 }
+
+mod pkcs12_mac;

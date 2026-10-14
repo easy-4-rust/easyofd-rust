@@ -12,7 +12,7 @@ libfuzzer-sys = "0.4"
 easyofd-core = { path = "../crates/easyofd-core" }
 easyofd-reader = { path = "../crates/easyofd-reader" }
 easyofd-gm = { path = "../crates/easyofd-gm" }
-lopdf = "0.35"
+lopdf = "0.45"
 
 # 防止被根 workspace 探测到：独立 workspace
 [[bin]]

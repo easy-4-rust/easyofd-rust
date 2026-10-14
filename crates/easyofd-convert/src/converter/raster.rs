@@ -86,6 +86,7 @@ impl RasterRenderer {
     /// # 返回
     ///
     /// 渲染后的 RGBA 像素图。
+    /// 兼容受信模型的旧入口；外部输入请使用try_render_page或文件转换接口。
     pub fn render_page(&self, page: &OfdPage) -> RgbaImage {
         let width_px = self.mm_to_px(page.width).round().max(1.0) as u32;
         let height_px = self.mm_to_px(page.height).round().max(1.0) as u32;
@@ -112,6 +113,66 @@ impl RasterRenderer {
         canvas
     }
 
+    /// 安全栅格入口。参数为页面；非法尺寸或超32百万像素预算返回错误。
+    /// 旧render_page用于受信模型，不接收未校验的外部尺寸。
+    pub fn try_render_page(&self, page: &OfdPage) -> easyofd_core::OfdResult<RgbaImage> {
+        self.render_page_with_text_runs(page, &[])
+    }
+
+    fn validate_resource_budget(&self, page: &OfdPage) -> easyofd_core::OfdResult<()> {
+        use easyofd_core::OfdError;
+        if !self.dpi.is_finite() || self.dpi <= 0. {
+            return Err(OfdError::Conversion("DPI必须为有限正数".into()));
+        }
+        let valid = |width: f64, height: f64| {
+            if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
+                return false;
+            }
+            let w = self.mm_to_px(width).round().max(1.);
+            let h = self.mm_to_px(height).round().max(1.);
+            w.is_finite() && h.is_finite() && w <= 16384. && h <= 16384. && w * h <= 32_000_000.
+        };
+        if !valid(page.width, page.height) {
+            return Err(OfdError::Conversion(
+                "页面尺寸超出栅格预算（边长16384px、32百万像素）".into(),
+            ));
+        }
+        for object in &page.content {
+            if let ContentObject::Text(text) = object {
+                let px = self.pt_to_px(text.size);
+                if !text.size.is_finite()
+                    || text.size <= 0.
+                    || !px.is_finite()
+                    || px > 1024.
+                    || !text.x.is_finite()
+                    || !text.y.is_finite()
+                {
+                    return Err(OfdError::Conversion(
+                        "文字字号或位置超出安全栅格预算".into(),
+                    ));
+                }
+            }
+            if let ContentObject::Image(image) = object {
+                if !valid(image.width, image.height) {
+                    return Err(OfdError::Conversion("图片缩放尺寸超出栅格预算".into()));
+                }
+                // 先读图片头再解码，阻止小压缩数据声明超大像素尺寸。
+                if let Ok(reader) =
+                    image::ImageReader::new(std::io::Cursor::new(&image.data)).with_guessed_format()
+                {
+                    if let Ok((w, h)) = reader.into_dimensions() {
+                        if w > 16384 || h > 16384 || u64::from(w) * u64::from(h) > 32_000_000 {
+                            return Err(OfdError::Conversion(
+                                "嵌入图片解码尺寸超出栅格预算".into(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// 以转换元数据渲染页面；字体/字形错误返回明确错误。
     /// 参数为页面和对应的文字绘制数据，返回RGBA图像。
     pub(crate) fn render_page_with_text_runs(
@@ -119,6 +180,7 @@ impl RasterRenderer {
         page: &OfdPage,
         runs: &[easyofd_reader::TextRenderRun],
     ) -> easyofd_core::OfdResult<RgbaImage> {
+        self.validate_resource_budget(page)?;
         let w = self.mm_to_px(page.width).round().max(1.) as u32;
         let h = self.mm_to_px(page.height).round().max(1.) as u32;
         let bg = Rgba([
@@ -137,7 +199,7 @@ impl RasterRenderer {
                     {
                         self.render_text_run(&mut canvas, run)?;
                     } else {
-                        self.render_text(&mut canvas, text);
+                        self.render_text_checked(&mut canvas, text)?;
                     }
                 }
                 ContentObject::Path(path) => self.render_path(&mut canvas, path, h),
@@ -263,18 +325,26 @@ impl RasterRenderer {
 
     /// 渲染文本对象到画布。
     fn render_text(&self, canvas: &mut RgbaImage, text: &TextObject) {
+        let _ = self.render_text_checked(canvas, text);
+    }
+
+    fn render_text_checked(
+        &self,
+        canvas: &mut RgbaImage,
+        text: &TextObject,
+    ) -> easyofd_core::OfdResult<()> {
         if text.text.is_empty() {
-            return;
+            return Ok(());
         }
 
         let font = match load_font_for_text(text) {
             Some(f) => f,
-            None => return, // 无法加载字体时静默跳过
+            None => return Ok(()), // 无法加载字体时静默跳过
         };
 
         let px_size = self.pt_to_px(text.size) as f32;
         if px_size < 1.0 {
-            return;
+            return Ok(());
         }
 
         let color = u32_to_rgba(text.color);
@@ -286,6 +356,19 @@ impl RasterRenderer {
         // 逐字符光栅化并绘制
         let mut cursor_x = start_x;
         for ch in text.text.chars() {
+            // 在位图分配前检查实际字形度量；异常字体也不能绕过画布预算。
+            let metrics = font.metrics(ch, px_size);
+            if metrics.width > 4096
+                || metrics.height > 4096
+                || metrics
+                    .width
+                    .checked_mul(metrics.height)
+                    .is_none_or(|area| area > 4_194_304)
+            {
+                return Err(easyofd_core::OfdError::Conversion(
+                    "实际字形位图超出预算".into(),
+                ));
+            }
             let (metrics, bitmap) = font.rasterize(ch, px_size);
 
             // 基线偏移：fontdue 的 metrics.height 是 glyph 位图高度，
@@ -319,6 +402,7 @@ impl RasterRenderer {
             // 推进光标（metrics.advance 是水平推进量）
             cursor_x += metrics.advance_width as f32;
         }
+        Ok(())
     }
 
     // ─── 图片渲染 ──────────────────────────────────────────────────────────

@@ -67,7 +67,7 @@ syn = { version = "3.0.3", features = ["full"] }
 trybuild = "1.0.116"
 criterion = { version = "0.8", features = ["html_reports"] }
 # ═══ 国密算法 ═══
-sm2 = { version = "0.14.0-rc.15", features = ["dsa", "arithmetic", "getrandom"] }
+sm2 = { version = "0.14.0", features = ["dsa", "arithmetic", "getrandom"] }
 sm3 = "0.5.0"
 sha2 = "0.10.9"
 der = "0.8.1"

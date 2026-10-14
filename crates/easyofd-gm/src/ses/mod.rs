@@ -220,12 +220,18 @@ pub(crate) fn decode_length(der: &[u8], pos: usize) -> DerResult<(usize, usize)>
         Ok((first as usize, pos + 1))
     } else {
         let num_bytes = (first & 0x7F) as usize;
-        if num_bytes == 0 || pos + 1 + num_bytes > der.len() {
+        if num_bytes == 0
+            || num_bytes > std::mem::size_of::<usize>()
+            || num_bytes > der.len() - pos - 1
+        {
             return Err(DerError("invalid length encoding"));
         }
         let mut len: usize = 0;
         for i in 0..num_bytes {
-            len = (len << 8) | der[pos + 1 + i] as usize;
+            len = len
+                .checked_mul(256)
+                .and_then(|n| n.checked_add(usize::from(der[pos + 1 + i])))
+                .ok_or(DerError("length overflow"))?;
         }
         Ok((len, pos + 1 + num_bytes))
     }
@@ -238,7 +244,9 @@ pub(crate) fn decode_tlv(der: &[u8], pos: usize) -> DerResult<(u8, Vec<u8>, usiz
     }
     let tag = der[pos];
     let (len, after_len) = decode_length(der, pos + 1)?;
-    let end = after_len + len;
+    let end = after_len
+        .checked_add(len)
+        .ok_or(DerError("TLV length overflow"))?;
     if end > der.len() {
         return Err(DerError("value extends past end"));
     }

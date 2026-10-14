@@ -49,6 +49,12 @@ jobs:
 
       - name: Examples build
         run: cargo build --workspace --examples
+      - name: Bounded server acceptance smoke
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: |
+          ulimit -v 2097152
+          timeout --signal=KILL 30s target/debug/examples/server_acceptance
+
 
   fmt:
     name: rustfmt

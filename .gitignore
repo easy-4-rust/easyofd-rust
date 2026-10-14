@@ -101,3 +101,5 @@ __pycache__/
 # Auditable upstream fixture manifests are tracked despite the global JSON rule.
 !tests/fixtures/upstream_20261014/manifest.json
 !tests/fixtures/bc185/manifest.json
+
+!tests/fixtures/pkcs12_integrity/manifest.json
