@@ -817,6 +817,7 @@ fn render_path_to_pdf(
     // 收集所有线段点（用于最终绘制）
     let mut all_points: Vec<(Point, bool)> = Vec::new();
     let mut has_path = false;
+    let mut paths = Vec::new();
 
     while i < tokens.len() {
         match tokens[i] {
@@ -825,16 +826,13 @@ fn render_path_to_pdf(
                 {
                     // 如果已有路径点，先绘制之前的路径
                     if all_points.len() >= 2 {
-                        layer.add_path(
-                            Line {
-                                points: std::mem::take(&mut all_points)
-                                    .into_iter()
-                                    .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
-                                    .collect(),
-                                is_closed: false,
-                            },
-                            path.fill_color.is_some(),
-                        );
+                        paths.push(Line {
+                            points: std::mem::take(&mut all_points)
+                                .into_iter()
+                                .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
+                                .collect(),
+                            is_closed: false,
+                        });
                     }
                     current_x = x;
                     current_y = y;
@@ -874,16 +872,13 @@ fn render_path_to_pdf(
                         ),
                         false,
                     ));
-                    layer.add_path(
-                        Line {
-                            points: std::mem::take(&mut all_points)
-                                .into_iter()
-                                .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
-                                .collect(),
-                            is_closed: true,
-                        },
-                        path.fill_color.is_some(),
-                    );
+                    paths.push(Line {
+                        points: std::mem::take(&mut all_points)
+                            .into_iter()
+                            .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
+                            .collect(),
+                        is_closed: true,
+                    });
                     current_x = subpath_start_x;
                     current_y = subpath_start_y;
                 }
@@ -957,16 +952,16 @@ fn render_path_to_pdf(
 
     // 绘制剩余路径
     if all_points.len() >= 2 {
-        layer.add_path(
-            Line {
-                points: all_points
-                    .into_iter()
-                    .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
-                    .collect(),
-                is_closed: false,
-            },
-            path.fill_color.is_some(),
-        );
+        paths.push(Line {
+            points: all_points
+                .into_iter()
+                .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
+                .collect(),
+            is_closed: false,
+        });
+    }
+    if !paths.is_empty() {
+        layer.add_paths(paths, path.fill_color.is_some());
     }
 }
 

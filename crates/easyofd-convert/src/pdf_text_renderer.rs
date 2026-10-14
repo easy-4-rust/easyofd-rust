@@ -92,7 +92,7 @@ pub(crate) fn render(
             if id >= u32::from(f.number_of_glyphs()) {
                 return Err(failure("glyph索引越界"));
             }
-            layer.write_glyph(id as u16, g.character);
+            layer.write_glyph(id as u16, g.character, &font, size_pt as f32);
         } else {
             if let Some(face) = &face {
                 if face.glyph_index(g.character).is_none() {

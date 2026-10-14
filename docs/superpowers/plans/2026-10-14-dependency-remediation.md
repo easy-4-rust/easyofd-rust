@@ -22,7 +22,7 @@
 - [ ] Step 3: 任务独立审查，保留功能，提交准确范围。
 
 ### Task 2: 字体链迁移
-**Files:** font/font_face.rs、glyph_outline.rs、cjk_font.rs、svg_text_renderer.rs、pdf_text_renderer.rs字体调用、converter/raster.rs；根/convert依赖（控制器）。
+**Files:** font/font_face.rs、glyph_outline.rs、cjk_font.rs、svg_text_renderer.rs、pdf_text_renderer.rs字体调用、converter/raster.rs、font/mod.rs及PDF后端/集成测试字体调用；根/convert依赖（控制器）。
 **Interfaces:** FontFace<'a>::parse、units_per_em、number_of_glyphs、glyph_index、glyph_hor_advance及GlyphOutline::load；均使用Fontations真实解析/轮廓，不造占位。
 - [ ] Step 1: 固定TTF/TTC/CJK字形、推进量、空白/坏字体、PNG阳性像素与预算的回归；依赖门禁保持RED。
 - [ ] Step 2: skrifa替代ttf-parser，tiny-skia替代fontdue，受影响测试GREEN。

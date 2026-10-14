@@ -173,6 +173,10 @@ fn cgtransform_glyph_is_embedded_and_preserves_unicode_text() {
         .glyph_index('/')
         .unwrap()
         .0;
+    let face = ttf_parser::Face::parse(&font_bytes, 0).unwrap();
+    let advance = f64::from(face.glyph_hor_advance(ttf_parser::GlyphId(gid)).unwrap())
+        / f64::from(face.units_per_em())
+        * 20.;
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
@@ -180,7 +184,7 @@ fn cgtransform_glyph_is_embedded_and_preserves_unicode_text() {
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).unwrap();
         if name.ends_with("P.xml") {
-            bytes = String::from_utf8(bytes).unwrap().replace(">/</TextCode>", &format!(">中</TextCode><CGTransform CodePosition=\"0\" CodeCount=\"1\" GlyphCount=\"1\" Glyphs=\"{gid}\"/>" )).into_bytes();
+            bytes = String::from_utf8(bytes).unwrap().replace("Y=\"20\"", &format!("Y=\"20\" DeltaX=\"{advance}\"")).replace(">/</TextCode>", &format!(">中/</TextCode><CGTransform CodePosition=\"0\" CodeCount=\"2\" GlyphCount=\"2\" Glyphs=\"{gid} {gid}\"/>" )).into_bytes();
         }
         out.start_file(name, zip::write::SimpleFileOptions::default())
             .unwrap();
@@ -190,11 +194,32 @@ fn cgtransform_glyph_is_embedded_and_preserves_unicode_text() {
     let pdf_path = ofd.with_extension("pdf");
     std::fs::write(&ofd, out.finish().unwrap().into_inner()).unwrap();
     ofd_to_pdf(&ofd, &pdf_path, &ConvertOptions::default()).unwrap();
+    if let Some(dir) = std::env::var_os("EASYOFD_PDF_REVIEW_DIR") {
+        std::fs::copy(
+            &pdf_path,
+            std::path::Path::new(&dir).join("glyph-collision.pdf"),
+        )
+        .unwrap();
+    }
     let pdf = lopdf::Document::load(&pdf_path).unwrap();
-    assert_eq!(pdf.extract_text(&[1]).unwrap().trim(), "中");
+    assert_eq!(
+        pdf.extract_text_chunks(&[1])
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .concat(),
+        "中/\n"
+    );
     let content =
         lopdf::content::Content::decode(&pdf.get_page_content(pdf.get_pages()[&1])).unwrap();
-    assert!(content.operations.iter().any(|op| op.operator == "TJ"));
+    assert!(content.operations.iter().any(|op| op.operator == "Tj"));
+    let fonts = pdf.get_page_fonts(pdf.get_pages()[&1]).unwrap();
+    for operation in content.operations.iter().filter(|op| op.operator == "Tf") {
+        assert!(
+            fonts.contains_key(operation.operands[0].as_name().unwrap()),
+            "each glyph font must be registered"
+        );
+    }
     let matrix = content
         .operations
         .iter()
