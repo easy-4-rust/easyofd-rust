@@ -415,6 +415,7 @@ dependencies = [
  "easyofd-core",
  "easyofd-gm",
  "easyofd-reader",
+ "easyofd-signature",
  "libfuzzer-sys",
  "lopdf",
 ]
@@ -457,6 +458,25 @@ dependencies = [
  "easyofd-package",
  "quick-xml",
  "thiserror",
+ "zip",
+]
+
+[[package]]
+name = "easyofd-signature"
+version = "0.1.4"
+dependencies = [
+ "chrono",
+ "der",
+ "easyofd-core",
+ "easyofd-gm",
+ "easyofd-package",
+ "pem",
+ "quick-xml",
+ "rand",
+ "sm2",
+ "sm3",
+ "thiserror",
+ "x509-cert",
  "zip",
 ]
 

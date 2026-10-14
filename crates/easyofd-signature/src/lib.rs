@@ -157,3 +157,6 @@ pub type SESV5ValidateContainer = SesV5ValidateContainer;
 
 /// 对应 Java: SignIDProvider（Rust trait 别名）。
 pub use SignIdProvider as SignIDProvider;
+
+mod digital_validate_container;
+mod gbt35275_validate_container;

@@ -15,8 +15,11 @@
 //! 目标：任意 DER 字节解码不 panic。
 #![no_main]
 use libfuzzer_sys::fuzz_target;
+use easyofd_signature::verify_containers::{DigitalValidateContainer, Gbt35275ValidateContainer, SignedDataValidateContainer};
 
 fuzz_target!(|data: &[u8]| {
+    let _ = DigitalValidateContainer::new(include_bytes!("../../tests/fixtures/bc185/public.sec1").to_vec()).validate(b"message", data);
+    let _ = Gbt35275ValidateContainer::new(vec![include_bytes!("../../tests/fixtures/bc185/cert.der").to_vec()]).validate(b"message", data);
     let _ = easyofd_gm::pkcs12_tools::Pkcs12Tools::read_private_key_verified(data, "public-test");
     // ---- SES v1 ----
     let _ = easyofd_gm::ses::v1::SESSignature::decode_der(data);

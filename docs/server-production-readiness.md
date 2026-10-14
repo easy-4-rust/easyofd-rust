@@ -1,5 +1,5 @@
 # 服务端库生产就绪验收
-日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：已确认的服务端库工程生产就绪门禁通过，ARCHIVED；结论以严格入口、隔离预算和下列支持范围为条件，不把旧阶段ARCHIVED视为当前验收。
+日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：整体结论重新开放；收尾发现裸SM2/GB35275骨架验证器未验收，原归档判断过早。Task6修复验证前不得判定整体通过；结论以严格入口、隔离预算和下列支持范围为条件，不把旧阶段ARCHIVED视为当前验收。
 对应规格：[当前版本生产验收](superpowers/specs/2026-10-14-production-readiness.md)。
 
 ## 已实现安全边界
@@ -39,7 +39,7 @@ Clippy沿用只豁免assert_is_empty显示风格建议的CI规则，其他warnin
 | Coverage CI（强制行覆盖率≥90%） | 通过 |
 | Linux受限进程烟测（2GiB/30s） | 当前SHA通过，4线程28输入/76输出，1927ms |
 
-未执行部署、发布或真实生产流量验收。上述工程门禁已具备当前源码证据；本轮计划已归档。
+未执行部署、发布或真实生产流量验收。上表及旧CI链接记录Task1–5的6ba781ab证据；Task6改变源码，不能据此宣称当前源码通过。Task6完整门禁待本轮新SHA验证。
 
 独立审查：2 Important/0 Critical，已完成一次红→绿修复，无延期Minor。未过滤audit仍发现printpdf生成依赖的lopdf0.31旧解析漏洞；上述可达性裁决是范围限定风险接受，不宣称依赖本身已修复。
 
@@ -58,3 +58,17 @@ Clippy沿用只豁免assert_is_empty显示风格建议的CI规则，其他warnin
 - BC底层核验全部七MAC算法，KeyStore只声明SHA1/SHA256。代价：其余算法未验收完整KeyStore路径。
 - 保留旧lopdf生成依赖不可达例外及两项维护例外。代价：必须持续跟踪，新增旧解析入口会使此裁决失效。
 - 纯文档归档跳过重复CI。代价：文档提交无独立源码重跑，靠非文档tree一致性核验；本地日志保留以供复核。
+
+收尾纠正：6ba781a的四工作流实际通过，但它们未覆盖两个骨架签名容器，不能证明完整生产验收。新增Task6并重新验证后才恢复最终结论。
+
+## 验签支持范围与Task6
+
+裸SM2容器真实校验SEC1公钥与DER/raw/ASCII HEX签名，默认SM2 ID为1234567812345678。GB35275容器读取Java直接摘要/PKCS9及BC标准CMS的SM2+SM3、版本1、Issuer/Serial签名者；所有签名者须与嵌入证书及显式DER证书pin匹配，并真实校验签名。此处trust_certs是签名者证书pin列表，不是CA链。
+
+认证属性messageDigest必填且匹配原文SM3，各OID不得重复；标准CMS/GB contentType必填且匹配。仅历史Rust GB的直接content+嵌套SET编码保留缺失contentType兼容，不允许GB→CMS跨域重包装。旧Rust GB writer编码保留，未声明其反向Java互操作。签名输入≤32MiB、字段≤4096、签名者≤64。
+
+原生verify_signature/verify_signature_multi仅验收已有Rust原生签名布局；容器层Java SES/GB/CMS互操作不代表所有外部OFD封装/C14N流程已端到端支持。OfdValidator目前是容器注册对象，不是完成的通用文档验证入口。cert::verify_chain中的兼容pass-through、crl::ocsp_check和timestamp占位入口不应被服务用作认证判断；本次不将这些功能算作已实现。
+
+Task6红→绿：非空公钥/证书配置接受伪签名、Unicode/奇数HEX panic、合法GB属性签名跨CMS重包装。公开Java fixture正例及篡改/错误pin/重复属性负例通过；签名验证器已纳入SES Fuzz。限定审查1 Important/0 Critical，已修复内容类型绑定缺口。当前整体验收仍等待新SHA完整门禁。
+
+Task6本地最终：运行测试2888通过/1忽略，doctest12通过/16忽略，合计2900通过/17忽略；行覆盖率93.36710%。Clippy/fmt/diffcheck通过；新增验签路径SES Fuzz100000次通过。当前新提交CI待完成。

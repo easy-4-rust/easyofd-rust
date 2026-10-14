@@ -103,3 +103,5 @@ __pycache__/
 !tests/fixtures/bc185/manifest.json
 
 !tests/fixtures/pkcs12_integrity/manifest.json
+
+!tests/fixtures/gbt35275/manifest.json
