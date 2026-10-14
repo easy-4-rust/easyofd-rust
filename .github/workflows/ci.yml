@@ -41,7 +41,8 @@ jobs:
 
       - name: Clippy
         if: matrix.rust == 'stable'
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # Rust 1.99新增断言显示风格建议；不改变历史测试语义，其他warning继续作为门禁。
+        run: cargo clippy --workspace --all-targets -- -D warnings -A clippy::assert_is_empty
 
       - name: Doctest
         run: cargo test --workspace --doc
