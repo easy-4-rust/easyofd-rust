@@ -105,53 +105,9 @@ impl SignedDataValidateContainer for Gbt35275ValidateContainer {
     }
 }
 
-/// SES V1 签名数据验证容器。
-///
-/// 对应 Java: `org.ofdrw.sign.verify.container.SESV1ValidateContainer`
-pub struct SesV1ValidateContainer;
-
-impl SignedDataValidateContainer for SesV1ValidateContainer {
-    fn validate(
-        &self,
-        _signed_info_bytes: &[u8],
-        _signed_value: &[u8],
-    ) -> Result<(), OfdVerifyException> {
-        // SES V1 验证逻辑
-        Ok(())
-    }
-}
-
-/// SES V4 签名数据验证容器。
-///
-/// 对应 Java: `org.ofdrw.sign.verify.container.SESV4ValidateContainer`
-pub struct SesV4ValidateContainer;
-
-impl SignedDataValidateContainer for SesV4ValidateContainer {
-    fn validate(
-        &self,
-        _signed_info_bytes: &[u8],
-        _signed_value: &[u8],
-    ) -> Result<(), OfdVerifyException> {
-        // SES V4 验证逻辑
-        Ok(())
-    }
-}
-
-/// SES V5 签名数据验证容器。
-///
-/// 对应 Java: `org.ofdrw.sign.verify.container.SESV5ValidateContainer`
-pub struct SesV5ValidateContainer;
-
-impl SignedDataValidateContainer for SesV5ValidateContainer {
-    fn validate(
-        &self,
-        _signed_info_bytes: &[u8],
-        _signed_value: &[u8],
-    ) -> Result<(), OfdVerifyException> {
-        // SES V5 验证逻辑
-        Ok(())
-    }
-}
+pub use crate::ses_v1_validate_container::SesV1ValidateContainer;
+pub use crate::ses_v4_validate_container::SesV4ValidateContainer;
+pub use crate::ses_v5_validate_container::SesV5ValidateContainer;
 
 /// OFD 文档签名验证器。
 ///
@@ -221,13 +177,13 @@ mod tests {
     }
 
     #[test]
-    fn ses_containers_validate_ok() {
+    fn ses_containers_reject_invalid_der() {
         let v1 = SesV1ValidateContainer;
         let v4 = SesV4ValidateContainer;
         let v5 = SesV5ValidateContainer;
-        assert!(v1.validate(&[0x01], &[0x02]).is_ok());
-        assert!(v4.validate(&[0x01], &[0x02]).is_ok());
-        assert!(v5.validate(&[0x01], &[0x02]).is_ok());
+        assert!(v1.validate(&[0x01], &[0x02]).is_err());
+        assert!(v4.validate(&[0x01], &[0x02]).is_err());
+        assert!(v5.validate(&[0x01], &[0x02]).is_err());
     }
 
     #[test]

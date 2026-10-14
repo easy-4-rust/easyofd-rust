@@ -9,3 +9,6 @@ pub mod tuple2;
 pub use path_point::PathPoint;
 pub use text_code_point::TextCodePoint;
 pub use tuple2::Tuple2;
+
+pub mod glyph_position;
+pub use glyph_position::GlyphPosition;

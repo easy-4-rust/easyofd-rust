@@ -296,3 +296,7 @@ specification and ofdrw output conventions.
 - [GB/T 33190-2016](https://openstd.samr.gov.cn/) -- OFD specification
 - [ofdrw](https://github.com/ofdrw/ofdrw) -- Java OFD reader/writer
 - [easyofd-rust](https://github.com/easy-4-rust/easyofd-rust) -- Rust OFD library
+
+## 固定上游 2026-10-14 验证
+
+文字绘制与 BC 1.85 的实际本地结果、固定源码构建步骤及尚未通过的 CI 门禁见 [验证报告](ofdrw-upstream-alignment-verification.md)。生成工具使用显式固定提交，不修改外部源码检出。

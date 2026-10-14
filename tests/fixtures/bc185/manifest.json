@@ -1,0 +1,23 @@
+{
+  "ofdrw_version": "2.4.0",
+  "ofdrw_commit": "84e9eb260ba6fd351ecccf08a01a40305d4af635",
+  "bc_version": "1.85",
+  "source": "ofdrw-sign/src/test/resources/USER.p12 and UserV1/V4/V5.esl, publicly published test identity only",
+  "password": "public-test",
+  "sm2_user_id": "1234567812345678",
+  "generator": "tools/upstream/BC185Interop.java",
+  "crypto_validation": "Java actual SES V1/V4/V5 plus Rust actual signature verification",
+  "files": {
+    "cert.der": "53c8eea4e81f88036e21eac9a50939c619c19eb2aee9a4d50d8181c689608fb2",
+    "message.bin": "df9be24b204cb4f443f99a36478fd6a31c4e6ff7da73672d630ba3748e8d0a75",
+    "public-test.p12": "6cedfd92fb20c566fe8a49d34eceae9ee12fefeacf7137cf6c023758d19daf51",
+    "public.sec1": "312a8adcff09ba1a9ac10e923dd0420355c876642ef9fbcab3db09d3d7304954",
+    "seal-v1.der": "305df82d82b0111a55702aaca7ccea05b412e4cd80b78cc7086aa675ef46f8f3",
+    "seal-v4.der": "b73dd33ec01c66a99ce9b99f898027363553ebccfe0bd1cb85bec36e6c3e05fd",
+    "seal-v5.der": "675d471ac56d633d8db2267a1569f9bd728c34bae7c8604a566acc7b4d637968",
+    "ses-v1.der": "def42e6c13c7366b2ad2d321480a4f28322718ddc0e604f904c6211e15dab4fc",
+    "ses-v4.der": "f4014659c9f9e9fa999bfddaba821a1b5bbcd4272b4cf7dba13030a101763249",
+    "ses-v5.der": "d88dc4a0d86aa0339cf465419c19cbde864ac8de619f30b33d7c98561b81e62d",
+    "sm2.der": "48b0dc415011fc2cc0188240ffbbad3f130ae2248d84c6a5a571dc7f03ff7477"
+  }
+}

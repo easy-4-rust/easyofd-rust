@@ -614,9 +614,8 @@ fn pkcs12_password_to_bmp(password: &str) -> Vec<u8> {
     }
     // 每字节前补 0x00 + 末尾 2 字节空终止
     let mut bmp = Vec::with_capacity((password.len() + 1) * 2);
-    for b in password.bytes() {
-        bmp.push(0x00);
-        bmp.push(b);
+    for unit in password.encode_utf16() {
+        bmp.extend_from_slice(&unit.to_be_bytes());
     }
     bmp.push(0x00);
     bmp.push(0x00);
@@ -666,6 +665,8 @@ fn pkcs12_kdf_sha1(
         salt_padded.extend_from_slice(salt);
     }
 
+    salt_padded.truncate(salt_pad_len);
+
     // 3. P = password 重复填充到 block 的整数倍
     let pass_pad_len = if password.is_empty() {
         0
@@ -676,6 +677,8 @@ fn pkcs12_kdf_sha1(
     while pass_padded.len() < pass_pad_len {
         pass_padded.extend_from_slice(password);
     }
+
+    pass_padded.truncate(pass_pad_len);
 
     // 4. I = S || P
     let mut i_data = Vec::with_capacity(salt_pad_len + pass_pad_len);
@@ -853,6 +856,8 @@ fn extract_private_key_from_pkcs8(pk_info_der: &[u8]) -> Option<Vec<u8>> {
 
 /// 解析完整 DER SEQUENCE（含 tag+length）为字段列表。
 fn parse_sequence_fields(data: &[u8]) -> Option<Vec<Any>> {
+    let normalized = crate::ber_to_der::normalize(data)?;
+    let data = normalized.as_slice();
     let any = Any::from_der(data).ok()?;
     if any.tag() != Tag::Sequence {
         return None;

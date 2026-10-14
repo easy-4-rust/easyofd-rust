@@ -776,6 +776,7 @@ dependencies = [
  "thiserror",
  "tiny-skia",
  "ttf-parser 0.25.1",
+ "zip",
 ]
 
 [[package]]
@@ -908,9 +909,11 @@ dependencies = [
  "easyofd-gm",
  "easyofd-package",
  "easyofd-writer",
+ "hmac 0.12.1",
  "pem",
  "quick-xml",
  "rand 0.10.2",
+ "sha1",
  "sm2",
  "sm3",
  "thiserror",

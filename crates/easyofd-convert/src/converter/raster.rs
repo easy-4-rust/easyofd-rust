@@ -112,6 +112,153 @@ impl RasterRenderer {
         canvas
     }
 
+    /// 以转换元数据渲染页面；字体/字形错误返回明确错误。
+    /// 参数为页面和对应的文字绘制数据，返回RGBA图像。
+    pub(crate) fn render_page_with_text_runs(
+        &self,
+        page: &OfdPage,
+        runs: &[easyofd_reader::TextRenderRun],
+    ) -> easyofd_core::OfdResult<RgbaImage> {
+        let w = self.mm_to_px(page.width).round().max(1.) as u32;
+        let h = self.mm_to_px(page.height).round().max(1.) as u32;
+        let bg = Rgba([
+            ((self.background_color >> 16) & 255) as u8,
+            ((self.background_color >> 8) & 255) as u8,
+            (self.background_color & 255) as u8,
+            255,
+        ]);
+        let mut canvas = RgbaImage::from_pixel(w, h, bg);
+        for (i, obj) in page.content.iter().enumerate() {
+            match obj {
+                ContentObject::Text(text) => {
+                    if let Some(run) = runs
+                        .iter()
+                        .find(|r| r.content_index == i && !r.uses_legacy_model())
+                    {
+                        self.render_text_run(&mut canvas, run)?;
+                    } else {
+                        self.render_text(&mut canvas, text);
+                    }
+                }
+                ContentObject::Path(path) => self.render_path(&mut canvas, path, h),
+                ContentObject::Image(img) => self.render_image(&mut canvas, img),
+            }
+        }
+        Ok(canvas)
+    }
+
+    fn render_text_run(
+        &self,
+        canvas: &mut RgbaImage,
+        run: &easyofd_reader::TextRenderRun,
+    ) -> easyofd_core::OfdResult<()> {
+        use crate::font::glyph_outline::GlyphOutline;
+        use crate::utils::text_layout::layout_text_run;
+        use easyofd_core::OfdError;
+        let fallback = if run.font_data.is_none() {
+            find_font_data(run.font_name.as_deref().unwrap_or("Helvetica"), false)
+                .or_else(find_system_font)
+        } else {
+            None
+        };
+        let data = run
+            .font_data
+            .as_deref()
+            .or(fallback.as_deref())
+            .ok_or_else(|| OfdError::Conversion("没有可用字体".into()))?;
+        let face = ttf_parser::Face::parse(data, 0)
+            .map_err(|_| OfdError::Conversion("字体无效".into()))?;
+        let size = run.text.size.unwrap_or(12. * 25.4 / 72.);
+        if !size.is_finite() || size <= 0. {
+            return Err(OfdError::Conversion("字号无效".into()));
+        }
+        let advances: Vec<f64> = run
+            .text
+            .text_codes
+            .iter()
+            .flat_map(|c| c.content.chars())
+            .map(|c| {
+                face.glyph_index(c)
+                    .and_then(|id| face.glyph_hor_advance(id))
+                    .map_or(size * 0.5, |a| {
+                        f64::from(a) / f64::from(face.units_per_em()) * size
+                    })
+            })
+            .collect();
+        let positions = layout_text_run(run, &advances)?;
+        let mut pixmap = Pixmap::new(canvas.width(), canvas.height())
+            .ok_or_else(|| OfdError::Conversion("画布过大".into()))?;
+        let units = size / f64::from(face.units_per_em());
+        let px = self.dpi / 25.4;
+        for p in positions {
+            let id = if let Some(id) = p.glyph_id {
+                if id >= u32::from(face.number_of_glyphs()) {
+                    return Err(OfdError::Conversion("glyph越界".into()));
+                }
+                ttf_parser::GlyphId(id as u16)
+            } else {
+                face.glyph_index(p.character)
+                    .ok_or_else(|| OfdError::Conversion(format!("字体缺少字形: {}", p.character)))?
+            };
+            let glyph = GlyphOutline::load(&face, id);
+            let Some(path) = glyph.path else {
+                continue;
+            };
+            let m = p.linear_ctm;
+            let tr = Transform::from_row(
+                (m[0] * units * px) as f32,
+                (m[1] * units * px) as f32,
+                (-m[2] * units * px) as f32,
+                (-m[3] * units * px) as f32,
+                (p.origin_mm[0] * px) as f32,
+                (p.origin_mm[1] * px) as f32,
+            );
+            let mut paint = Paint {
+                anti_alias: true,
+                ..Paint::default()
+            };
+            if run.text.fill {
+                paint.set_color(u32_to_premultiplied_rgba(
+                    run.text.fill_color.unwrap_or(0),
+                    255,
+                ));
+                pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, tr, None);
+            }
+            if run.text.stroke && run.line_width_mm > 0. {
+                paint.set_color(u32_to_premultiplied_rgba(
+                    run.text.stroke_color.unwrap_or(0),
+                    255,
+                ));
+                pixmap.stroke_path(
+                    &path,
+                    &paint,
+                    &Stroke {
+                        width: (run.line_width_mm / units) as f32,
+                        ..Stroke::default()
+                    },
+                    tr,
+                    None,
+                );
+            }
+        }
+        for (i, src) in pixmap.pixels().iter().enumerate() {
+            if src.alpha() == 0 {
+                continue;
+            }
+            let c = src.demultiply();
+            let dst: &mut [u8] = canvas.as_mut();
+            let base = i * 4;
+            let alpha = f64::from(c.alpha()) / 255.;
+            dst[base] = (f64::from(c.red()) * alpha + f64::from(dst[base]) * (1. - alpha)) as u8;
+            dst[base + 1] =
+                (f64::from(c.green()) * alpha + f64::from(dst[base + 1]) * (1. - alpha)) as u8;
+            dst[base + 2] =
+                (f64::from(c.blue()) * alpha + f64::from(dst[base + 2]) * (1. - alpha)) as u8;
+            dst[base + 3] = 255;
+        }
+        Ok(())
+    }
+
     // ─── 文本渲染 ──────────────────────────────────────────────────────────
 
     /// 渲染文本对象到画布。

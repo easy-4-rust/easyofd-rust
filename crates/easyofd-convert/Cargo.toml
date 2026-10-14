@@ -23,3 +23,6 @@ tiny-skia = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+zip = { workspace = true }

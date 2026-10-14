@@ -97,3 +97,7 @@ __pycache__/
 ### OF-B 样本生成（ofdrw 浅克隆，含测试用 p12/密钥，禁止入库）###
 .ofdrw-gen/
 .mimosa/
+
+# Auditable upstream fixture manifests are tracked despite the global JSON rule.
+!tests/fixtures/upstream_20261014/manifest.json
+!tests/fixtures/bc185/manifest.json

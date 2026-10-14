@@ -28,6 +28,7 @@ pub use ses_v5_container::SesV5Container;
 pub(crate) const SM2_SM3_OID_STR: &str = "1.2.156.10197.1.501";
 
 /// SM2WithSM3 OID 弧段。
+#[cfg(test)]
 pub(crate) const SM2_SM3_OID_ARCS: &[u32] = &[1, 2, 156, 10_197, 1, 501];
 
 /// SM3WithSM2 签名的默认用户 ID。

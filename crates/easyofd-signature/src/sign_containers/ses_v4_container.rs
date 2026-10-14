@@ -9,12 +9,10 @@
 //! 4. 构建 SES_Signature{toSign=TBS_Sign, cert, signatureAlgorithm, signature}
 //! 5. 返回 SES_Signature DER
 
-use super::{
-    ExtendSignatureContainer, SM2_SM3_OID_ARCS, SM2_SM3_OID_STR, SigType, generalized_time_now,
-    sm2_sign_with_sm3,
-};
+#[cfg(test)]
+use super::SM2_SM3_OID_ARCS;
+use super::{ExtendSignatureContainer, SM2_SM3_OID_STR, SigType};
 use crate::errors::SignError;
-use crate::internal_helpers::compute_sm3;
 
 /// SES V4 签名容器。
 ///
@@ -57,36 +55,15 @@ impl ExtendSignatureContainer for SesV4Container {
     ///
     /// 对应 Java: `org.ofdrw.sign.signContainer.SESV4Container#sign`
     fn sign(&self, in_data: &[u8], property_info: &str) -> Result<Vec<u8>, SignError> {
-        // 1. SM3 摘要 Signature.xml 原文
-        let data_hash = compute_sm3(in_data);
-
-        // 2. 解码印章 DER
-        let seal = easyofd_gm::ses::v4::SESeal::decode_der(&self.seal_der)
-            .map_err(|e| SignError::Decode(format!("V4 印章 DER 解码失败: {e}")))?;
-
-        // 3. 构建 TBS_Sign
-        let tbs = easyofd_gm::ses::v4::TBSSign {
-            version: 4,
-            seal,
-            time_info: generalized_time_now(),
-            data_hash: data_hash.to_vec(),
-            property_info: property_info.to_string(),
-        };
-        let tbs_der = tbs.encode_der();
-
-        // 4. SM3WithSM2 签名 TBS_Sign DER
-        let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der)?;
-
-        // 5. 构建 SES_Signature（to_sign 保存完整 TBS_Sign）
-        let ses_sig = easyofd_gm::ses::v4::SESSignature {
-            to_sign: tbs,
-            cert: self.cert_der.clone(),
-            signature_algorithm: SM2_SM3_OID_ARCS.to_vec(),
-            sign_data: sig_val,
-        };
-
-        // 6. 返回 SES_Signature DER
-        Ok(ses_sig.encode_der())
+        crate::ses_signing::sign(
+            4,
+            &self.secret_key,
+            &self.seal_der,
+            &self.cert_der,
+            in_data,
+            property_info,
+            None,
+        )
     }
 
     fn seal(&self) -> Option<Vec<u8>> {

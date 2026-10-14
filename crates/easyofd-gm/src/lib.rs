@@ -23,6 +23,7 @@ pub fn module_name() -> &'static str {
     "easyofd-gm"
 }
 
+mod ber_to_der;
 /// 证书解析工具（对应 Java: org.ofdrw.gm.cert.CertTools）。
 pub mod cert_tools;
 /// PEM 编解码工具（对应 Java: org.ofdrw.gm.cert.PEMLoader）。

@@ -55,3 +55,5 @@ pub use type1_seg_split_parser::{Type1Seg, Type1SegSplitParser, Type1SegType};
 ///
 /// 复用 [`easyofd_font::ttf_data_stream::TtfDataStream`]，此别名保持 Java 名称兼容。
 pub use ttf_data_stream_alias::TTFDataStream;
+
+pub(crate) mod glyph_outline;

@@ -25,5 +25,8 @@ quick-xml = { workspace = true }
 [dev-dependencies]
 easyofd-writer = { workspace = true }
 
+sha1 = "0.10"
+hmac = "0.12"
+
 [lints]
 workspace = true

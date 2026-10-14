@@ -35,7 +35,9 @@ pub mod html;
 pub mod image;
 mod image_convert_format;
 pub mod importer;
+mod pdf_text_renderer;
 pub mod point;
+mod svg_text_renderer;
 pub mod utils;
 
 pub use convert_helper::ConvertHelper;
@@ -643,10 +645,24 @@ pub fn ofd_to_pdf(
         let page = &pages[page_idx];
         let height_mm = page.height;
 
-        for content in &page.content {
+        for (content_index, content) in page.content.iter().enumerate() {
             match content {
                 ContentObject::Text(text) => {
-                    render_text_to_pdf(&current_layer, text, height_mm, &font_cache);
+                    if let Some(run) = reader
+                        .text_render_runs(page_idx)?
+                        .iter()
+                        .find(|r| r.content_index == content_index && !r.uses_legacy_model())
+                    {
+                        let fallback = font_cache.get(text).unwrap_or_else(|| {
+                            font_cache
+                                .cjk_font
+                                .as_ref()
+                                .unwrap_or(&font_cache.helvetica)
+                        });
+                        pdf_text_renderer::render(&doc, &current_layer, run, fallback, height_mm)?;
+                    } else {
+                        render_text_to_pdf(&current_layer, text, height_mm, &font_cache);
+                    }
                 }
                 ContentObject::Image(img) => {
                     render_image_to_pdf(&current_layer, img, height_mm);

@@ -13,6 +13,7 @@ use crate::read_options::ReadOptions;
 
 /// OFD 文档读取器。
 pub struct OfdReader {
+    text_runs: Vec<OfdResult<Vec<crate::TextRenderRun>>>,
     pages: Vec<OfdPage>,
     metadata: OfdMetadata,
     /// 原始 ZIP 中不由写入器重新生成的条目（模板页、注释、附件、
@@ -63,17 +64,20 @@ impl OfdReader {
     /// ZIP 包或 XML 无效时返回错误。
     pub fn from_seek<R: Read + Seek>(source: R, options: ReadOptions) -> OfdResult<Self> {
         let mut pages = Vec::new();
+        let mut text_runs = Vec::new();
         let mut raw_entries = Vec::new();
         let (metadata, raw_ofd_xml, raw_document_xml) = visit_archive(
             source,
             options,
-            |_, page| {
+            |_, page, runs| {
+                text_runs.push(runs);
                 pages.push(page);
                 Ok(())
             },
             &mut raw_entries,
         )?;
         Ok(Self {
+            text_runs,
             pages,
             metadata,
             raw_entries,
@@ -99,13 +103,22 @@ impl OfdReader {
         let _ = visit_archive(
             File::open(path)?,
             options,
-            |page_number, page| {
+            |page_number, page, _| {
                 count += 1;
                 visitor(page_number, page)
             },
             &mut raw_entries,
         )?;
         Ok(count)
+    }
+
+    /// 获取指定零基页面的绘制文字数据，返回索引越界错误。
+    pub fn text_render_runs(&self, page_index: usize) -> OfdResult<&[crate::TextRenderRun]> {
+        match self.text_runs.get(page_index) {
+            Some(Ok(runs)) => Ok(runs),
+            Some(Err(error)) => Err(OfdError::Xml(error.to_string())),
+            None => Err(OfdError::Xml("页面索引越界".into())),
+        }
     }
 
     /// 文档页数。
@@ -172,7 +185,7 @@ impl OfdReader {
 fn visit_archive<R: Read + Seek>(
     source: R,
     options: ReadOptions,
-    mut visitor: impl FnMut(usize, OfdPage) -> OfdResult<()>,
+    mut visitor: impl FnMut(usize, OfdPage, OfdResult<Vec<crate::TextRenderRun>>) -> OfdResult<()>,
     raw_entries: &mut Vec<(String, Vec<u8>)>,
 ) -> OfdResult<(OfdMetadata, Option<String>, Option<String>)> {
     let mut archive = zip::ZipArchive::new(source).map_err(|e| OfdError::Zip(e.to_string()))?;
@@ -216,7 +229,20 @@ fn visit_archive<R: Read + Seek>(
         }
         let page_path = doc_path(doc_dir, page_loc);
         let page = parse_page_entry(&mut archive, &page_path, doc_dir, &resources)?;
-        visitor(page_number, page)?;
+        let bytes = crate::parser::read_zip_entry(&mut archive, &page_path)?;
+        let root = easyofd_core::parse_xml_to_nodes(
+            std::str::from_utf8(&bytes).map_err(|e| OfdError::Xml(e.to_string()))?,
+        )
+        .map_err(OfdError::Xml)?;
+        let runs = crate::text_render_parser::parse_runs(
+            &mut archive,
+            doc_dir,
+            &document_entry.raw_xml,
+            &page_path,
+            &root,
+            &resources.keys().cloned().collect(),
+        );
+        visitor(page_number, page, runs)?;
     }
     // Parse date strings into NaiveDateTime if present.  Accepts ISO formats
     // ("2024-05-31", "2024-05-31T00:00:00") and PDF-style dates

@@ -89,7 +89,9 @@ impl Exporter for ImageExporter {
 
         for page_idx in range {
             let page = &pages[page_idx];
-            let rgba_image = self.renderer.render_page(page);
+            let rgba_image = self
+                .renderer
+                .render_page_with_text_runs(page, reader.text_render_runs(page_idx)?)?;
 
             // 编码为 PNG
             let png_data = encode_to_png(&rgba_image)?;
