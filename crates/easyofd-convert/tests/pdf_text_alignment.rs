@@ -230,3 +230,93 @@ fn cgtransform_glyph_is_embedded_and_preserves_unicode_text() {
     std::fs::remove_file(ofd).unwrap();
     std::fs::remove_file(pdf_path).unwrap();
 }
+
+#[test]
+fn mixed_legacy_and_embedded_text_restores_explicit_font() {
+    use std::io::{Cursor, Read, Write};
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/upstream_20261014/stroke_true.ofd");
+    let mut archive = zip::ZipArchive::new(Cursor::new(std::fs::read(source).unwrap())).unwrap();
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).unwrap();
+        let name = file.name().to_string();
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes).unwrap();
+        if name.ends_with("P.xml") {
+            let before = "<TextObject ID=\"90\" Boundary=\"5 5 30 10\" Font=\"missing-restoration-font\" Size=\"12\"><TextCode>before</TextCode></TextObject>";
+            let after = "<TextObject ID=\"91\" Boundary=\"5 90 30 10\" Font=\"missing-restoration-font\" Size=\"12\"><TextCode>abc</TextCode></TextObject>";
+            bytes = String::from_utf8(bytes)
+                .unwrap()
+                .replace("<Layer ID=\"3\">", &format!("<Layer ID=\"3\">{before}"))
+                .replace("</Layer>", &format!("{after}</Layer>"))
+                .into_bytes();
+        }
+        out.start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        out.write_all(&bytes).unwrap();
+    }
+    let data = out.finish().unwrap().into_inner();
+    let reader = easyofd_reader::OfdReader::from_bytes(&data).unwrap();
+    let runs = reader.text_render_runs(0).unwrap();
+    assert_eq!(
+        runs.iter()
+            .map(easyofd_reader::TextRenderRun::uses_legacy_model)
+            .collect::<Vec<_>>(),
+        vec![true, false, true]
+    );
+    let ofd = std::env::temp_dir().join(format!("easyofd-q-restore-{}.ofd", std::process::id()));
+    let target = ofd.with_extension("pdf");
+    std::fs::write(&ofd, data).unwrap();
+    ofd_to_pdf(&ofd, &target, &ConvertOptions::default()).unwrap();
+    let pdf = lopdf::Document::load(&target).unwrap();
+    let id = pdf.get_pages()[&1];
+    let fonts = pdf.get_page_fonts(id).unwrap();
+    let content = lopdf::content::Content::decode(&pdf.get_page_content(id)).unwrap();
+    let restored = content
+        .operations
+        .iter()
+        .position(|op| op.operator == "Q")
+        .unwrap();
+    let first_font = content
+        .operations
+        .iter()
+        .find(|op| op.operator == "Tf")
+        .unwrap()
+        .operands[0]
+        .as_name()
+        .unwrap();
+    let last_text = content.operations[restored + 1..]
+        .iter()
+        .position(|op| op.operator == "Tj")
+        .unwrap()
+        + restored
+        + 1;
+    let font = content.operations[restored + 1..last_text]
+        .iter()
+        .find(|op| op.operator == "Tf")
+        .expect("legacy text after embedded q/Q must explicitly reselect its font")
+        .operands[0]
+        .as_name()
+        .unwrap();
+    assert_eq!(font, first_font);
+    assert!(fonts.contains_key(font));
+    let encoding = fonts[font].get_font_encoding(&pdf).unwrap();
+    let mut text = String::new();
+    encoding
+        .write_to_string(
+            content.operations[last_text].operands[0].as_str().unwrap(),
+            &mut text,
+        )
+        .unwrap();
+    assert_eq!(text, "abc");
+    if let Some(dir) = std::env::var_os("EASYOFD_PDF_REVIEW_DIR") {
+        std::fs::copy(
+            &target,
+            std::path::Path::new(&dir).join("q-restore-ofd.pdf"),
+        )
+        .unwrap();
+    }
+    std::fs::remove_file(ofd).unwrap();
+    std::fs::remove_file(target).unwrap();
+}

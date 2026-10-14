@@ -170,14 +170,15 @@ fn defer_font_operations(document: &mut printpdf::PdfDocument) {
                     page.ops.push(Op::ShowText { items });
                 }
                 Op::SaveGraphicsState => {
-                    stack.push((current.clone(), emitted.clone()));
+                    stack.push(current.clone());
                     page.ops.push(Op::SaveGraphicsState);
                 }
                 Op::RestoreGraphicsState => {
-                    if let Some((saved_current, saved_emitted)) = stack.pop() {
+                    if let Some(saved_current) = stack.pop() {
                         current = saved_current;
-                        emitted = saved_emitted;
                     }
+                    // PDF 阅读器恢复 q/Q 的字体，但 printpdf 的编码器不恢复；下一次输出必须同步 Tf。
+                    emitted = None;
                     page.ops.push(Op::RestoreGraphicsState);
                 }
                 other => page.ops.push(other),
@@ -660,6 +661,94 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// 按 PDF q/Q 真正恢复字体状态，验证输出编码与阅读器状态一致。
+    fn assert_font_after_restore(external: bool) {
+        let data = fixture_font();
+        let (doc, page, layer) = PdfDocument::create("font restore", Mm(100.), Mm(100.), "Layer");
+        let first = if external {
+            doc.add_external_font(Cursor::new(data.clone())).unwrap()
+        } else {
+            super::PdfDocumentReference::add_builtin_font(BuiltinFont::Helvetica).unwrap()
+        };
+        let embedded = doc.add_external_font(Cursor::new(data)).unwrap();
+        let layer = doc.get_page(page).get_layer(layer);
+        layer.use_text("before", 12., Mm(10.), Mm(80.), &first);
+        layer.save_graphics_state();
+        layer.use_text("embedded", 12., Mm(10.), Mm(60.), &embedded);
+        layer.restore_graphics_state();
+        layer.use_text("abc", 12., Mm(10.), Mm(40.), &first);
+        let mut bytes = Vec::new();
+        doc.save(&mut bytes).unwrap();
+        let pdf = lopdf::Document::load_mem(&bytes).unwrap();
+        let id = pdf.get_pages()[&1];
+        let fonts = pdf.get_page_fonts(id).unwrap();
+        let content = lopdf::content::Content::decode(&pdf.get_page_content(id)).unwrap();
+        let mut active = None;
+        let mut stack = Vec::new();
+        let mut text = String::new();
+        for operation in &content.operations {
+            match operation.operator.as_str() {
+                "Tf" => {
+                    let name = operation.operands[0].as_name().unwrap().to_vec();
+                    assert!(fonts.contains_key(&name));
+                    active = Some(name);
+                }
+                "q" => stack.push(active.clone()),
+                "Q" => active = stack.pop().unwrap(),
+                "Tj" => {
+                    let encoding = fonts[active.as_ref().unwrap()]
+                        .get_font_encoding(&pdf)
+                        .unwrap();
+                    encoding
+                        .write_to_string(operation.operands[0].as_str().unwrap(), &mut text)
+                        .unwrap();
+                }
+                "ET" => text.push('\n'),
+                _ => {}
+            }
+        }
+        assert_eq!(
+            text, "before\nembedded\nabc\n",
+            "PDF viewer font restoration must agree with the glyph encoder"
+        );
+        let restored = content
+            .operations
+            .iter()
+            .position(|operation| operation.operator == "Q")
+            .unwrap();
+        let next_text = content.operations[restored + 1..]
+            .iter()
+            .position(|operation| operation.operator == "Tj")
+            .unwrap()
+            + restored
+            + 1;
+        let font = content.operations[restored + 1..next_text]
+            .iter()
+            .find(|operation| operation.operator == "Tf")
+            .expect("explicit Tf after Q must synchronize the serializer");
+        assert_eq!(
+            font.operands[0].as_name().unwrap(),
+            first.get_resource_name().as_bytes()
+        );
+        if let Some(dir) = std::env::var_os("EASYOFD_PDF_REVIEW_DIR") {
+            let name = if external {
+                "q-restore-external.pdf"
+            } else {
+                "q-restore-builtin.pdf"
+            };
+            std::fs::write(std::path::Path::new(&dir).join(name), bytes).unwrap();
+        }
+    }
+
+    #[test]
+    fn builtin_font_is_reselected_after_graphics_restore() {
+        assert_font_after_restore(false);
+    }
+    #[test]
+    fn external_font_is_reselected_after_graphics_restore() {
+        assert_font_after_restore(true);
     }
 
     #[test]
