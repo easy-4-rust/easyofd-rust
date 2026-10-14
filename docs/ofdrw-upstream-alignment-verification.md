@@ -1,11 +1,11 @@
 # OFDRW增量对齐实际验证记录
 
-日期：2026-10-14。Rust工作目录在dev，基线commit `12a0381bfa92a3736b84cadda95f4044c94f22e6`。本轮修改尚未提交，因此旧CI不代表本轮源码。
+日期：2026-10-14。Rust工作目录在dev，基线commit `12a0381bfa92a3736b84cadda95f4044c94f22e6`。本轮代码已提交推送；最终CI对应下文实际代码SHA，旧CI不用于本轮验收。
 Java基线 `84e9eb260ba6fd351ecccf08a01a40305d4af635` / 2.4.0 / BC1.85。
 
 ## 当前状态
 
-文字元数据、CTM逐字定位、PDF、SVG/PNG描边、固定基线工具及BC双向互操作已实现并完成本地验证。独立审查发现的三个Important问题已分别红→绿修复。**MSRV1.88及Linux/macOS/Windows三平台CI仍未验证；计划不归档，也不宣称整体门禁完成。**
+文字元数据、CTM逐字定位、PDF、SVG/PNG描边、固定基线工具及BC双向互操作已实现并完成本地验证。独立审查发现的三个Important问题已分别红→绿修复。**Rust1.88及stable的Linux/macOS/Windows六矩阵CI全部通过；两计划已ARCHIVED。**
 
 ## 实现与兼容性
 
@@ -44,7 +44,7 @@ Java基线 `84e9eb260ba6fd351ecccf08a01a40305d4af635` / 2.4.0 / BC1.85。
 2. 嵌入PDF字体缺字被printpdf跳过：真实🦀输入先成功返回导致反例失败，新增glyph覆盖验证后明确返回错误，测试通过。
 3. 反向PFX仅复制且未读取：替换为非空垃圾仍通过的红灯已记录；Rust实际构造PFX、Java加载/口令/密钥对应验证后垃圾拒绝测试通过。
 
-红绿和完整输出在 `.superpowers/sdd/2026-10-14-ofdrw-text-rendering-alignment/` 与 `.superpowers/sdd/2026-10-14-bc185-interoperability/`。实现未提交，不删除这些证据。实际产物位于target/upstream-output、target/upstream-reference、target/bc185。
+红绿和完整输出在 `.superpowers/sdd/2026-10-14-ofdrw-text-rendering-alignment/` 与 `.superpowers/sdd/2026-10-14-bc185-interoperability/`。实现已提交推送；本地红绿日志保留。实际产物位于target/upstream-output、target/upstream-reference、target/bc185。
 
 ## 工程裁决与审查保留边界
 
@@ -58,12 +58,16 @@ Java基线 `84e9eb260ba6fd351ecccf08a01a40305d4af635` / 2.4.0 / BC1.85。
 | Rust反向PFX写出限于公开测试工具 | 证明真实反向结构兼容，不新增生产KeyStore API | 不能用于生产密钥导出；现有Pkcs12Tools完整MAC/证书链校验仍非本次范围 |
 | CGTransform当前1:1映射，复杂多对多显式拒绝 | 不冒充完整复杂塑形引擎 | 此类合法复杂文档仍不能转换，未作完整字体能力声明 |
 | 像素完全一致、复杂字体塑形不验收 | 当前目标是上游修复的可观察行为 | 输出视觉差异的其他来源尚未全面比较 |
-| CI/MSRV门禁保留未完成 | 当前机器Rust1.98.1，不是MSRV1.88；未提交推送本轮改动 | 本地Mac成功不能证明其他平台/编译器兼容 |
+| CI/MSRV必须使用本轮代码 | 本机Rust1.98.1不能代替MSRV证据；最终六矩阵实际通过 | 不代表矩阵以外的平台或编译器验收 |
 
 未发现需延后的Minor代码问题；审查保留的上述边界不通过旧报告或删减验收标准关闭。
 
-## 下一门禁
+## 交付状态
 
-已授权提交/推送；在包含本轮源码的提交上运行仓库CI（stable+Rust1.88.0、Ubuntu/macOS/Windows）；针对本轮SHA核对结果，全部满足才完成任务6 Step4/5并归档。提交前应先整合远端已合并的#36/#37依赖/工作流变化，保护当前改动。
+代码已提交推送，远端已整合#36/#37。两计划完成并ARCHIVED；本次不发布版本。归档记录为纯文档提交，使用`[skip ci]`避免重复运行未改变的源码测试；其源码、夹具、脚本、Cargo和工作流与下述已通过CI的代码提交完全一致。
 
-CI首轮 `dc8ee27`：Rust1.88三平台均通过，stable测试通过后被Rust1.99新增`assert_is_empty`风格检查阻断。CI仅显式豁免该断言显示风格检查，其余`-D warnings`保留；不批量重写历史测试。该豁免不证明断言诊断显示质量，本轮重新运行CI。
+CI首轮 `dc8ee27`：Rust1.88三平台均通过，stable测试通过后被Rust1.99新增`assert_is_empty`风格检查阻断。CI仅显式豁免该断言显示风格检查，其余`-D warnings`保留；不批量重写历史测试。该豁免不证明断言诊断显示质量，重新运行的CI已全部通过。
+
+最终代码提交：`65b21bf14ebaa55956addfbd9097f12a12872227`。[CI](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38510929976)：8/8 jobs成功（6平台/工具链矩阵、格式、bench）；[Coverage](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38510929917)：成功。整合远端依赖后的本地完整测试仍为2878通过/0失败/17忽略。
+
+补充裁决：CI仅豁免`assert_is_empty`风格建议，保留其他`-D warnings`；代价是断言失败的显示风格不由该lint验收。归档只改文档并跳过重复CI，代码验收对应上述SHA；代价是归档commit本身没有独立重跑源码测试，靠非文档tree一致性核验。

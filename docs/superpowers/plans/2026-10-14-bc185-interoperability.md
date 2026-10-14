@@ -1,6 +1,6 @@
 # BC 1.85 双向互操作验证 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 判定 OFDRW 的 BC 1.84→1.85 升级是否要求修正 Rust 密码学行为，并保存双向证据。
 
@@ -10,7 +10,7 @@
 
 **Spec:** [2026-10-14-ofdrw-upstream-alignment.md](../specs/2026-10-14-ofdrw-upstream-alignment.md)，R6–R7。
 
-状态：两任务与发现后的最小修复在本地完成。实际Java1.85与Rust双向验签/PFX验证通过；未提交推送，整体变更仍待CI/MSRV门禁，不归档。
+状态：ARCHIVED；两任务及最小修复完成。Java1.85/Rust双向验证、本地回归及代码`65b21bf14ebaa55956addfbd9097f12a12872227`六矩阵CI通过，已提交推送。
 
 ## Global Constraints
 
@@ -66,3 +66,5 @@
 - [x] 验证容器对真实签章和消息/签名篡改运行红灯，再分别接入版本、摘要、证书、公钥与密码验签。
 - [x] Rust→Java实测raw/DER编码差异的失败，再改SES签章输出DER，同时验证旧raw编码在Rust读取端仍兼容。
 - [x] 三版本双向实际验签、篡改/坏DER/错误ID等反例全部通过；不得用结构解析或空验证充数。
+
+整体门禁：[CI通过](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38510929976)，Coverage通过。证书信任、吊销与生产KeyStore完整MAC校验仍为已声明的非目标。

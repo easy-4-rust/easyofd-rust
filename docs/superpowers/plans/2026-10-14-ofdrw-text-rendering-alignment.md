@@ -10,7 +10,7 @@
 
 **Spec:** [2026-10-14-ofdrw-upstream-alignment.md](../specs/2026-10-14-ofdrw-upstream-alignment.md)。
 
-状态：任务1–5本地实现/验证完成；任务6的本地步骤完成，MSRV1.88及三平台CI门禁待执行。用户已授权在当前dev实施；未授权提交/推送，未归档。
+状态：ARCHIVED；任务1–6全部完成。已授权当前dev实施与提交/推送；代码提交`65b21bf14ebaa55956addfbd9097f12a12872227`的六矩阵CI、格式与bench通过。
 
 ## Global Constraints
 
@@ -105,11 +105,13 @@ GlyphPosition 约定字段：`character: char`、`glyph_id: Option<u32>`、`orig
 - [x] Step 1：编写脚本基线契约检查（受控Git夹具），验证SHA不符、字体缺失、生成失败均非零退出，外部目录不被修改；汇总描边8项与两种坐标场景及R5附加场景清单。
 - [x] Step 2：运行契约检查，记录固定基线支持缺失的失败；确认该脚本与此前 .ofdrw-clone 默认路径不混淆。
 - [x] Step 3：实现基线参数与生成流程，使用上游两测试类的构造逻辑和固定嵌入字体；仅在明确生成命令中产出样本，CI无JDK的普通测试仍可用已存夹具。
-- [ ] Step 4：执行 `cargo test --workspace`、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`，以及 `cargo test -p easyofd --test roundtrip_diff`；记录MSRV/三平台项目CI和新实际输出回归结果。已有stable Clippy问题单独定位，不能用旧绿记录覆盖。
-- [ ] Step 5：对照R1–R6检查全部证据、红绿链和公开兼容性，更新本计划与索引；任一输出/平台门禁缺失则保持待验证，不归档。
+- [x] Step 4：执行 `cargo test --workspace`、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`，以及 `cargo test -p easyofd --test roundtrip_diff`；记录MSRV/三平台项目CI和新实际输出回归结果。已有stable Clippy问题单独定位，不能用旧绿记录覆盖。
+- [x] Step 5：对照R1–R6检查全部证据、红绿链和公开兼容性，更新本计划与索引；任一输出/平台门禁缺失则保持待验证，不归档。
 
 ## 完成记录
 
-实际证据见 [2026-10-14验证报告](../../ofdrw-upstream-alignment-verification.md)。本地workspace测试、fmt、clippy、roundtrip已执行；固定Java源码构建和9个上游真实测试方法、PNG/SVG输出对比、实际PDF输出均已有记录。任务6 Step4/5保持未完成：跨平台CI和MSRV1.88尚未执行，不以本地Mac结果代替。
+实际证据见 [2026-10-14验证报告](../../ofdrw-upstream-alignment-verification.md)。本地workspace测试、fmt、clippy、roundtrip已执行；固定Java源码构建和9个上游真实测试方法、PNG/SVG输出对比、实际PDF输出均已有记录。任务6 Step4/5已完成：跨平台CI和MSRV1.88实际通过，不以本地Mac结果代替。
 
 执行裁决：通过新增font_name/font_data旁路字段连接嵌入字体；文字元数据错误只在转换接口请求时报告，保持原始读取/roundtrip兼容；旧简化writer的pt字号路径保留；CGTransform当前支持1:1显式glyph映射，非1:1映射明确报错，复杂塑形不作完成声明。
+
+最终门禁：[CI六矩阵全部通过](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38510929976)，对应代码`65b21bf14ebaa55956addfbd9097f12a12872227`。CI中显式豁免Rust1.99新增的assert_is_empty断言显示风格建议，其他warning仍为门禁。归档不扩大复杂字体塑形/证书信任的范围。

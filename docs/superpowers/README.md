@@ -4,12 +4,12 @@
 
 ## 当前增量任务（2026-10-14）
 
-依据 OFDRW `7459e350` → `84e9eb26` 的净差异补充任务；Java 项目版本仍为 2.4.0。已按用户追加授权实施并完成本地验证；跨平台CI与MSRV1.88仍待验证，未归档。不覆盖下方历史验收记录。
+依据 OFDRW `7459e350` → `84e9eb26` 的净差异补充任务；Java 项目版本仍为 2.4.0。已按用户追加授权实施并完成本地验证；跨平台CI与MSRV1.88已通过，两计划ARCHIVED。不覆盖下方历史验收记录。
 
 | 计划 | 范围 | 状态 |
 |---|---|---|
-| [ofdrw-text-rendering-alignment](plans/2026-10-14-ofdrw-text-rendering-alignment.md) | 绘制元数据、CTM逐字定位、PDF、SVG/PNG描边、固定上游回归；6任务/30步骤 | 本地28/30；Step4/5待CI/MSRV |
-| [bc185-interoperability](plans/2026-10-14-bc185-interoperability.md) | BC1.85双向签章/PKCS#12互操作；2任务/10步骤 | 本地两任务及追加修复完成；整体CI门禁仍开放 |
+| [ofdrw-text-rendering-alignment](plans/2026-10-14-ofdrw-text-rendering-alignment.md) | 绘制元数据、CTM逐字定位、PDF、SVG/PNG描边、固定上游回归；6任务/30步骤 | ARCHIVED；30/30完成，六矩阵CI通过 |
+| [bc185-interoperability](plans/2026-10-14-bc185-interoperability.md) | BC1.85双向签章/PKCS#12互操作；2任务/10步骤 | ARCHIVED；两任务及追加修复完成，整体CI门禁通过 |
 
 增量规格：[ofdrw-upstream-alignment](specs/2026-10-14-ofdrw-upstream-alignment.md)。执行遵循关联规格与TDD，先核对当前分支和源码，再从未完成任务继续；不得将类型覆盖或旧roundtrip成绩作为新输出行为验收。
 
@@ -46,3 +46,5 @@
 4. 归档：全部任务实测通过后，状态行追加 `ARCHIVED` 并更新本索引
 
 实际验证与边界：[ofdrw-upstream-alignment-verification](../ofdrw-upstream-alignment-verification.md)。
+
+2026-10-14上游对齐两计划已ARCHIVED，六矩阵CI通过；完整证据及验收边界见上述验证报告。
