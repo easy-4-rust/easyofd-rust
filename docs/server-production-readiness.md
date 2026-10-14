@@ -1,5 +1,5 @@
 # 服务端库生产就绪验收
-日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：整体结论重新开放；收尾发现裸SM2/GB35275骨架验证器未验收，原归档判断过早。Task6修复验证前不得判定整体通过；结论以严格入口、隔离预算和下列支持范围为条件，不把旧阶段ARCHIVED视为当前验收。
+日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：验收通过（限定已验证支持范围及服务集成契约），ARCHIVED。收尾遗漏的裸SM2/GB35275骨架已真实修复并完成新SHA完整门禁；不以历史归档或旧CI替代当前证据。
 对应规格：[当前版本生产验收](superpowers/specs/2026-10-14-production-readiness.md)。
 
 ## 已实现安全边界
@@ -32,22 +32,22 @@ Clippy沿用只豁免assert_is_empty显示风格建议的CI规则，其他warnin
 
 | 门禁 | 结果 |
 |---|---|
-| workspace运行测试/行覆盖率≥90% | 运行测试2881通过/1忽略，doctest12通过/16忽略，合计2893通过/17忽略；行覆盖率93.41% |
-| 四个Fuzz目标各100000次 | 本地及当前SHA CI四目标均各100000次通过 |
+| workspace运行测试/行覆盖率≥90% | 运行测试2888通过/1忽略，doctest12通过/16忽略，合计2900通过/17忽略；本地行覆盖率93.37% |
+| 四个Fuzz目标各100000次 | 当前SHA CI四目标均各100000次通过，本地受影响SES目标100000次通过 |
 | audit/deny及上述例外 | 配置门禁通过；未过滤审计明确检出lopdf0.31例外及两个unmaintained提示，无撤回版本 |
 | stable/MSRV1.88三平台CI | 六矩阵及fmt/bench共8 jobs成功 |
 | Coverage CI（强制行覆盖率≥90%） | 通过 |
-| Linux受限进程烟测（2GiB/30s） | 当前SHA通过，4线程28输入/76输出，1927ms |
+| Linux受限进程烟测（2GiB/30s） | 当前SHA通过，4线程28输入/76输出，1932ms |
 
-未执行部署、发布或真实生产流量验收。上表及旧CI链接记录Task1–5的6ba781ab证据；Task6改变源码，不能据此宣称当前源码通过。Task6完整门禁待本轮新SHA验证。
+未执行部署、发布或真实生产流量验收。上表CI证据均对应当前代码9ba5d3f；Task1–6所列工程门禁通过，规格/计划已归档。
 
-独立审查：2 Important/0 Critical，已完成一次红→绿修复，无延期Minor。未过滤audit仍发现printpdf生成依赖的lopdf0.31旧解析漏洞；上述可达性裁决是范围限定风险接受，不宣称依赖本身已修复。
+独立审查：主审2 Important，加验签容器限定审查1 Important，合计3 Important/0 Critical；均已红→绿修复，无延期Minor。未过滤audit仍发现printpdf生成依赖的lopdf0.31旧解析漏洞；上述可达性裁决是范围限定风险接受，不宣称依赖本身已修复。
 
 最终本地四线程烟测：28次输入、76个输出，耗时790ms，最大RSS约725MiB（macOS debug、本地公开样本）；该数字不是Linux/生产环境吞吐承诺。
 
 ## 最终提交与CI证据
 
-代码提交：6ba781ab6302c550905dc743603a1c466f80c03b。[ci](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516291667), [coverage](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516291631), [security](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516291623), [fuzz](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516292115)全部success。最后归档提交仅改文档并使用skip ci；非文档tree与上述已验证SHA一致，不冒充归档提交独立重跑CI。
+代码提交：9ba5d3f161563278d96588b5b5dc343887cbad9f。[ci](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38520794442), [coverage](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38520794529), [security](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38520794532), [fuzz](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38520795694)全部success。最后归档提交仅改文档并使用skip ci；非文档tree与上述已验证SHA一致，不冒充归档提交独立重跑CI。
 
 ## 工程裁决与代价
 
@@ -69,6 +69,6 @@ Clippy沿用只豁免assert_is_empty显示风格建议的CI规则，其他warnin
 
 原生verify_signature/verify_signature_multi仅验收已有Rust原生签名布局；容器层Java SES/GB/CMS互操作不代表所有外部OFD封装/C14N流程已端到端支持。OfdValidator目前是容器注册对象，不是完成的通用文档验证入口。cert::verify_chain中的兼容pass-through、crl::ocsp_check和timestamp占位入口不应被服务用作认证判断；本次不将这些功能算作已实现。
 
-Task6红→绿：非空公钥/证书配置接受伪签名、Unicode/奇数HEX panic、合法GB属性签名跨CMS重包装。公开Java fixture正例及篡改/错误pin/重复属性负例通过；签名验证器已纳入SES Fuzz。限定审查1 Important/0 Critical，已修复内容类型绑定缺口。当前整体验收仍等待新SHA完整门禁。
+Task6红→绿：非空公钥/证书配置接受伪签名、Unicode/奇数HEX panic、合法GB属性签名跨CMS重包装。公开Java fixture正例及篡改/错误pin/重复属性负例通过；签名验证器已纳入SES Fuzz。限定审查1 Important/0 Critical，已修复内容类型绑定缺口。新SHA的完整门禁均通过；支持范围按本节及服务集成契约执行。
 
-Task6本地最终：运行测试2888通过/1忽略，doctest12通过/16忽略，合计2900通过/17忽略；行覆盖率93.36710%。Clippy/fmt/diffcheck通过；新增验签路径SES Fuzz100000次通过。当前新提交CI待完成。
+Task6本地最终：运行测试2888通过/1忽略，doctest12通过/16忽略，合计2900通过/17忽略；行覆盖率93.36710%。Clippy/fmt/diffcheck通过；新增验签路径SES Fuzz100000次通过。新SHA CI/Coverage/Security/Fuzz均通过。

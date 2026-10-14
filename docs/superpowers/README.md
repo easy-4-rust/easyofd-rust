@@ -51,4 +51,4 @@
 
 ## 服务端生产验收（2026-10-14）
 
-[生产验收计划](plans/2026-10-14-production-readiness.md)：重新实施；前五任务CI通过，但Task6验证器骨架遗漏待修复，整体归档撤销；事实源为[生产验收规格](specs/2026-10-14-production-readiness.md)，证据与部署约束见[服务端验收](../server-production-readiness.md)。
+[生产验收计划](plans/2026-10-14-production-readiness.md)：ARCHIVED；Task1–6全部完成，代码9ba5d3f的CI/Coverage/Security/Fuzz通过；事实源为[生产验收规格](specs/2026-10-14-production-readiness.md)，证据与部署约束见[服务端验收](../server-production-readiness.md)。
