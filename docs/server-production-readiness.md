@@ -1,5 +1,5 @@
 # 服务端库生产就绪验收
-日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：本地门禁核验中，当前源码CI待验证；不把旧阶段ARCHIVED视为当前验收。
+日期：2026-10-14。用途：服务端OFD读取、转换与密码学验签。当前状态：已确认的服务端库工程生产就绪门禁通过，ARCHIVED；结论以严格入口、隔离预算和下列支持范围为条件，不把旧阶段ARCHIVED视为当前验收。
 对应规格：[当前版本生产验收](superpowers/specs/2026-10-14-production-readiness.md)。
 
 ## 已实现安全边界
@@ -33,14 +33,28 @@ Clippy沿用只豁免assert_is_empty显示风格建议的CI规则，其他warnin
 | 门禁 | 结果 |
 |---|---|
 | workspace运行测试/行覆盖率≥90% | 运行测试2881通过/1忽略，doctest12通过/16忽略，合计2893通过/17忽略；行覆盖率93.41% |
-| 四个Fuzz目标各100000次 | 最终代码本地4×100000次通过，CI复核待执行 |
+| 四个Fuzz目标各100000次 | 本地及当前SHA CI四目标均各100000次通过 |
 | audit/deny及上述例外 | 配置门禁通过；未过滤审计明确检出lopdf0.31例外及两个unmaintained提示，无撤回版本 |
-| stable/MSRV1.88三平台CI | 待当前源码CI |
-| Coverage CI（强制行覆盖率≥90%） | 待当前源码CI |
-| Linux受限进程烟测（2GiB/30s） | 待当前源码CI |
+| stable/MSRV1.88三平台CI | 六矩阵及fmt/bench共8 jobs成功 |
+| Coverage CI（强制行覆盖率≥90%） | 通过 |
+| Linux受限进程烟测（2GiB/30s） | 当前SHA通过，4线程28输入/76输出，1927ms |
 
-未执行部署、发布或真实生产流量验收。归档只在上述门禁有当前源码证据后进行。
+未执行部署、发布或真实生产流量验收。上述工程门禁已具备当前源码证据；本轮计划已归档。
 
 独立审查：2 Important/0 Critical，已完成一次红→绿修复，无延期Minor。未过滤audit仍发现printpdf生成依赖的lopdf0.31旧解析漏洞；上述可达性裁决是范围限定风险接受，不宣称依赖本身已修复。
 
 最终本地四线程烟测：28次输入、76个输出，耗时790ms，最大RSS约725MiB（macOS debug、本地公开样本）；该数字不是Linux/生产环境吞吐承诺。
+
+## 最终提交与CI证据
+
+代码提交：6ba781ab6302c550905dc743603a1c466f80c03b。[ci](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516291667), [coverage](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516291631), [security](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516291623), [fuzz](https://github.com/easy-4-rust/easyofd-rust/actions/runs/38516292115)全部success。最后归档提交仅改文档并使用skip ci；非文档tree与上述已验证SHA一致，不冒充归档提交独立重跑CI。
+
+## 工程裁决与代价
+
+- 用户确认范围为Rust服务端库；正式CA/吊销/印章授权及真实部署/SLA不在本次验收。代价：库验签成功不能用作认证结论。
+- KDF上限选200万以容纳BC真实120万MAC参数。代价：仍需任务限流/超时，不能把迭代上限当总CPU服务预算。
+- 保留旧受信API，生产选择严格接口。代价：误用旧入口不能获得完整性和像素预算保证。
+- 通用PBKDF2内部长度上限64，AES128/SM4调用点限定16。代价：新增算法须更新对应契约并重验收。
+- BC底层核验全部七MAC算法，KeyStore只声明SHA1/SHA256。代价：其余算法未验收完整KeyStore路径。
+- 保留旧lopdf生成依赖不可达例外及两项维护例外。代价：必须持续跟踪，新增旧解析入口会使此裁决失效。
+- 纯文档归档跳过重复CI。代价：文档提交无独立源码重跑，靠非文档tree一致性核验；本地日志保留以供复核。

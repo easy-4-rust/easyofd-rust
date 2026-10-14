@@ -51,4 +51,4 @@
 
 ## 服务端生产验收（2026-10-14）
 
-[生产验收计划](plans/2026-10-14-production-readiness.md)：本地4任务完成，当前源码CI待验证；事实源为[生产验收规格](specs/2026-10-14-production-readiness.md)，证据与部署约束见[服务端验收](../server-production-readiness.md)。
+[生产验收计划](plans/2026-10-14-production-readiness.md)：ARCHIVED；5任务完成，当前源码CI/Coverage/Security/Fuzz通过；事实源为[生产验收规格](specs/2026-10-14-production-readiness.md)，证据与部署约束见[服务端验收](../server-production-readiness.md)。
