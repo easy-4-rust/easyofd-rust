@@ -1,4 +1,5 @@
 //! 实际PDF路径中的逐字定位。
+use crate::pdf_backend as printpdf;
 use crate::utils::text_layout::layout_text_run;
 use easyofd_core::{OfdError, OfdResult};
 use easyofd_reader::TextRenderRun;
@@ -91,7 +92,7 @@ pub(crate) fn render(
             if id >= u32::from(f.number_of_glyphs()) {
                 return Err(failure("glyph索引越界"));
             }
-            layer.write_codepoints([id as u16]);
+            layer.write_glyph(id as u16, g.character);
         } else {
             if let Some(face) = &face {
                 if face.glyph_index(g.character).is_none() {

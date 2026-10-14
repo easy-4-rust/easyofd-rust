@@ -35,6 +35,8 @@ pub mod html;
 pub mod image;
 mod image_convert_format;
 pub mod importer;
+mod pdf_backend;
+use pdf_backend as printpdf;
 mod pdf_text_renderer;
 pub mod point;
 mod svg_text_renderer;
@@ -482,9 +484,9 @@ fn build_font_cache(
     pages: &[OfdPage],
     range: std::ops::Range<usize>,
 ) -> FontCache {
-    let helvetica = doc
-        .add_builtin_font(printpdf::BuiltinFont::Helvetica)
-        .expect("Helvetica 内置字体加载不应失败");
+    let helvetica =
+        printpdf::PdfDocumentReference::add_builtin_font(printpdf::BuiltinFont::Helvetica)
+            .expect("Helvetica 内置字体加载不应失败");
 
     // ── 探测系统 CJK 字体 ──
     let cjk_font = if let Some(info) = cjk_font::find_cjk_font() {
@@ -629,7 +631,7 @@ pub fn ofd_to_pdf(
     }
 
     let first_page = &pages[range.start];
-    let (doc, page_id, layer_id) = printpdf::PdfDocument::new(
+    let (doc, page_id, layer_id) = printpdf::PdfDocument::create(
         "OFD Export",
         printpdf::Mm(first_page.width as f32),
         printpdf::Mm(first_page.height as f32),
@@ -743,8 +745,8 @@ fn render_text_to_pdf(
 
 /// 渲染图片对象到 PDF 层。
 ///
-/// 使用 `image` crate 解码图片（支持 PNG/JPEG/BMP/TIFF），提取原始 RGB8 像素，
-/// 构造 `printpdf::ImageXObject` 并通过 `Image::add_to_layer` 嵌入 PDF。
+/// 使用 `image` crate 解码图片（支持 PNG/JPEG/BMP/TIFF），提取原始 RGBA8 像素，
+/// 通过操作流后端嵌入真实图片及透明度遮罩。
 ///
 /// 坐标换算：OFD 坐标系左上原点，PDF 坐标系左下原点，
 /// `translate_y = page_height - img.y - img.height`。
@@ -754,9 +756,6 @@ fn render_image_to_pdf(
     img: &easyofd_core::ImageObject,
     page_height: f64,
 ) {
-    use printpdf::{ColorBits, ColorSpace, Image, ImageTransform, ImageXObject, Mm, Px};
-
-    // 用 image crate 解码图片数据（自动识别 PNG/JPEG/BMP/TIFF 格式）
     let dyn_img = match image::load_from_memory(&img.data) {
         Ok(d) => d,
         Err(e) => {
@@ -764,45 +763,12 @@ fn render_image_to_pdf(
             return;
         }
     };
-    let rgb_img = dyn_img.to_rgb8();
-    let (w_px, h_px) = rgb_img.dimensions();
-    if w_px == 0 || h_px == 0 {
+    let rgba_img = dyn_img.to_rgba8();
+    let (width, height) = rgba_img.dimensions();
+    if width == 0 || height == 0 {
         return;
     }
-
-    let xobj = ImageXObject {
-        width: Px(w_px as usize),
-        height: Px(h_px as usize),
-        color_space: ColorSpace::Rgb,
-        bits_per_component: ColorBits::Bit8,
-        interpolate: true,
-        image_data: rgb_img.into_raw(),
-        image_filter: None,
-        smask: None,
-        clipping_bbox: None,
-    };
-    let image = Image::from(xobj);
-
-    // 默认 DPI = 300（printpdf 默认），计算 scale 使输出尺寸 = img.width/height mm
-    let dpi: f32 = 300.0;
-    let scale_x = (img.width as f32) * dpi / (w_px as f32 * 25.4);
-    let scale_y = (img.height as f32) * dpi / (h_px as f32 * 25.4);
-
-    // OFD 左上原点 → PDF 左下原点
-    let translate_x = Mm(img.x as f32);
-    let translate_y = Mm((page_height - img.y - img.height) as f32);
-
-    image.add_to_layer(
-        layer.clone(),
-        ImageTransform {
-            translate_x: Some(translate_x),
-            translate_y: Some(translate_y),
-            scale_x: Some(scale_x),
-            scale_y: Some(scale_y),
-            dpi: Some(dpi),
-            ..Default::default()
-        },
-    );
+    layer.add_rgba_image(rgba_img.into_raw(), width, height, img, page_height);
 }
 
 /// 渲染路径对象到 PDF 层。
@@ -828,7 +794,7 @@ fn render_path_to_pdf(
     let b = (stroke_color & 0xFF) as f64 / 255.0;
 
     layer.set_outline_color(Color::Rgb(Rgb::new(r as f32, g as f32, b as f32, None)));
-    layer.set_outline_thickness(path.stroke_width as f32);
+    layer.set_outline_thickness((path.stroke_width * 72. / 25.4) as f32);
 
     // 如果有填充色，设置填充颜色
     if let Some(fill_rgb) = path.fill_color {
@@ -859,10 +825,16 @@ fn render_path_to_pdf(
                 {
                     // 如果已有路径点，先绘制之前的路径
                     if all_points.len() >= 2 {
-                        layer.add_line(Line {
-                            points: std::mem::take(&mut all_points),
-                            is_closed: false,
-                        });
+                        layer.add_path(
+                            Line {
+                                points: std::mem::take(&mut all_points)
+                                    .into_iter()
+                                    .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
+                                    .collect(),
+                                is_closed: false,
+                            },
+                            path.fill_color.is_some(),
+                        );
                     }
                     current_x = x;
                     current_y = y;
@@ -902,10 +874,16 @@ fn render_path_to_pdf(
                         ),
                         false,
                     ));
-                    layer.add_line(Line {
-                        points: std::mem::take(&mut all_points),
-                        is_closed: true,
-                    });
+                    layer.add_path(
+                        Line {
+                            points: std::mem::take(&mut all_points)
+                                .into_iter()
+                                .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
+                                .collect(),
+                            is_closed: true,
+                        },
+                        path.fill_color.is_some(),
+                    );
                     current_x = subpath_start_x;
                     current_y = subpath_start_y;
                 }
@@ -979,10 +957,16 @@ fn render_path_to_pdf(
 
     // 绘制剩余路径
     if all_points.len() >= 2 {
-        layer.add_line(Line {
-            points: all_points,
-            is_closed: false,
-        });
+        layer.add_path(
+            Line {
+                points: all_points
+                    .into_iter()
+                    .map(|(p, bezier)| printpdf::LinePoint { p, bezier })
+                    .collect(),
+                is_closed: false,
+            },
+            path.fill_color.is_some(),
+        );
     }
 }
 
@@ -1597,15 +1581,15 @@ mod tests {
     fn test_render_text_color_in_pdf() {
         // 直接创建 PDF 文档，用 render_text_to_pdf 渲染带颜色的文本，
         // 验证 PDF 内容流中出现正确的颜色操作符。
-        let (doc, page_id, layer_id) = printpdf::PdfDocument::new(
+        let (doc, page_id, layer_id) = printpdf::PdfDocument::create(
             "Color Test",
             printpdf::Mm(210.0),
             printpdf::Mm(297.0),
             "Layer 1",
         );
-        let helvetica = doc
-            .add_builtin_font(printpdf::BuiltinFont::Helvetica)
-            .unwrap();
+        let helvetica =
+            printpdf::PdfDocumentReference::add_builtin_font(printpdf::BuiltinFont::Helvetica)
+                .unwrap();
         let font_cache = FontCache {
             fonts: HashMap::new(),
             helvetica: helvetica.clone(),
@@ -1638,15 +1622,15 @@ mod tests {
     #[test]
     fn test_render_text_default_color_is_black() {
         // 默认颜色 0x000000（黑色）应生成 "0 0 0 rg"
-        let (doc, page_id, layer_id) = printpdf::PdfDocument::new(
+        let (doc, page_id, layer_id) = printpdf::PdfDocument::create(
             "Black Test",
             printpdf::Mm(210.0),
             printpdf::Mm(297.0),
             "Layer 1",
         );
-        let helvetica = doc
-            .add_builtin_font(printpdf::BuiltinFont::Helvetica)
-            .unwrap();
+        let helvetica =
+            printpdf::PdfDocumentReference::add_builtin_font(printpdf::BuiltinFont::Helvetica)
+                .unwrap();
         let font_cache = FontCache {
             fonts: HashMap::new(),
             helvetica: helvetica.clone(),
