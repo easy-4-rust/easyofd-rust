@@ -57,3 +57,7 @@ pub use type1_seg_split_parser::{Type1Seg, Type1SegSplitParser, Type1SegType};
 pub use ttf_data_stream_alias::TTFDataStream;
 
 pub(crate) mod glyph_outline;
+
+pub(crate) mod font_face;
+
+pub(crate) mod glyph_bitmap;

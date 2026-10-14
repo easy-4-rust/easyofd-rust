@@ -2,7 +2,7 @@
 //!
 //! 对应 Java: org.ofdrw.converter.AWTMaker（渲染管线核心）
 //!
-//! 使用 `image` crate 的 `RgbaImage` 作为画布，`fontdue` 渲染文本，
+//! 使用 `image` crate 的 `RgbaImage` 作为画布，Fontations 和 `tiny-skia` 渲染文本，
 //! `tiny-skia` 渲染矢量路径，`image` 解码/缩放/合成图片。
 //!
 //! # 绘制管线
@@ -10,7 +10,7 @@
 //! 1. 按 DPI（默认 96）将 mm 页面尺寸换算为像素
 //! 2. 创建白色背景 `RgbaImage` 画布
 //! 3. 按顺序遍历 `ContentObject`：
-//!    - **文本**：fontdue 光栅化 glyph → 逐像素绘制到画布
+//!    - **文本**：Fontations 轮廓逐字形光栅化 → 逐像素绘制到画布
 //!    - **图片**：image 解码 → resize → alpha 合成到画布
 //!    - **路径**：tiny-skia PathBuilder → Pixmap → 合成到画布
 
@@ -228,7 +228,7 @@ impl RasterRenderer {
             .as_deref()
             .or(fallback.as_deref())
             .ok_or_else(|| OfdError::Conversion("没有可用字体".into()))?;
-        let face = ttf_parser::Face::parse(data, 0)
+        let face = crate::font::font_face::FontFace::parse(data, 0)
             .map_err(|_| OfdError::Conversion("字体无效".into()))?;
         let size = run.text.size.unwrap_or(12. * 25.4 / 72.);
         if !size.is_finite() || size <= 0. {
@@ -257,12 +257,12 @@ impl RasterRenderer {
                 if id >= u32::from(face.number_of_glyphs()) {
                     return Err(OfdError::Conversion("glyph越界".into()));
                 }
-                ttf_parser::GlyphId(id as u16)
+                crate::font::font_face::GlyphId(id as u16)
             } else {
                 face.glyph_index(p.character)
                     .ok_or_else(|| OfdError::Conversion(format!("字体缺少字形: {}", p.character)))?
             };
-            let glyph = GlyphOutline::load(&face, id);
+            let glyph = GlyphOutline::load(&face, id)?;
             let Some(path) = glyph.path else {
                 continue;
             };
@@ -337,12 +337,28 @@ impl RasterRenderer {
             return Ok(());
         }
 
-        let font = match load_font_for_text(text) {
+        let font_data = match load_font_for_text(text) {
             Some(f) => f,
             None => return Ok(()), // 无法加载字体时静默跳过
         };
 
+        let font = crate::font::font_face::FontFace::parse(&font_data, 0)
+            .map_err(|_| easyofd_core::OfdError::Conversion("字体无效".into()))?;
+        self.render_text_with_face(canvas, text, &font)
+    }
+
+    fn render_text_with_face(
+        &self,
+        canvas: &mut RgbaImage,
+        text: &TextObject,
+        font: &crate::font::font_face::FontFace<'_>,
+    ) -> easyofd_core::OfdResult<()> {
         let px_size = self.pt_to_px(text.size) as f32;
+        if !px_size.is_finite() || px_size <= 0. || px_size > 1024. {
+            return Err(easyofd_core::OfdError::Conversion(
+                "文字字号超出安全栅格预算".into(),
+            ));
+        }
         if px_size < 1.0 {
             return Ok(());
         }
@@ -356,51 +372,35 @@ impl RasterRenderer {
         // 逐字符光栅化并绘制
         let mut cursor_x = start_x;
         for ch in text.text.chars() {
-            // 在位图分配前检查实际字形度量；异常字体也不能绕过画布预算。
-            let metrics = font.metrics(ch, px_size);
-            if metrics.width > 4096
-                || metrics.height > 4096
-                || metrics
-                    .width
-                    .checked_mul(metrics.height)
-                    .is_none_or(|area| area > 4_194_304)
-            {
-                return Err(easyofd_core::OfdError::Conversion(
-                    "实际字形位图超出预算".into(),
-                ));
-            }
-            let (metrics, bitmap) = font.rasterize(ch, px_size);
-
-            // 基线偏移：fontdue 的 metrics.height 是 glyph 位图高度，
-            // metrics.ymin 是从基线到位图底部的偏移（负值表示在基线上方）
-            let glyph_top = start_y + px_size + metrics.ymin as f32;
-
-            for row in 0..metrics.height {
-                for col in 0..metrics.width {
-                    let alpha = bitmap[row * metrics.width + col];
-                    if alpha == 0 {
-                        continue;
-                    }
-
-                    let px = cursor_x + col as f32 + metrics.xmin as f32;
-                    let py = glyph_top + row as f32;
-
-                    let px_i = px as i32;
-                    let py_i = py as i32;
-
-                    if px_i >= 0
-                        && py_i >= 0
-                        && (px_i as u32) < canvas_w
-                        && (py_i as u32) < canvas_h
-                    {
-                        let pixel = canvas.get_pixel_mut(px_i as u32, py_i as u32);
-                        blend_pixel(pixel, color, alpha);
+            let glyph = crate::font::glyph_bitmap::GlyphBitmap::rasterize(font, ch, px_size)?;
+            // 保留旧入口 start_y + px_size + floor(ymin) 的字形放置语义。
+            let glyph_top = start_y + px_size + glyph.ymin;
+            if let Some(bitmap) = &glyph.pixels {
+                for row in 0..bitmap.height() {
+                    for col in 0..bitmap.width() {
+                        let alpha = bitmap.pixels()[(row * bitmap.width() + col) as usize].alpha();
+                        if alpha == 0 {
+                            continue;
+                        }
+                        let px_i = (cursor_x + col as f32 + glyph.xmin) as i32;
+                        let py_i = (glyph_top + row as f32) as i32;
+                        if px_i >= 0
+                            && py_i >= 0
+                            && (px_i as u32) < canvas_w
+                            && (py_i as u32) < canvas_h
+                        {
+                            blend_pixel(
+                                canvas.get_pixel_mut(px_i as u32, py_i as u32),
+                                color,
+                                alpha,
+                            );
+                        }
                     }
                 }
             }
 
             // 推进光标（metrics.advance 是水平推进量）
-            cursor_x += metrics.advance_width as f32;
+            cursor_x += glyph.advance;
         }
         Ok(())
     }
@@ -588,28 +588,16 @@ fn blend_pixel(dst: &mut Rgba<u8>, fg_color: Rgba<u8>, glyph_alpha: u8) {
 /// 1. 根据字体名称匹配系统字体路径（含 CJK 字体探测）
 /// 2. 尝试系统通用字体（Helvetica/Arial/DejaVuSans 等）
 /// 3. 全部失败则返回 `None`（该文本段将被静默跳过）
-fn load_font_for_text(text: &TextObject) -> Option<fontdue::Font> {
-    let settings = fontdue::FontSettings {
-        collection_index: 0,
-        scale: 100.0, // 基准缩放，实际渲染时用 rasterize 的 size 参数
-        load_substitutions: false,
+fn load_font_for_text(text: &TextObject) -> Option<Vec<u8>> {
+    // 保留字体名称优先、系统字体回退及集合索引零的选择顺序。
+    let validate = |data: Vec<u8>| {
+        crate::font::font_face::FontFace::parse(&data, 0)
+            .is_ok()
+            .then_some(data)
     };
-
-    // 优先：按字体名称查找
-    if let Some(data) = find_font_data(&text.font, text.weight >= 700)
-        && let Ok(font) = fontdue::Font::from_bytes(data.as_slice(), settings)
-    {
-        return Some(font);
-    }
-
-    // 回退：系统通用字体
-    if let Some(data) = find_system_font()
-        && let Ok(font) = fontdue::Font::from_bytes(data.as_slice(), settings)
-    {
-        return Some(font);
-    }
-
-    None
+    find_font_data(&text.font, text.weight >= 700)
+        .and_then(validate)
+        .or_else(|| find_system_font().and_then(validate))
 }
 
 /// 根据字体名称查找系统字体文件数据。
@@ -989,6 +977,131 @@ fn parse_token(token: &str) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fixture_font_data() -> Vec<u8> {
+        use std::io::Read;
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/upstream_20261014/stroke_true.ofd");
+        let mut archive =
+            zip::ZipArchive::new(std::io::Cursor::new(std::fs::read(source).unwrap())).unwrap();
+        let mut data = Vec::new();
+        archive
+            .by_name("Doc_0/Res/font.ttf")
+            .unwrap()
+            .read_to_end(&mut data)
+            .unwrap();
+        data
+    }
+
+    #[test]
+    fn font_migration_baseline() {
+        let data = fixture_font_data();
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
+        for (ch, gid, xmin, ymin, width, height) in
+            [('A', 102, 0., 0., 8, 12), ('/', 402, 0., -2., 8, 15)]
+        {
+            assert_eq!(face.glyph_index(ch).unwrap().0, gid);
+            assert_eq!(
+                face.glyph_hor_advance(crate::font::font_face::GlyphId(gid)),
+                Some(128.)
+            );
+            let glyph = crate::font::glyph_bitmap::GlyphBitmap::rasterize(&face, ch, 16.).unwrap();
+            assert_eq!((glyph.xmin, glyph.ymin, glyph.advance), (xmin, ymin, 8.));
+            let pixels = glyph.pixels.unwrap();
+            assert_eq!((pixels.width(), pixels.height()), (width, height));
+            assert!(pixels.pixels().iter().any(|p| p.alpha() > 0));
+        }
+        let space = crate::font::glyph_bitmap::GlyphBitmap::rasterize(&face, ' ', 16.).unwrap();
+        assert_eq!(space.advance.to_bits(), 8_f32.to_bits());
+        assert!(space.pixels.is_none());
+        assert!(face.glyph_index('中').is_none());
+        let missing = crate::font::glyph_bitmap::GlyphBitmap::rasterize(&face, '中', 16.).unwrap();
+        assert_eq!(missing.advance.to_bits(), 16_f32.to_bits());
+        assert!(missing.pixels.is_none());
+        assert_eq!(face.units_per_em(), 256);
+        assert_eq!(face.number_of_glyphs(), 1384);
+    }
+
+    #[test]
+    fn glyph_bitmap_rejects_invalid_size_and_actual_large_outline() {
+        let mut data = fixture_font_data();
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
+        for size in [f32::NAN, f32::INFINITY, -1., 0., 1025.] {
+            assert!(crate::font::glyph_bitmap::GlyphBitmap::rasterize(&face, 'A', size).is_err());
+        }
+        // 真实字形坐标不变，缩小head.unitsPerEm使合法字号产生超预算位图。
+        let tables = u16::from_be_bytes(data[4..6].try_into().unwrap());
+        let entry = (0..usize::from(tables))
+            .map(|i| 12 + i * 16)
+            .find(|i| &data[*i..*i + 4] == b"head")
+            .unwrap();
+        let offset = u32::from_be_bytes(data[entry + 8..entry + 12].try_into().unwrap()) as usize;
+        data[offset + 18..offset + 20].copy_from_slice(&16_u16.to_be_bytes());
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
+        let error = crate::font::glyph_bitmap::GlyphBitmap::rasterize(&face, 'A', 1024.)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("实际字形位图超出预算"));
+    }
+
+    #[test]
+    fn legacy_text_keeps_start_position_ymin_and_space_advance() {
+        let data = fixture_font_data();
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
+        let renderer = RasterRenderer::new();
+        let make_text = |content: &str| {
+            let mut text = TextObject::new(10. * 25.4 / 96., 20. * 25.4 / 96., content);
+            text.size = 12.;
+            text
+        };
+        let mut a = RgbaImage::from_pixel(80, 80, Rgba([255; 4]));
+        let mut spaced = a.clone();
+        renderer
+            .render_text_with_face(&mut a, &make_text("A"), &face)
+            .unwrap();
+        renderer
+            .render_text_with_face(&mut spaced, &make_text(" A"), &face)
+            .unwrap();
+        let visible: Vec<_> = a
+            .enumerate_pixels()
+            .filter(|(_, _, p)| p[0] < 255)
+            .map(|(x, y, _)| (x, y))
+            .collect();
+        assert!(!visible.is_empty());
+        assert!(
+            visible
+                .iter()
+                .all(|(x, y)| (10..18).contains(x) && (36..48).contains(y))
+        );
+        for (x, y, pixel) in a.enumerate_pixels() {
+            if x + 8 < spaced.width() {
+                assert_eq!(
+                    pixel,
+                    spaced.get_pixel(x + 8, y),
+                    "space must advance exactly 8px"
+                );
+            }
+        }
+        let mut slash = RgbaImage::from_pixel(80, 80, Rgba([255; 4]));
+        renderer
+            .render_text_with_face(&mut slash, &make_text("/"), &face)
+            .unwrap();
+        let visible: Vec<_> = slash
+            .enumerate_pixels()
+            .filter(|(_, _, p)| p[0] < 255)
+            .map(|(x, y, _)| (x, y))
+            .collect();
+        assert!(!visible.is_empty());
+        assert!(
+            visible
+                .iter()
+                .all(|(x, y)| (10..18).contains(x) && (34..49).contains(y))
+        );
+        assert!(
+            visible.iter().any(|(_, y)| *y < 36),
+            "negative ymin shifts the actual glyph above A"
+        );
+    }
 
     #[test]
     fn test_raster_renderer_new() {

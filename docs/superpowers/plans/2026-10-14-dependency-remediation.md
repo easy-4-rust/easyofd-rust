@@ -17,9 +17,9 @@
 ### Task 1: PDF引擎升级
 **Files:** Cargo.toml/Cargo.lock（控制器）；crates/easyofd-convert/src/lib.rs、pdf_text_renderer.rs及PDF测试（执行者）。
 **Interfaces:** 保持ofd_to_pdf及转换公共入口；内部采用新版printpdf文档/操作流，Task2后续迁移pdf_text_renderer字体解析。
-- [ ] Step 1: 依赖门禁/无配置审计复现RED，保存现有PDF正例行为。
-- [ ] Step 2: printpdf0.12.8及操作API适配，PDF现有回归与新增行为测试GREEN。
-- [ ] Step 3: 任务独立审查，保留功能，提交准确范围。
+- [x] Step 1: 依赖门禁/无配置审计复现RED，保存现有PDF正例行为。
+- [x] Step 2: printpdf0.12.8及操作API适配，PDF现有回归与新增行为测试GREEN。
+- [x] Step 3: 任务独立审查，保留功能，提交准确范围。
 
 ### Task 2: 字体链迁移
 **Files:** font/font_face.rs、glyph_outline.rs、cjk_font.rs、svg_text_renderer.rs、pdf_text_renderer.rs字体调用、converter/raster.rs、font/mod.rs及PDF后端/集成测试字体调用；根/convert依赖（控制器）。

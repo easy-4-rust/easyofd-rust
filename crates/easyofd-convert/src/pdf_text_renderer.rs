@@ -26,7 +26,10 @@ pub(crate) fn render(
     let face = run
         .font_data
         .as_deref()
-        .map(|d| ttf_parser::Face::parse(d, 0).map_err(|e| failure(format!("嵌入字体无效: {e:?}"))))
+        .map(|d| {
+            crate::font::font_face::FontFace::parse(d, 0)
+                .map_err(|e| failure(format!("嵌入字体无效: {e:?}")))
+        })
         .transpose()?;
     let font = if let Some(data) = &run.font_data {
         doc.add_external_font(std::io::Cursor::new(data))

@@ -1,5 +1,6 @@
 //! 实际PDF文字矩阵回归。
 use easyofd_convert::{ConvertOptions, ofd_to_pdf};
+use skrifa::MetadataProvider;
 #[test]
 fn actual_pdf_contains_per_glyph_transformed_origins() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -168,15 +169,30 @@ fn cgtransform_glyph_is_embedded_and_preserves_unicode_text() {
         .unwrap()
         .read_to_end(&mut font_bytes)
         .unwrap();
-    let gid = ttf_parser::Face::parse(&font_bytes, 0)
-        .unwrap()
-        .glyph_index('/')
-        .unwrap()
-        .0;
-    let face = ttf_parser::Face::parse(&font_bytes, 0).unwrap();
-    let advance = f64::from(face.glyph_hor_advance(ttf_parser::GlyphId(gid)).unwrap())
-        / f64::from(face.units_per_em())
-        * 20.;
+    let gid = u16::try_from(
+        skrifa::FontRef::from_index(&font_bytes, 0)
+            .unwrap()
+            .charmap()
+            .map('/')
+            .unwrap()
+            .to_u32(),
+    )
+    .unwrap();
+    let face = skrifa::FontRef::from_index(&font_bytes, 0).unwrap();
+    let advance = f64::from(
+        face.glyph_metrics(
+            skrifa::instance::Size::unscaled(),
+            skrifa::instance::LocationRef::default(),
+        )
+        .advance_width(skrifa::GlyphId::new(u32::from(gid)))
+        .unwrap(),
+    ) / f64::from(
+        face.metrics(
+            skrifa::instance::Size::unscaled(),
+            skrifa::instance::LocationRef::default(),
+        )
+        .units_per_em,
+    ) * 20.;
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();

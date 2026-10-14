@@ -5,7 +5,7 @@
 //!
 //! ## 设计约束
 //!
-//! - **仅读路径**：不依赖 `easyofd` facade（会拉入 `printpdf`/`fontdue`/`tiny-skia` 等
+//! - **仅读路径**：不依赖 `easyofd` facade（会拉入 `printpdf`/`skrifa`/`tiny-skia` 等
 //!   非 WASM 兼容依赖），直接使用 `easyofd-reader` 子 crate。
 //! - **无文件 I/O**：所有 API 接收内存字节（`&[u8]`），适配浏览器 `FileReader` / `ArrayBuffer`。
 //! - **无 tokio**：纯同步计算，不引入异步运行时。

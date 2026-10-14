@@ -372,7 +372,7 @@ mod tests {
     #[test]
     fn explicit_glyph_is_subset_and_unicode_selectable() {
         let data = fixture_font();
-        let face = ttf_parser::Face::parse(&data, 0).unwrap();
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
         let gid = face.glyph_index('/').unwrap().0;
         let (doc, page, layer) = PdfDocument::create("Glyph Unicode", Mm(100.), Mm(100.), "Layer");
         let original_glyphs = face.number_of_glyphs();
@@ -398,7 +398,7 @@ mod tests {
         } else {
             embedded.content.clone()
         };
-        let subset = ttf_parser::Face::parse(&font_bytes, 0).unwrap();
+        let subset = crate::font::font_face::FontFace::parse(&font_bytes, 0).unwrap();
         assert!(
             subset.number_of_glyphs() < original_glyphs / 10,
             "must embed a true subset, not the full font"
@@ -416,12 +416,18 @@ mod tests {
     /// 基于已有真实字体构造 cmap 不可达的复合字形；复合组件指向原 slash。
     fn composite_unmapped_font() -> (Vec<u8>, u16) {
         let original = fixture_font();
-        let face = ttf_parser::Face::parse(&original, 0).unwrap();
+        let face = crate::font::font_face::FontFace::parse(&original, 0).unwrap();
         let child = face.glyph_index('/').unwrap().0;
         let parent = face.glyph_index('A').unwrap().0;
-        let raw = face.raw_face();
-        let loca = raw.table(ttf_parser::Tag::from_bytes(b"loca")).unwrap();
-        let head = raw.table(ttf_parser::Tag::from_bytes(b"head")).unwrap();
+        let raw = &face.font;
+        let loca = raw
+            .table_data(skrifa::raw::types::Tag::new(b"loca"))
+            .unwrap()
+            .as_bytes();
+        let head = raw
+            .table_data(skrifa::raw::types::Tag::new(b"head"))
+            .unwrap()
+            .as_bytes();
         let offset = |gid: u16| {
             if i16::from_be_bytes([head[50], head[51]]) == 0 {
                 let i = usize::from(gid) * 2;
@@ -432,8 +438,9 @@ mod tests {
             }
         };
         let mut glyf = raw
-            .table(ttf_parser::Tag::from_bytes(b"glyf"))
+            .table_data(skrifa::raw::types::Tag::new(b"glyf"))
             .unwrap()
+            .as_bytes()
             .to_vec();
         let parent_start = offset(parent);
         let child_start = offset(child);
@@ -516,7 +523,7 @@ mod tests {
     /// 记录实际解出的轮廓指令，确保复合子字形没有被子集化丢弃。
     #[derive(Default)]
     struct OutlineCommands(Vec<(u8, Vec<f32>)>);
-    impl ttf_parser::OutlineBuilder for OutlineCommands {
+    impl skrifa::outline::OutlinePen for OutlineCommands {
         fn move_to(&mut self, x: f32, y: f32) {
             self.0.push((0, vec![x, y]));
         }
@@ -534,16 +541,33 @@ mod tests {
         }
     }
 
+    fn draw_outline(
+        face: &crate::font::font_face::FontFace<'_>,
+        gid: u16,
+        pen: &mut OutlineCommands,
+    ) -> Result<(), skrifa::outline::DrawError> {
+        use skrifa::MetadataProvider;
+        face.font
+            .outline_glyphs()
+            .get(skrifa::GlyphId::new(u32::from(gid)))
+            .unwrap()
+            .draw(
+                skrifa::outline::DrawSettings::unhinted(
+                    skrifa::instance::Size::unscaled(),
+                    skrifa::instance::LocationRef::default(),
+                ),
+                pen,
+            )
+            .map(|_| ())
+    }
+
     #[test]
     fn subset_preserves_unmapped_composite_and_child_outline() {
         let (data, gid) = composite_unmapped_font();
-        let face = ttf_parser::Face::parse(&data, 0).unwrap();
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
         assert!(face.glyph_index('A').is_none());
         let mut source = OutlineCommands::default();
-        assert!(
-            face.outline_glyph(ttf_parser::GlyphId(gid), &mut source)
-                .is_some()
-        );
+        assert!(draw_outline(&face, gid, &mut source).is_ok());
         assert!(!source.0.is_empty());
         let (doc, page, layer) = PdfDocument::create("composite", Mm(100.), Mm(100.), "Layer");
         let font = doc.add_external_font(Cursor::new(data.clone())).unwrap();
@@ -574,7 +598,7 @@ mod tests {
         } else {
             stream.content.clone()
         };
-        let face = ttf_parser::Face::parse(&subset, 0).unwrap();
+        let face = crate::font::font_face::FontFace::parse(&subset, 0).unwrap();
         assert_eq!(
             face.number_of_glyphs(),
             3,
@@ -591,10 +615,7 @@ mod tests {
         let encoded = operation.operands[0].as_str().unwrap();
         let subset_gid = u16::from_be_bytes(encoded.try_into().unwrap());
         let mut output = OutlineCommands::default();
-        assert!(
-            face.outline_glyph(ttf_parser::GlyphId(subset_gid), &mut output)
-                .is_some()
-        );
+        assert!(draw_outline(&face, subset_gid, &mut output).is_ok());
         assert_eq!(
             output.0, source.0,
             "subset preserves the complete composite outline"
@@ -604,7 +625,7 @@ mod tests {
     #[test]
     fn glyph_unicode_variants_survive_plain_text_and_page_boundaries() {
         let data = fixture_font();
-        let gid = ttf_parser::Face::parse(&data, 0)
+        let gid = crate::font::font_face::FontFace::parse(&data, 0)
             .unwrap()
             .glyph_index('/')
             .unwrap()
@@ -831,7 +852,7 @@ mod normalization_regressions {
             .unwrap()
             .read_to_end(&mut data)
             .unwrap();
-        let gid = ttf_parser::Face::parse(&data, 0)
+        let gid = crate::font::font_face::FontFace::parse(&data, 0)
             .unwrap()
             .glyph_index('/')
             .unwrap()

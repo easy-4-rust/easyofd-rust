@@ -13,7 +13,10 @@ pub(crate) fn render(run: &TextRenderRun) -> OfdResult<String> {
     let face = run
         .font_data
         .as_deref()
-        .map(|d| ttf_parser::Face::parse(d, 0).map_err(|_| OfdError::Conversion("字体无效".into())))
+        .map(|d| {
+            crate::font::font_face::FontFace::parse(d, 0)
+                .map_err(|_| OfdError::Conversion("字体无效".into()))
+        })
         .transpose()?;
     let advances: Vec<f64> = run
         .text
@@ -52,12 +55,12 @@ pub(crate) fn render(run: &TextRenderRun) -> OfdResult<String> {
                 if g >= u32::from(face.number_of_glyphs()) {
                     return Err(OfdError::Conversion("glyph越界".into()));
                 }
-                ttf_parser::GlyphId(g as u16)
+                crate::font::font_face::GlyphId(g as u16)
             } else {
                 face.glyph_index(p.character)
                     .ok_or_else(|| OfdError::Conversion(format!("字体缺少字形: {}", p.character)))?
             };
-            let outline = GlyphOutline::load(face, id);
+            let outline = GlyphOutline::load(face, id)?;
             let s = size / f64::from(face.units_per_em());
             let _ = writeln!(
                 out,

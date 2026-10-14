@@ -159,13 +159,13 @@ fn candidate_paths() -> Vec<FontCandidate> {
 
 /// 验证字体文件是否有效且包含 CJK 字形。
 ///
-/// 使用 `ttf-parser` 解析字体，检查 `units_per_em > 0`（TrueType 要求），
+/// 使用 Fontations 解析字体，检查 `units_per_em > 0`（TrueType 要求），
 /// 并测试常用 CJK 字符的字形映射。
 fn validate_font(path: &Path, name: &str) -> Option<CjkFontInfo> {
     let data = std::fs::read(path).ok()?;
 
-    // ttf_parser::Face::parse 对 TTF/OTF 和 TTC（取 index 0）均适用
-    let face = ttf_parser::Face::parse(&data, 0).ok()?;
+    // Fontations 同时支持 TTF/OTF 和 TTC（取集合索引零）。
+    let face = crate::font::font_face::FontFace::parse(&data, 0).ok()?;
 
     // 基本有效性检查
     if face.units_per_em() == 0 {
@@ -186,7 +186,7 @@ fn validate_font(path: &Path, name: &str) -> Option<CjkFontInfo> {
 /// 测试字体是否包含 CJK 字形。
 ///
 /// 检查 "中"、"文"、"测"、"试" 四个常用汉字，至少命中一个即认为支持 CJK。
-fn probe_cjk_glyphs(face: &ttf_parser::Face<'_>) -> bool {
+fn probe_cjk_glyphs(face: &crate::font::font_face::FontFace<'_>) -> bool {
     let test_chars = ['中', '文', '测', '试', '你', '好'];
     let mut hits = 0;
     for ch in test_chars {
@@ -261,7 +261,7 @@ pub struct SubsetStats {
 
 /// 对 TTF/OTF 字体做子集化分析。
 ///
-/// 使用 `ttf-parser` 解析字体，统计文档中用到的字符在字体中的 glyph 映射情况。
+/// 使用 Fontations 解析字体，统计文档中用到的字符在字体中的 glyph 映射情况。
 ///
 /// **注意**：实际的字体子集化由 `printpdf` 的 `font_subsetting` feature
 /// 在 `PdfDocument::save()` 时自动完成（内部使用 `allsorts` 库）。
@@ -271,7 +271,7 @@ pub struct SubsetStats {
 ///
 /// 返回子集化统计信息。如果字体解析失败则返回错误。
 pub fn subset_font(face_data: &[u8], used_chars: &HashSet<char>) -> OfdResult<SubsetStats> {
-    let face = ttf_parser::Face::parse(face_data, 0)
+    let face = crate::font::font_face::FontFace::parse(face_data, 0)
         .map_err(|e| easyofd_core::OfdError::Conversion(format!("字体解析失败: {e}")))?;
 
     let mut mapped_glyph_count = 0usize;
@@ -310,9 +310,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cjk_probe_and_subset_counts_follow_actual_cmap() {
+        let data = crate::font::font_face::tests::cjk_fixture();
+        let face = crate::font::font_face::FontFace::parse(&data, 0).unwrap();
+        assert!(probe_cjk_glyphs(&face));
+        let stats = subset_font(&data, &HashSet::from(['中', '文', '测', 'A'])).unwrap();
+        assert_eq!(stats.used_char_count, 4);
+        assert_eq!(stats.cjk_char_count, 3);
+        assert_eq!(stats.mapped_glyph_count, 2);
+        assert_eq!(stats.original_size, data.len());
+    }
+
+    #[test]
     fn test_probe_cjk_glyphs_with_invalid_data() {
         // 空数据应返回 None（解析失败）
-        let result = ttf_parser::Face::parse(&[], 0);
+        let result = crate::font::font_face::FontFace::parse(&[], 0);
         assert!(result.is_err());
     }
 
