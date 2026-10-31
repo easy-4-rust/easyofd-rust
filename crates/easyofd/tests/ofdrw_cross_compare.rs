@@ -94,7 +94,7 @@ fn list_zip_entries(ofd_path: &Path) -> Vec<String> {
         .unwrap_or_else(|e| panic!("{} is not a valid ZIP: {e}", ofd_path.display()));
     archive
         .file_names()
-        .map(std::string::ToString::to_string)
+        .map(|name| name.unwrap().into_owned())
         .collect()
 }
 

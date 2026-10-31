@@ -210,7 +210,10 @@ fn visit_archive<R: Read + Seek>(
         let mut file = archive
             .by_index(i)
             .map_err(|e| OfdError::Zip(e.to_string()))?;
-        let name = file.name().to_string();
+        let name = file
+            .name()
+            .map_err(|e| OfdError::Zip(e.to_string()))?
+            .into_owned();
         if !writer_regenerates(&name, doc_dir, &ofd_entry.document_file) {
             // Clamp the preallocation hint to a sane bound on 32-bit targets.
             let capacity = usize::try_from(file.size()).unwrap_or(usize::MAX);

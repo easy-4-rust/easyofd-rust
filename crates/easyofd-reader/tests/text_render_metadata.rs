@@ -73,7 +73,7 @@ fn missing_image_does_not_shift_following_text_metadata() {
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
-        let name = file.name().to_owned();
+        let name = file.name().unwrap().into_owned();
         let mut bytes = Vec::new();
         std::io::Read::read_to_end(&mut file, &mut bytes).unwrap();
         if name == "Doc_0/Pages/P.xml" {

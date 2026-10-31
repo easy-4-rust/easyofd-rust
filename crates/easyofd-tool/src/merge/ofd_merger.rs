@@ -1988,7 +1988,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let image_entries: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .filter(|name| name.contains("/Res/") && !name.ends_with('/'))
             .collect();
         assert_eq!(
@@ -2157,7 +2157,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         // 应包含 Annotations.xml 索引
@@ -2228,7 +2228,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         assert!(
@@ -2264,7 +2264,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         // 应包含 Annotations.xml 索引
@@ -2476,7 +2476,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         // ── 验证 1：印章图片资源文件存在 ──
@@ -2586,7 +2586,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let png_res_files: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .filter(|n| {
                 n.contains("/Res/")
                     && std::path::Path::new(n)
@@ -2763,7 +2763,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         // ── 验证 1：PublicRes.xml 含 ColorSpace 定义 ──
@@ -2877,7 +2877,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         // ── 验证 1：PublicRes.xml 含 Font 定义 ──
@@ -2983,7 +2983,7 @@ mod tests {
         let cursor = std::io::Cursor::new(&bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         let entry_names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
 
         let pub_res_path = entry_names

@@ -99,7 +99,7 @@ fn count_images_in_ofd_zip(ofd_path: &Path) -> usize {
         let Ok(mut entry) = archive.by_index(i) else {
             continue;
         };
-        let name = entry.name().to_string();
+        let name = entry.name().unwrap().into_owned();
         // Only count ImageObject in Content.xml files (including templates),
         // excluding annotation files.
         let is_content = name.contains("Content.xml");
@@ -159,12 +159,16 @@ fn has_signature(ofd_path: &Path) -> bool {
         return false;
     };
     // Check 1: Signs/ directory
-    let has_signs = archive.file_names().any(|n| n.contains("Signs/"));
+    let has_signs = archive
+        .file_names()
+        .any(|n| n.is_ok_and(|name| name.contains("Signs/")));
     if has_signs {
         return true;
     }
     // Check 2: Annots/ directory (annotations with seal/stamp images)
-    let has_annots = archive.file_names().any(|n| n.contains("Annots/"));
+    let has_annots = archive
+        .file_names()
+        .any(|n| n.is_ok_and(|name| name.contains("Annots/")));
     if has_annots {
         return true;
     }
@@ -432,7 +436,10 @@ fn test_roundtrip_ofd_has_valid_zip_structure() {
         let archive = zip::ZipArchive::new(std::io::Cursor::new(&roundtrip_bytes))
             .unwrap_or_else(|e| panic!("{name}: roundtrip output is not a valid ZIP: {e}"));
 
-        let entries: Vec<String> = archive.file_names().map(String::from).collect();
+        let entries: Vec<String> = archive
+            .file_names()
+            .map(|name| name.unwrap().into_owned())
+            .collect();
 
         assert!(
             entries.contains(&"OFD.xml".to_string()),

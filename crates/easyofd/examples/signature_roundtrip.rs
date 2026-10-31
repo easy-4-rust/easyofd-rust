@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut tampered = false;
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i).unwrap();
-            let name = entry.name().to_string();
+            let name = entry.name()?.into_owned();
             let mut buf = Vec::new();
             entry.read_to_end(&mut buf).unwrap();
 

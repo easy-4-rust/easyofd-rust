@@ -42,7 +42,10 @@ pub fn encrypt_ofd(input: &[u8], key: &[u8; sm4::KEY_SIZE]) -> OfdResult<Vec<u8>
                 .by_index(i)
                 .map_err(|e| OfdError::Zip(format!("{e}")))?;
 
-            let name = file.name().to_owned();
+            let name = file
+                .name()
+                .map_err(|e| OfdError::Zip(e.to_string()))?
+                .into_owned();
 
             // 跳过目录条目和已有的加密描述文件
             if name.ends_with('/') || name == ENCRYPT_INFO_PATH {
@@ -120,7 +123,10 @@ pub fn decrypt_ofd(input: &[u8], key: &[u8; sm4::KEY_SIZE]) -> OfdResult<Vec<u8>
                 .by_index(i)
                 .map_err(|e| OfdError::Zip(format!("{e}")))?;
 
-            let name = file.name().to_owned();
+            let name = file
+                .name()
+                .map_err(|e| OfdError::Zip(e.to_string()))?
+                .into_owned();
 
             // 跳过目录条目和加密描述文件
             if name.ends_with('/') || name == ENCRYPT_INFO_PATH {

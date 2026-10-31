@@ -49,7 +49,7 @@ fn list_zip_entries(zip_bytes: &[u8]) -> Vec<String> {
     };
     archive
         .file_names()
-        .map(std::string::ToString::to_string)
+        .map(|name| name.unwrap().into_owned())
         .collect()
 }
 

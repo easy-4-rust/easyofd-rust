@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|&i| {
                 archive
                     .by_index(i)
-                    .is_ok_and(|e| e.name().contains("Image_"))
+                    .is_ok_and(|e| e.name().is_ok_and(|name| name.contains("Image_")))
             })
             .count();
         println!("[验证] 图片资源数: {image_count}");
