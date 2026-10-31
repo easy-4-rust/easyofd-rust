@@ -32,7 +32,7 @@ fn embedded_font_missing_character_returns_error() {
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for i in 0..archive.len() {
         let mut f = archive.by_index(i).unwrap();
-        let name = f.name().to_owned();
+        let name = f.name().unwrap().into_owned();
         let mut bytes = Vec::new();
         f.read_to_end(&mut bytes).unwrap();
         if name.ends_with("P.xml") {
@@ -196,7 +196,7 @@ fn cgtransform_glyph_is_embedded_and_preserves_unicode_text() {
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
-        let name = file.name().to_owned();
+        let name = file.name().unwrap().into_owned();
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).unwrap();
         if name.ends_with("P.xml") {
@@ -256,7 +256,7 @@ fn mixed_legacy_and_embedded_text_restores_explicit_font() {
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for index in 0..archive.len() {
         let mut file = archive.by_index(index).unwrap();
-        let name = file.name().to_string();
+        let name = file.name().unwrap().into_owned();
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).unwrap();
         if name.ends_with("P.xml") {

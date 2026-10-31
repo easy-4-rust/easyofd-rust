@@ -36,12 +36,15 @@ pub fn validate_archive<R: Read + Seek>(
         let file = archive
             .by_index(index)
             .map_err(|error| OfdError::Zip(error.to_string()))?;
-        validate_entry_name(file.name())?;
+        let name = file
+            .name()
+            .map_err(|error| OfdError::Zip(error.to_string()))?;
+        validate_entry_name(&name)?;
         let size = file.size();
         if size > limits.max_entry_uncompressed_size {
             return Err(OfdError::InvalidDocument(format!(
                 "ZIP entry {} is too large: {size} bytes",
-                file.name()
+                name
             )));
         }
         total = total.checked_add(size).ok_or_else(|| {
@@ -59,7 +62,7 @@ pub fn validate_archive<R: Read + Seek>(
         {
             return Err(OfdError::InvalidDocument(format!(
                 "ZIP entry {} exceeds compression ratio limit",
-                file.name()
+                name
             )));
         }
     }

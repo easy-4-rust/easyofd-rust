@@ -221,7 +221,10 @@ impl OfdSignatureBuilder {
             let mut e = archive
                 .by_index(i)
                 .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-            let name = e.name().to_string();
+            let name = e
+                .name()
+                .map_err(|err| easyofd_core::OfdError::Zip(err.to_string()))?
+                .into_owned();
             let mut buf = Vec::new();
             e.read_to_end(&mut buf)
                 .map_err(easyofd_core::OfdError::Io)?;
@@ -256,7 +259,10 @@ impl OfdSignatureBuilder {
             let mut e = archive
                 .by_index(i)
                 .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-            let name = e.name().to_string();
+            let name = e
+                .name()
+                .map_err(|err| easyofd_core::OfdError::Zip(err.to_string()))?
+                .into_owned();
             let mut buf = Vec::new();
             e.read_to_end(&mut buf)
                 .map_err(easyofd_core::OfdError::Io)?;
