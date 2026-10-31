@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, fix/actions-easyofd-20261031]
+    branches: [main, dev]
   pull_request:
 
 env:
