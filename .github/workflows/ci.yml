@@ -32,6 +32,10 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          # Tests create nested target trees that the cache post step cannot clean reliably.
+          # Keep cache restores without emitting cleanup errors after successful jobs.
+          save-if: "false"
 
       - name: Build
         run: cargo build --workspace --all-targets
