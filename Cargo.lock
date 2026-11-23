@@ -188,9 +188,9 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "azul-core"
-version = "0.0.20"
+version = "0.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a58134c82af69ad019b2c3a2fd7fedfbc489bc42ee7a0225517c94aa0a49c2"
+checksum = "00174fb58e1c8cb8ae1b089c7c28b4ec17ffcec56ffab1af59a042390f907278"
 dependencies = [
  "azul-css",
  "gl-context-loader",
@@ -200,9 +200,9 @@ dependencies = [
 
 [[package]]
 name = "azul-css"
-version = "0.0.20"
+version = "0.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab384d70977890bcd43da8525b14a46ca87ef252f9c5a221f40dab8694de61d1"
+checksum = "c2e635a63e2bf08b9b8e410aa1bdee53ccb1462ae021034e2c82373b05b2b306"
 dependencies = [
  "azul-simplecss",
  "libm",
@@ -210,15 +210,14 @@ dependencies = [
 
 [[package]]
 name = "azul-layout"
-version = "0.0.20"
+version = "0.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f157c48d956d84695fedf3c88161a5fed05b8f51b8ce717c989a5f23456a66af"
+checksum = "38d84675106afffa51082e9bd416ba19683663bb49eb6b52caefac9bf3c27a62"
 dependencies = [
  "allsorts-azul",
  "azul-core",
  "azul-css",
  "base64 0.22.1",
- "brotli-decompressor",
  "lru",
  "regex-lite",
  "rust-fontconfig",
@@ -234,9 +233,9 @@ dependencies = [
 
 [[package]]
 name = "azul-simplecss"
-version = "0.2.3"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beea02de84f7d4c090ccf9a2bddcd0595105b35c2ed0c9a0ed66aca4b79559bd"
+checksum = "343e24eeae9f09f61afeafcc7112e8d62f965bf0c6b30cedb5f89cc0b200380f"
 
 [[package]]
 name = "base16ct"
@@ -1426,6 +1425,32 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lopdf"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e2ec995d822e05cabc3f06d196ee43650af3fe4fe38012cacb35e0c3d113b68"
+dependencies = [
+ "aes 0.9.2",
+ "bitflags",
+ "cbc 0.2.1",
+ "ecb",
+ "encoding_rs",
+ "flate2",
+ "getrandom 0.4.3",
+ "indexmap",
+ "itoa",
+ "log",
+ "md-5",
+ "nom",
+ "rand 0.10.2",
+ "rangemap",
+ "sha2 0.11.0",
+ "stringprep",
+ "thiserror",
+ "weezl",
+]
+
+[[package]]
+name = "lopdf"
 version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfffda0fe1ab0157e1a13c14bebd3f28671f2fccb7922f0722ec53926e6922d3"
@@ -1447,33 +1472,6 @@ dependencies = [
  "rand 0.10.2",
  "rangemap",
  "rayon",
- "sha2 0.11.0",
- "stringprep",
- "thiserror",
- "weezl",
-]
-
-[[package]]
-name = "lopdf"
-version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6ad532ff9262dd4bfd6e085400cbb39959d48cb8d08518b01b68f77bdf6feca"
-dependencies = [
- "aes 0.9.2",
- "bitflags",
- "brotli-decompressor",
- "cbc 0.2.1",
- "ecb",
- "encoding_rs",
- "flate2",
- "getrandom 0.4.3",
- "indexmap",
- "itoa",
- "log",
- "md-5",
- "nom",
- "rand 0.10.2",
- "rangemap",
  "sha2 0.11.0",
  "stringprep",
  "thiserror",
@@ -1789,18 +1787,18 @@ dependencies = [
 
 [[package]]
 name = "printpdf"
-version = "0.12.14"
+version = "0.12.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658f7c0506ba72778073f482ae3d98b14678d34c083757dd72c72e6b01f2050f"
+checksum = "95d50369c5e18e18d4716bd855172db3a70f9e82c966687ae051ea58138f285c"
 dependencies = [
  "allsorts-azul",
  "azul-core",
  "azul-css",
  "azul-layout",
- "base64 0.23.1",
+ "base64 0.22.1",
  "flate2",
  "getrandom 0.4.3",
- "lopdf 0.47.0",
+ "lopdf 0.44.0",
  "rust-fontconfig",
  "serde",
  "serde_derive",
