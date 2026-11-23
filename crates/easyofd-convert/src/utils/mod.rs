@@ -32,3 +32,5 @@ pub use os_info as OSinfo;
 ///
 /// 工具类以模块级函数形式实现，见 [`string_util`] 模块。
 pub use string_util as StringUtils;
+
+pub mod text_layout;

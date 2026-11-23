@@ -37,7 +37,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-OFRW_CLONE_DIR="$PROJECT_ROOT/.ofdrw-clone"
+OFRW_CLONE_DIR="${OFDRW_SOURCE_DIR:-$PROJECT_ROOT/.ofdrw-clone}"
 OFRW_REPO="https://github.com/ofdrw/ofdrw.git"
 OFRW_BRANCH="master"
 EXPECTED_DIR="$PROJECT_ROOT/tests/fixtures/baseline/ofdrw_expected"
@@ -92,6 +92,16 @@ check_prerequisites() {
 # ─── Step 1: Clone ofdrw repository ────────────────────────────────────────────
 
 clone_ofdrw() {
+    if [ -n "${OFDRW_SOURCE_DIR:-}" ]; then
+        local actual_sha
+        actual_sha=$(git -C "$OFRW_CLONE_DIR" rev-parse HEAD)
+        if [ "$actual_sha" != "${OFDRW_COMMIT:-84e9eb260ba6fd351ecccf08a01a40305d4af635}" ]; then
+            log_error "Fixed OFDRW baseline mismatch: $actual_sha"
+            return 2
+        fi
+        cd "$OFRW_CLONE_DIR"
+        return 0
+    fi
     if [ -d "$OFRW_CLONE_DIR" ]; then
         log_info "ofdrw clone already exists at $OFRW_CLONE_DIR"
         cd "$OFRW_CLONE_DIR"

@@ -25,13 +25,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # Tests create nested target trees that the cache post step cannot clean reliably.
+          # Keep cache restores without emitting cleanup errors after successful jobs.
+          save-if: "false"
 
       - name: Build
         run: cargo build --workspace --all-targets
@@ -41,13 +45,20 @@ jobs:
 
       - name: Clippy
         if: matrix.rust == 'stable'
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # Rust 1.99新增断言显示风格建议；不改变历史测试语义，其他warning继续作为门禁。
+        run: cargo clippy --workspace --all-targets -- -D warnings -A clippy::assert_is_empty
 
       - name: Doctest
         run: cargo test --workspace --doc
 
       - name: Examples build
         run: cargo build --workspace --examples
+      - name: Bounded server acceptance smoke
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: |
+          ulimit -v 2097152
+          timeout --signal=KILL 30s target/debug/examples/server_acceptance
+
 
   fmt:
     name: rustfmt
@@ -56,7 +67,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
           components: rustfmt
@@ -71,12 +82,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Build benches
         run: cargo build --workspace --benches

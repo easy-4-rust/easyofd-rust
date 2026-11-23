@@ -16,10 +16,12 @@ lopdf = { workspace = true }
 printpdf = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
-ttf-parser = { workspace = true }
 image = { workspace = true }
-fontdue = { workspace = true }
+skrifa = { workspace = true }
 tiny-skia = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+zip = { workspace = true }

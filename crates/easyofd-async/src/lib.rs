@@ -205,8 +205,7 @@ mod tests {
     async fn test_write_pages_to_bytes() {
         let page = OfdPage::new(210.0, 297.0);
         let bytes = write_pages_to_bytes(vec![page]).await.unwrap();
-        assert!(!bytes.is_empty());
-        assert_eq!(&bytes[0..2], b"PK");
+        assert!(bytes.starts_with(b"PK"));
     }
 
     /// 测试错误路径：无效文件。

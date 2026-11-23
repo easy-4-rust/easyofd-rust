@@ -139,7 +139,7 @@ mod tests {
             .do_write_to_bytes(vec![page])
             .unwrap();
 
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
         assert_eq!(&bytes[0..2], b"PK");
     }
 
@@ -149,7 +149,7 @@ mod tests {
         page.add_text(TextObject::new(0.0, 0.0, "Direct bytes"));
 
         let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
         assert_eq!(&bytes[0..2], b"PK");
     }
 
@@ -218,7 +218,7 @@ mod tests {
         page.add_path(PathObject::rect(20.0, 50.0, 170.0, 100.0));
 
         let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
     }
 
     // ── PageWriterBuilder all methods ─────────────────────────────────────────
@@ -232,7 +232,7 @@ mod tests {
             .metadata_creator("C")
             .do_write_to_bytes(vec![page])
             .unwrap();
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
     }
 
     #[test]
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn test_empty_pages() {
         let bytes = EasyOfd::write_pages_to_bytes(vec![]).unwrap();
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
         assert_eq!(&bytes[0..2], b"PK");
     }
 
@@ -264,7 +264,7 @@ mod tests {
     fn test_empty_content_page() {
         let page = OfdPage::new(210.0, 297.0);
         let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
     }
 
     #[test]
@@ -272,7 +272,7 @@ mod tests {
         let mut page = OfdPage::new(210.0, 297.0);
         page.add_text(TextObject::new(0.0, 0.0, "<>&\"'"));
         let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-        assert!(!bytes.is_empty());
+        assert_ne!(bytes, [] as [u8; 0]);
     }
 
     // ── Re-export verification ────────────────────────────────────────────────
@@ -294,7 +294,7 @@ mod tests {
         let cursor = std::io::Cursor::new(bytes);
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect()
     }
 }

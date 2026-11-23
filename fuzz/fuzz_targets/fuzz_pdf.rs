@@ -2,7 +2,7 @@
 //!
 //! 覆盖函数：`lopdf::Document::load_mem(data: &[u8])`
 //! 目标：任意 PDF 字节解析不 panic。
-//! 注意：RUSTSEC-2026-0187 是已知深度嵌套 DoS，fuzz 若发现 panic 属预期发现。
+//! 与生产解析依赖lopdf0.45一致；任何panic/abort均作为失败，不豁免已知输入。
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 

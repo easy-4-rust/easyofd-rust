@@ -2,6 +2,17 @@
 
 > easyofd-rust 的规格事实源（对齐 liteflow `docs/superpowers` 结构）。
 
+## 当前增量任务（2026-10-14）
+
+依据 OFDRW `7459e350` → `84e9eb26` 的净差异补充任务；Java 项目版本仍为 2.4.0。已按用户追加授权实施并完成本地验证；跨平台CI与MSRV1.88已通过，两计划ARCHIVED。不覆盖下方历史验收记录。
+
+| 计划 | 范围 | 状态 |
+|---|---|---|
+| [ofdrw-text-rendering-alignment](plans/2026-10-14-ofdrw-text-rendering-alignment.md) | 绘制元数据、CTM逐字定位、PDF、SVG/PNG描边、固定上游回归；6任务/30步骤 | ARCHIVED；30/30完成，六矩阵CI通过 |
+| [bc185-interoperability](plans/2026-10-14-bc185-interoperability.md) | BC1.85双向签章/PKCS#12互操作；2任务/10步骤 | ARCHIVED；两任务及追加修复完成，整体CI门禁通过 |
+
+增量规格：[ofdrw-upstream-alignment](specs/2026-10-14-ofdrw-upstream-alignment.md)。执行遵循关联规格与TDD，先核对当前分支和源码，再从未完成任务继续；不得将类型覆盖或旧roundtrip成绩作为新输出行为验收。
+
 ## 当前状态（2026-08-12）
 
 **全部 7 个历史计划已归档**：76/77 任务完全达标（98.7%），唯一 🟡 项（覆盖率
@@ -33,3 +44,15 @@
 2. 新计划：`plans/YYYY-MM-DD-<主题>.md`（对齐 liteflow 命名）
 3. 完成门禁：任务勾选 ≠ 完成，必须附实际命令输出（test/roundtrip/clippy）
 4. 归档：全部任务实测通过后，状态行追加 `ARCHIVED` 并更新本索引
+
+实际验证与边界：[ofdrw-upstream-alignment-verification](../ofdrw-upstream-alignment-verification.md)。
+
+2026-10-14上游对齐两计划已ARCHIVED，六矩阵CI通过；完整证据及验收边界见上述验证报告。
+
+## 服务端生产验收（2026-10-14）
+
+[生产验收计划](plans/2026-10-14-production-readiness.md)：ARCHIVED；Task1–6全部完成，代码9ba5d3f的CI/Coverage/Security/Fuzz通过；事实源为[生产验收规格](specs/2026-10-14-production-readiness.md)，证据与部署约束见[服务端验收](../server-production-readiness.md)。
+
+## 无豁免依赖治理（2026-10-14）
+
+[计划](plans/2026-10-14-dependency-remediation.md)：ARCHIVED；PDF及字体迁移完成，代码8dd0bbf六矩阵CI/Coverage/Security/Fuzz全部通过，审计无例外。[规格](specs/2026-10-14-dependency-remediation.md)，[验证报告](../dependency-remediation-verification.md)。

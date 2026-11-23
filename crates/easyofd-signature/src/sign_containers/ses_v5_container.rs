@@ -4,11 +4,11 @@
 //!
 //! V5 与 V4 流程相同，区别在于印章 SESeal 含可选 timeStamp。
 
-use super::{
-    ExtendSignatureContainer, SM2_SM3_OID_ARCS, SM2_SM3_OID_STR, SigType, generalized_time_now,
-    sm2_sign_with_sm3,
-};
+#[cfg(test)]
+use super::SM2_SM3_OID_ARCS;
+use super::{ExtendSignatureContainer, SM2_SM3_OID_STR, SigType};
 use crate::errors::SignError;
+#[cfg(test)]
 use crate::internal_helpers::compute_sm3;
 use crate::timestamp_hook::TimeStampHook;
 
@@ -63,37 +63,15 @@ impl ExtendSignatureContainer for SesV5Container {
     ///
     /// 对应 Java: `org.ofdrw.sign.signContainer.SESV5Container#sign`
     fn sign(&self, in_data: &[u8], property_info: &str) -> Result<Vec<u8>, SignError> {
-        let data_hash = compute_sm3(in_data);
-
-        let seal = easyofd_gm::ses::v5::SESeal::decode_der(&self.seal_der)
-            .map_err(|e| SignError::Decode(format!("V5 印章 DER 解码失败: {e}")))?;
-
-        let tbs = easyofd_gm::ses::v5::TBSSign {
-            version: 5,
-            seal,
-            time_info: generalized_time_now(),
-            data_hash: data_hash.to_vec(),
-            property_info: property_info.to_string(),
-        };
-        let tbs_der = tbs.encode_der();
-
-        let sig_val = sm2_sign_with_sm3(&self.secret_key, &tbs_der)?;
-
-        // 对应 Java: `if (timeStampHook != null) { ... signature.setTimeStamp(...) }`
-        let time_stamp = self.time_stamp_hook.as_ref().and_then(|hook| {
-            let ts = hook.apply(&sig_val);
-            if ts.is_empty() { None } else { Some(ts) }
-        });
-
-        let ses_sig = easyofd_gm::ses::v5::SESSignature {
-            to_sign: tbs,
-            cert: self.cert_der.clone(),
-            signature_algorithm: SM2_SM3_OID_ARCS.to_vec(),
-            sign_data: sig_val,
-            time_stamp,
-        };
-
-        Ok(ses_sig.encode_der())
+        crate::ses_signing::sign(
+            5,
+            &self.secret_key,
+            &self.seal_der,
+            &self.cert_der,
+            in_data,
+            property_info,
+            self.time_stamp_hook.as_deref(),
+        )
     }
 
     fn seal(&self) -> Option<Vec<u8>> {

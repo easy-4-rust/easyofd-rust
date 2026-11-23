@@ -117,7 +117,7 @@ fn extract_ofd_xml(zip_path: &str) -> HashMap<String, String> {
     };
     for i in 0..zip.len() {
         if let Ok(mut entry) = zip.by_index(i) {
-            let name = entry.name().to_string();
+            let name = entry.name().unwrap().into_owned();
             if Path::new(&name)
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("xml"))
@@ -143,7 +143,7 @@ fn list_ofd_entries(ofd_path: &str) -> Vec<String> {
     };
     archive
         .file_names()
-        .map(std::string::ToString::to_string)
+        .map(|name| name.unwrap().into_owned())
         .collect()
 }
 

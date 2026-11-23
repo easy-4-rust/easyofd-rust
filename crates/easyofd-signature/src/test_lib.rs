@@ -53,7 +53,7 @@ fn test_sign_with_seal() {
     let cur = Cursor::new(&bytes);
     let mut a = zip::ZipArchive::new(cur).unwrap();
     let names: Vec<String> = (0..a.len())
-        .map(|i| a.by_index(i).unwrap().name().to_string())
+        .map(|i| a.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     assert!(names.contains(&"Doc_0/Res/Seal_0.png".to_string()));
     assert!(names.contains(&"Doc_0/Signs/Signature.xml".to_string()));
@@ -118,7 +118,7 @@ fn verify_signature_rejects_tampered_ofd_entry() {
             .compression_method(zip::CompressionMethod::Deflated);
         for i in 0..src_zip.len() {
             let mut e = src_zip.by_index(i).unwrap();
-            let name = e.name().to_string();
+            let name = e.name().unwrap().into_owned();
             let mut data = Vec::new();
             e.read_to_end(&mut data).unwrap();
             if name == "Doc_0/Document.xml" {
@@ -189,7 +189,7 @@ fn multi_signature_produces_multiple_signed_info() {
     let cur = Cursor::new(&bytes);
     let mut a = zip::ZipArchive::new(cur).unwrap();
     let names: Vec<String> = (0..a.len())
-        .map(|i| a.by_index(i).unwrap().name().to_string())
+        .map(|i| a.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     let sig_count = names
         .iter()
@@ -268,7 +268,7 @@ fn seal_info_embeds_esl_and_keyinfo_in_signature_xml() {
     let cur = Cursor::new(&bytes);
     let mut a = zip::ZipArchive::new(cur).unwrap();
     let names: Vec<String> = (0..a.len())
-        .map(|i| a.by_index(i).unwrap().name().to_string())
+        .map(|i| a.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
     assert!(names.contains(&"Doc_0/Seal_0.esl".to_string()));
     let mut sig_file = a.by_name("Doc_0/Signs/Signature.xml").unwrap();
@@ -339,7 +339,7 @@ fn repack_zip_with<F: FnMut(&str, &mut Vec<u8>)>(original: &[u8], mut f: F) -> V
         .compression_method(zip::CompressionMethod::Deflated);
     for i in 0..src_zip.len() {
         let mut e = src_zip.by_index(i).unwrap();
-        let name = e.name().to_string();
+        let name = e.name().unwrap().into_owned();
         let mut data = Vec::new();
         e.read_to_end(&mut data).unwrap();
         f(&name, &mut data);

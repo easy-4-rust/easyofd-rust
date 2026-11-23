@@ -41,7 +41,11 @@ pub fn list_entries<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> OfdResu
         let file = archive
             .by_index(i)
             .map_err(|e| OfdError::Zip(format!("index {i}: {e}")))?;
-        names.push(file.name().to_string());
+        names.push(
+            file.name()
+                .map_err(|e| OfdError::Zip(e.to_string()))?
+                .into_owned(),
+        );
     }
     Ok(names)
 }
@@ -63,9 +67,12 @@ pub fn extract_to_dir<R: Read + Seek>(
         let mut file = archive
             .by_index(i)
             .map_err(|e| OfdError::Zip(format!("index {i}: {e}")))?;
-        let outpath = dest.join(file.name());
+        let name = file
+            .enclosed_name()
+            .ok_or_else(|| OfdError::Zip("unsafe ZIP entry path".to_string()))?;
+        let outpath = dest.join(&name);
 
-        if file.name().ends_with('/') {
+        if file.is_dir() {
             fs::create_dir_all(&outpath).map_err(OfdError::Io)?;
         } else {
             if let Some(parent) = outpath.parent() {

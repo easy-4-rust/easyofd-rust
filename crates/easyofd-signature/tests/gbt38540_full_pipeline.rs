@@ -85,7 +85,7 @@ fn conformance_sign_verify_roundtrip() {
             .compression_method(zip::CompressionMethod::Deflated);
         for i in 0..src_zip.len() {
             let mut entry = src_zip.by_index(i).unwrap();
-            let name = entry.name().to_string();
+            let name = entry.name().unwrap().into_owned();
             let mut data = Vec::new();
             entry.read_to_end(&mut data).unwrap();
             if name == "Doc_0/Document.xml" {
@@ -150,7 +150,7 @@ fn conformance_multi_signature() {
     let cur = Cursor::new(&bytes);
     let mut archive = zip::ZipArchive::new(cur).unwrap();
     let names: Vec<String> = (0..archive.len())
-        .map(|i| archive.by_index(i).unwrap().name().to_string())
+        .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
         .collect();
 
     // Must have 3 Signature_<n>.xml files.

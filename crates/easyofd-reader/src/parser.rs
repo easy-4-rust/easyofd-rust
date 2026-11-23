@@ -792,8 +792,8 @@ fn find_zip_entry_name<R: Read + std::io::Seek>(
     }
     let lower = name.to_lowercase();
     for i in 0..archive.len() {
-        if archive.by_index(i).ok()?.name().to_lowercase() == lower {
-            let actual = archive.by_index(i).ok()?.name().to_string();
+        let actual = archive.by_index(i).ok()?.name().ok()?.into_owned();
+        if actual.to_lowercase() == lower {
             return Some(actual);
         }
     }

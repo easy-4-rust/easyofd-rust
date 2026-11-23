@@ -115,7 +115,7 @@ fn has_signature(bytes: &[u8]) -> bool {
     // platforms, but OFD spec uses exact case).
     let names: Vec<String> = archive
         .file_names()
-        .map(std::string::ToString::to_string)
+        .map(|name| name.unwrap().into_owned())
         .collect();
     names.iter().any(|n| n.contains("Signs/"))
 }

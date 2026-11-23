@@ -70,7 +70,7 @@ impl Exporter for SvgExporter {
 
         for page_idx in range {
             let page = &pages[page_idx];
-            let svg_content = render_page_to_svg(page)?;
+            let svg_content = render_page_with_runs(page, reader.text_render_runs(page_idx)?)?;
 
             let output_path = if is_single_page {
                 target.to_path_buf()
@@ -96,7 +96,10 @@ impl Exporter for SvgExporter {
 /// - TextObject → `<text>` 元素
 /// - PathObject → `<path>` 元素
 /// - ImageObject → `<image>` 元素（data URI + base64 编码）
-fn render_page_to_svg(page: &easyofd_core::OfdPage) -> OfdResult<String> {
+fn render_page_with_runs(
+    page: &easyofd_core::OfdPage,
+    runs: &[easyofd_reader::TextRenderRun],
+) -> OfdResult<String> {
     let width = page.width;
     let height = page.height;
 
@@ -108,9 +111,16 @@ fn render_page_to_svg(page: &easyofd_core::OfdPage) -> OfdResult<String> {
 "#
     );
 
-    for content in &page.content {
+    for (index, content) in page.content.iter().enumerate() {
         match content {
             ContentObject::Text(text) => {
+                if let Some(run) = runs
+                    .iter()
+                    .find(|r| r.content_index == index && !r.uses_legacy_model())
+                {
+                    svg.push_str(&crate::svg_text_renderer::render(run)?);
+                    continue;
+                }
                 // SVG Y 轴向下，与 OFD 一致
                 let x = text.x;
                 let y = text.y;

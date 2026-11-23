@@ -1,0 +1,18 @@
+{
+  "ofdrw_version": "2.4.0",
+  "ofdrw_commit": "84e9eb260ba6fd351ecccf08a01a40305d4af635",
+  "font_source": "ofdrw-converter/src/test/resources/font_13132_0_edit.ttf",
+  "font_sha256": "04df3190d1154659efe5e30117633d03bda0245104512249826848ff3e75eda2",
+  "font_license_note": "Upstream test asset under repository Apache-2.0; no separate font license supplied. Redistribution review remains required.",
+  "generator": "tools/upstream/TextFixtures.java: input construction port, not Java rendering proof",
+  "java": "openjdk version \"21.0.12.1\" 2026-08-18 LTS",
+  "samples": {
+    "ab.ofd": "26c210a8c44db59c3d5b8033bed6804b61b77ef34173e7cc3afb61160a3c425a",
+    "stroke_explicit.ofd": "0c07a8b44484080109a3b720fa4d99553e82daf2fe1f0e423530a08c022f9d6f",
+    "stroke_false.ofd": "11a0e6fbd4cdaabb73fd601f740e2c6f248483d47b6ba628ff3f72b430eafaaa",
+    "stroke_omitted.ofd": "ccdf337772183fc857c0675d047d10ca73fa8757fdd32241eb9d9da4e3a345df",
+    "stroke_only.ofd": "f1b12b9df6cf58bf7b83949f57767e074cbe44c1aac5bc02fb2cbf0ee24781b9",
+    "stroke_true.ofd": "bb90007fe337bba4e9678934db5c6992a46e1f812c95ab109606258d944681c1",
+    "vertical.ofd": "6fbcd0e3ea83f39239d9ab228e863f7b0511765c81946cefdd6bb444110ac378"
+  }
+}

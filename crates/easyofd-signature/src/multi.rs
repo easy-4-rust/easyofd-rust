@@ -433,7 +433,7 @@ mod tests {
         let cur = std::io::Cursor::new(&zip_data);
         let mut archive = zip::ZipArchive::new(cur).unwrap();
         let names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
         assert!(names.contains(&"Doc_0/Signs/Signature_0.xml".to_string()));
         assert!(names.contains(&"Doc_0/Signs/Signature_1.xml".to_string()));

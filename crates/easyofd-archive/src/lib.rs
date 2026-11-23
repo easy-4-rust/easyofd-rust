@@ -147,7 +147,10 @@ fn read_all_entries(ofd_bytes: &[u8]) -> OfdResult<Vec<(String, Vec<u8>)>> {
         let mut file = archive
             .by_index(i)
             .map_err(|e| OfdError::Zip(e.to_string()))?;
-        let name = file.name().to_string();
+        let name = file
+            .name()
+            .map_err(|e| OfdError::Zip(e.to_string()))?
+            .into_owned();
         let mut data = Vec::new();
         file.read_to_end(&mut data).map_err(OfdError::Io)?;
         entries.push((name, data));

@@ -52,7 +52,10 @@ impl OfdTemplateFiller {
             let mut entry = archive
                 .by_index(i)
                 .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?;
-            let name = entry.name().to_string();
+            let name = entry
+                .name()
+                .map_err(|e| easyofd_core::OfdError::Zip(e.to_string()))?
+                .into_owned();
             let mut content = Vec::new();
             entry
                 .read_to_end(&mut content)

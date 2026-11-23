@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut enc_count = 0;
         for i in 0..archive.len() {
             let entry = archive.by_index(i).expect("entry");
-            if entry.name().to_ascii_lowercase().ends_with(".enc") {
+            if entry.name()?.to_ascii_lowercase().ends_with(".enc") {
                 enc_count += 1;
             }
         }

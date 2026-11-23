@@ -7,7 +7,7 @@
 //! 图片绘制（`BufferedImage`）等 AWT/Swing 专有 API。
 //!
 //! Rust 版使用 [`RasterRenderer`] 替代，基于 `image` crate 的 `RgbaImage`
-//! 作为画布，`fontdue` 渲染文本，`tiny-skia` 渲染矢量路径，`image` 解码/合成图片。
+//! 作为画布，Fontations 和 `tiny-skia` 渲染文本，`tiny-skia` 渲染矢量路径，`image` 解码/合成图片。
 //! 渲染管线与 Java AWTMaker 功能等价。
 
 use std::path::Path;
@@ -114,7 +114,9 @@ impl AWTMaker {
 
         for page_idx in range {
             let page = &pages[page_idx];
-            let rgba_image = self.renderer.render_page(page);
+            let rgba_image = self
+                .renderer
+                .render_page_with_text_runs(page, reader.text_render_runs(page_idx)?)?;
 
             let png_data = encode_to_png(&rgba_image)?;
 

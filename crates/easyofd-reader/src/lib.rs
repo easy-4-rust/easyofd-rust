@@ -17,6 +17,9 @@
 
 mod ofd_reader;
 mod parser;
+mod text_render_parser;
+mod text_render_run;
+pub use text_render_run::TextRenderRun;
 mod read_options;
 
 // ── ofdrw 对齐新增模块 ──

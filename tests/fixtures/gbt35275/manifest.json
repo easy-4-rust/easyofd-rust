@@ -1,0 +1,12 @@
+{
+  "source_commit": "84e9eb260ba6fd351ecccf08a01a40305d4af635",
+  "bouncycastle": "1.85",
+  "generator": "tools/upstream/Gbt35275Interop.java",
+  "identity": "Public test identity from ../bc185; never production credentials",
+  "direction": "Java GB direct/PKCS9 and BC CMS -> Rust verify",
+  "sha256": {
+    "cms.der": "c7219728ba59eb220ed1aaeb7f4f760b6bbfb389248f5ee76bb3edcac797d6a2",
+    "direct.der": "52fd9f062f5bf0e64f23e294d995bf9eee858dffca38f59547b381fcdbce9900",
+    "pkcs9.der": "c2a12cfb7458e2d7f255c0a7290361bb630c8a1f815316cbd12f12809d64a8e5"
+  }
+}

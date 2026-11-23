@@ -82,7 +82,10 @@ impl OfdDecryptor {
             let mut file = archive
                 .by_index(i)
                 .map_err(|e| OfdError::Zip(format!("{e}")))?;
-            let name = file.name().to_owned();
+            let name = file
+                .name()
+                .map_err(|e| OfdError::Zip(e.to_string()))?
+                .into_owned();
 
             if !self.filter.should_process(&name) {
                 continue;

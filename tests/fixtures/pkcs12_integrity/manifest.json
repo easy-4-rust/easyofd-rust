@@ -1,0 +1,27 @@
+{
+  "source": "tests/fixtures/bc185/rust-public-test.p12",
+  "source_sha256": "39aa5999bfad282871d602801be96f8c403a4b7118692080179dc9e4a608cb68",
+  "generator": "tools/upstream/pkcs12_mac_variants.py, Python hashlib/hmac, RFC7292 B.2 id=3",
+  "password": "public-test",
+  "public_test_identity_only": true,
+  "files": {
+    "invalid_scalar.p12": "dd2634fa4629f8cce0c520651763820866c357ff5f439325421c8ef68ae57ead",
+    "kdf_huge.p12": "e0ca1e278981c80eae4a5979674b8ab2dbe39c0fc707c826f2054242940ec392",
+    "kdf_negative.p12": "af38a02e5c2f60968820dab652def1d3ffaaf1cd18bef076cddf9e5ac641d2e2",
+    "kdf_wrong_size.p12": "7dd12bef962a0bcf9d300d7846f2b4e90dbc35f894ea5ba821da8c2a2ed23e8c",
+    "kdf_zero.p12": "a91c5ba2894091119d9d8e50d603f6a5ab25ce5f8bd66e1e3854f6b866b50534",
+    "negative.p12": "c43aa59ce57c95f74b2e494fecc566f13e499a76295fe222d69bc6e97ab598ca",
+    "no_mac.p12": "e7ff0a4ad04911ffb89348c7122af4747afcf4c7e704d7fbec33ce844ef035ac",
+    "over_budget.p12": "192d3fbdab53e707e10e622413676e53576486eedcd97f22a39cdaf5f8254bf5",
+    "sha1.p12": "ebdead77fc784452a8cb9f00b010ea99d4ffa34321fb45b6f52c183bd3252ead",
+    "sha224.p12": "a5713ed569039cb308103e134dbf5b0b75b5e8c397215e791566a2c7f657ba81",
+    "sha256.p12": "8080f123a82cabb7bf683463efa398a0a808107b77c573d6a6bf1a7d06d6403b",
+    "sha384.p12": "f257106aa2f7b7df5567ed65fcf39854401696f583c32299352cfdbdc376575e",
+    "sha512.p12": "87a811bf11830980e87631b947ee6d8d050eb32a679184d8fca4e3445cd34819",
+    "sha512_224.p12": "434cedf67d9e3aa35c4f654a8e04d33064d16c25ab9b58e01a7724a0f581de0e",
+    "sha512_256.p12": "5949137612cf0446795499e6c37f3a7654143e46690f08ffe7c4e6cdca9c960a",
+    "wrong_curve.p12": "431e8ab47c8bb338610c35e476a49443f4c25e273c92ae00c686165ee0c82b6b",
+    "zero.p12": "abe6978ee430203c627d175362a9189992ccc4261970c44da8ca2822d71be464",
+    "zero_scalar.p12": "8f6811016a75880a0c0f633eb4a99770f31ed5af2f6e4ef9145dc9929ba739b5"
+  }
+}

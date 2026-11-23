@@ -347,7 +347,7 @@ fn test_easyofd_write_derive_model() {
         .do_write_to_bytes(&data)
         .unwrap();
 
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
     assert_eq!(&bytes[0..2], b"PK");
 
     let names = zip_entry_names(&bytes);
@@ -384,7 +384,7 @@ fn test_manual_page_construction() {
         .do_write_to_bytes(vec![page])
         .unwrap();
 
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
     assert_eq!(&bytes[0..2], b"PK");
 }
 
@@ -429,7 +429,7 @@ fn test_write_builder_all_metadata() {
         .metadata_creator("Creator")
         .do_write_to_bytes(&data)
         .unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 #[test]
@@ -461,7 +461,7 @@ fn test_pages_builder_all_metadata() {
         .metadata_creator("C")
         .do_write_to_bytes(vec![page])
         .unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 #[test]
@@ -498,7 +498,7 @@ fn test_write_pages_to_static() {
 fn test_write_pages_to_bytes_static() {
     let page = OfdPage::new(210.0, 297.0);
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
     assert_eq!(&bytes[0..2], b"PK");
 }
 
@@ -510,13 +510,13 @@ fn test_write_pages_to_bytes_static() {
 fn test_empty_page() {
     let page = OfdPage::new(210.0, 297.0);
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 #[test]
 fn test_no_pages() {
     let bytes = EasyOfd::write_pages_to_bytes(vec![]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
     assert_eq!(&bytes[0..2], b"PK");
 }
 
@@ -526,7 +526,7 @@ fn test_large_text_content() {
     let mut page = OfdPage::new(210.0, 297.0);
     page.add_text(TextObject::new(0.0, 0.0, &big_text));
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 #[test]
@@ -534,7 +534,7 @@ fn test_special_xml_chars_in_content() {
     let mut page = OfdPage::new(210.0, 297.0);
     page.add_text(TextObject::new(0.0, 0.0, "<tag>&\"'amp"));
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 #[test]
@@ -542,7 +542,7 @@ fn test_empty_string_text() {
     let mut page = OfdPage::new(210.0, 297.0);
     page.add_text(TextObject::new(0.0, 0.0, ""));
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 #[test]
@@ -572,7 +572,7 @@ fn test_path_with_stroke_color_hex() {
     let mut page = OfdPage::new(210.0, 297.0);
     page.add_path(PathObject::new(0.0, 0.0, "M0 0L100 100").stroke_color(0xAB_CD_EF));
     let bytes = EasyOfd::write_pages_to_bytes(vec![page]).unwrap();
-    assert!(!bytes.is_empty());
+    assert_ne!(bytes, [] as [u8; 0]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -583,6 +583,6 @@ fn zip_entry_names(bytes: &[u8]) -> Vec<String> {
     let cursor = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).unwrap();
     (0..archive.len())
-        .map(|i| archive.by_index(i).unwrap().name().to_string())
+        .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
         .collect()
 }

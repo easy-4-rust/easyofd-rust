@@ -15,6 +15,11 @@ mod multi;
 mod ofd_signature_builder;
 mod read_signature;
 mod seal;
+mod ses_signing;
+mod ses_v1_validate_container;
+mod ses_v4_validate_container;
+mod ses_v5_validate_container;
+mod ses_verification;
 pub mod sign_containers;
 pub mod sign_dir;
 pub mod sign_id_parser;
@@ -152,3 +157,6 @@ pub type SESV5ValidateContainer = SesV5ValidateContainer;
 
 /// 对应 Java: SignIDProvider（Rust trait 别名）。
 pub use SignIdProvider as SignIDProvider;
+
+mod digital_validate_container;
+mod gbt35275_validate_container;

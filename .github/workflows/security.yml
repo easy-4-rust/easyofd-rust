@@ -4,7 +4,8 @@ on:
   schedule:
     - cron: "0 0 * * 1" # Every Monday at 00:00 UTC
   push:
-    branches: [main]
+    branches: [main, dev]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,12 +18,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -30,8 +31,20 @@ jobs:
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
 
-      - name: cargo audit
-        run: cargo audit
+      - name: Dependency contract
+        run: python3 scripts/check_dependency_contract.py
+
+      - name: Fresh consumer dependency resolution
+        run: python3 scripts/check_fresh_resolution.py
+
+      - name: Unfiltered cargo audit (production and fuzz)
+        shell: bash
+        run: |
+          audit_workspace=$(mktemp -d)
+          trap 'rm -rf "$audit_workspace"' EXIT
+          cd "$audit_workspace"
+          cargo audit --db "$audit_workspace/advisory-db" --file "$GITHUB_WORKSPACE/Cargo.lock" --deny warnings
+          cargo audit --db "$audit_workspace/advisory-db" --file "$GITHUB_WORKSPACE/fuzz/Cargo.lock" --deny warnings
 
       - name: cargo deny check
         run: cargo deny check

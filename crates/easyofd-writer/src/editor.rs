@@ -42,7 +42,10 @@ impl OfdEditor {
             let mut file = archive
                 .by_index(i)
                 .map_err(|e| OfdError::Zip(e.to_string()))?;
-            let name = file.name().to_string();
+            let name = file
+                .name()
+                .map_err(|e| OfdError::Zip(e.to_string()))?
+                .into_owned();
             let mut buf = Vec::new();
             file.read_to_end(&mut buf).map_err(OfdError::Io)?;
             original_entries.insert(name, buf);
